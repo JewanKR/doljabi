@@ -1,7 +1,13 @@
+use std::{collections::HashSet};
+
+pub mod socket;
 pub mod baduk;
-pub mod typelist;
 
 fn main() {
+    
 
+}
+
+struct App {
 
 }

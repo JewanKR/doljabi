@@ -1,30 +1,111 @@
 use derive_builder::Builder;
 
-//use std::{collections::HashSet};
-use crate::typelist::{*};
-
 const BOARDSIZE: usize = 19;
 
-
-/// Baduk::default()를 이용해 생성
-/* 사용 예시
-let Baduk1 = Baduk::default()
-    .game_id("player name".to_string)
-    .board(BadukBoard::new())
-    .white_player(whiteplayer)
-    .black_player(blackplayer)
-    .overtime(60000)
-    .build();
- */
-#[derive(Clone, Debug, Builder)]
-struct Baduk {
-    game_id: u64,
-    board: BadukBoard,
-    white_player: Player,
-    black_player: Player,
-    overtime: u128,
-
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Color {
+    Black,
+    White,
+    Free,
+    ColorError
 }
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Coordinate {
+    col: usize,
+    row: usize,
+    selected: bool,
+    determine: bool,
+}
+
+impl Coordinate {
+    pub fn new() -> Self {Self { col: 0, row: 0, selected: false, determine: false }}
+    pub fn col(&self) -> usize {self.col}
+    pub fn row(&self) -> usize {self.row}
+
+    /// if let이랑 같이 사용
+    pub fn aim(&mut self, col: usize, row: usize) -> bool {
+        if col > 18 || row > 18 {
+            self.col = col;
+            self.row = row;
+            self.selected = true;
+            true
+        } else {
+            self.reset();
+            false
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.selected = false;
+        self.col = 0;
+        self.row = 0;
+        self.determine = false;
+    }
+}
+
+#[derive(Clone, Debug, Builder)]
+pub struct User {
+    id: usize,
+    name: String,
+    location: u64,
+    match_making_rating:u16,
+}
+
+/// Player::default()를 이용해 생성
+#[derive(Clone, Debug, Builder)]
+pub struct Player {
+    user_id: User,
+    color: Color,
+    remaining_overtime: u8,
+    caught_stone: u16,
+    timer: u128,
+    overtime: u128,
+}
+
+impl Player {
+    pub fn new(userid: User) -> Self {
+        Self {
+            user_id: userid,
+            color: Color::Free,
+            remaining_overtime: 3,
+            caught_stone: 0,
+            timer: 7200000,
+            overtime: 60000,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Builder)]
+struct BadukRoom {
+    room_id: u64,
+    game_start: bool,
+
+    board: BadukBoard,
+    white_player: Option<Player>,
+    black_player: Option<Player>,
+
+    coordinate: Coordinate,
+}
+
+impl BadukRoom {
+    pub fn new(roomid: usize) -> Self {
+        Self {
+            room_id: roomid as u64,
+            game_start: false,
+            board: BadukBoard::new(),
+            white_player: None,
+            black_player: None,
+            coordinate: Coordinate::new(),
+        }
+    }
+    /* 
+    pub fn baduk_start() {
+        
+    }*/
+}
+
+
 
 #[derive(Clone, Debug)]
 pub struct BadukBoard {
@@ -44,7 +125,7 @@ impl BadukBoard {
 
     /// 입력한 위치의 바둑돌의 색을 반환하는 함수
     pub fn check_stone_color(&self, coordinate: &Coordinate) -> Color {
-        let col = coordinate.col(); let row = coordinate.row();
+        let col: usize = coordinate.col(); let row: usize = coordinate.row();
         let check_black: bool = (self.black[col] & 1u32<<row) != 0;
         let check_white: bool = (self.white[col] & 1u32<<row) != 0;
 
@@ -139,6 +220,17 @@ impl BadukBoard {
 
 }
 
-pub fn check_overflow(input: usize) -> bool {
-    if input > 18 {false} else {true}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ErrorCode {
+    OverFlow,
+    OverLap,
+    Undefined,
+}
+
+pub fn errorcode(error: ErrorCode) -> &'static str {
+    match error {
+        ErrorCode::OverFlow => "Error: OverFlow",
+        ErrorCode::OverLap => "Error: OverLap",
+        ErrorCode::Undefined => "Error: Undefined Error",
+    }
 }
