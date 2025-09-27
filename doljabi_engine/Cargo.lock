@@ -39,14 +39,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "baduk"
-version = "0.1.0"
-dependencies = [
- "derive_builder",
- "tokio",
-]
-
-[[package]]
 name = "bitflags"
 version = "2.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -128,6 +120,14 @@ checksum = "ab63b0e2bf4d5928aff72e83a7dace85d7bba5fe12dcc3c5a572d78caffd3f3c"
 dependencies = [
  "derive_builder_core",
  "syn",
+]
+
+[[package]]
+name = "doljabi_engine"
+version = "0.1.0"
+dependencies = [
+ "derive_builder",
+ "tokio",
 ]
 
 [[package]]
