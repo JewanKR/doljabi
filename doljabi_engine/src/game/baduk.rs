@@ -29,6 +29,10 @@ pub struct Baduk {
     // TODO: 흑백 스위칭
 }
 
+enum BadukCommandList {
+    Chaksu = 1,
+    DrawRe
+}
 
 // TODO: 연결 된 돌 확인 및 HashSet<HashMap>에 저장
 // TODO: 먹히는 돌 판별

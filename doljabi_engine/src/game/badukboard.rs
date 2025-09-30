@@ -17,8 +17,8 @@ pub enum Color {
 }
 
 /// xy 좌표 표현법 -> 정수 좌표 표현법 함수
-pub fn xy_expression_to_integer_expression(x: usize, y: usize) -> u16 {
-    (y * BOARDSIZE + x) as u16
+pub fn xy_expression_to_integer_expression(x: u16, y: u16) -> u16 {
+    y * BOARDSIZE as u16 + x
 }
 
 /// bitboard 접근 함수
@@ -103,8 +103,8 @@ pub struct Player {
     name: String,
     color: Color,
     remaining_overtime: u8,
-    timer: u128,
-    overtime: u128,
+    timer: u64,
+    overtime: u64,
     match_making_rating: u16,
 } impl Player {
     pub fn new(user_id: usize) -> Self {

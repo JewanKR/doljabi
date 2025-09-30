@@ -1,15 +1,28 @@
+use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{self, tungstenite::Message};
-use tokio::io;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 
 
 // TODO: 클라이언트에서 온 데이터 분류하기
 // TODO: 클라이언트로 보낼 정보 포장하기
 
-async fn main_network() {
+pub struct ClientInformation {
+    user_id: Option<u64>,
+    location: Option<u16>,
+    ws_send_channel: mpsc::Sender<Message>,
+} impl ClientInformation {
+    pub fn new(ws_send_channel: mpsc::Sender<Message>) -> Self { Self {
+        user_id: None,
+        location: None,
+        ws_send_channel: ws_send_channel,
+    }}
+}
+
+pub async fn main_network(client_table: &Arc<Mutex<HashMap<String, ClientInformation>>>) {
     // TODO: 클라이언트와 통신을 위한 포트 열기
     let addr = "0.0.0.0:8080";
     let listener = TcpListener::bind(addr).await.expect("Error: TcpListener::bind !!");
@@ -22,13 +35,15 @@ async fn main_network() {
             Err(_) => {continue;}
         };
 
+        let client_table_key = client_table.clone();
+
         tokio::spawn(async move {
-            handle_client(web_socket, addr).await;
+            handle_client(web_socket, addr, &client_table_key).await;
         });
     }
 }
 
-async fn handle_client(tcp: TcpStream, addr: SocketAddr) {
+async fn handle_client(tcp: TcpStream, addr: SocketAddr, client_table: &Arc<Mutex<HashMap<String, ClientInformation>>>) {
     let ws_stream = match tokio_tungstenite::accept_async(tcp).await {
         Ok(ws) => ws,
         Err(e) => {
@@ -41,8 +56,10 @@ async fn handle_client(tcp: TcpStream, addr: SocketAddr) {
 
     let (mut w_stream, mut r_stream) = ws_stream.split();
     // tx: 수신, rx: 송신
-    let (send_tx, mut send_rx) = mpsc::channel::<Message>(32);
-    let (read_tx, mut read_rx) = mpsc::channel::<Message>(32);
+    let (send_tx, mut send_rx) = mpsc::channel::<Message>(65535);
+    let ws_send_channel = send_tx.clone();
+
+    client_table.lock().await.insert(addr.to_string(), ClientInformation::new(ws_send_channel));
 
     // 송신 프로세스: send_tx.clone().send() 으로 입력
     let send_process = tokio::spawn(async move {
@@ -52,15 +69,7 @@ async fn handle_client(tcp: TcpStream, addr: SocketAddr) {
     });
 
     // 수신 프로세스: read_rx.recv()로 출력
-    let receive_process = tokio::spawn(async move {
-        while let Some(Ok(receive_message)) = r_stream.next().await {
-            if read_tx.send(receive_message).await.is_err() {break;}
-        }
-    });
-
-    ////// 네트워크 API //////
-
-    while let Some(ws_receive_data) = read_rx.recv().await {
+    while let Some(Ok(ws_receive_data)) = r_stream.next().await {
         match ws_receive_data {
             Message::Text(text) => {
                 let receive_text = text;
@@ -82,8 +91,14 @@ async fn handle_client(tcp: TcpStream, addr: SocketAddr) {
 
             _ => {},
         }
-    }
+    };
 
+    // client_table에서 제거
+    client_table.lock().await.remove(&addr.to_string());
 
+    // await 지점에 취소 신호를 보내 함수 종료
+    send_process.abort();
+
+    println!("{} 연결 종료!", &addr.to_string());
 
 }
