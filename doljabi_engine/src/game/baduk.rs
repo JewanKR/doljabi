@@ -34,7 +34,7 @@ enum BadukCommandList {
     DrawRe
 }
 
-// TODO: 연결 된 돌 확인 및 HashSet<HashMap>에 저장
+// TODO: 연결 된 돌 확인 및 linked_stone_set: HashMap<HashSet>에 저장
 // TODO: 먹히는 돌 판별
 // TODO: 자살수 검사 구현
 // TODO: 반복수 검사 구현

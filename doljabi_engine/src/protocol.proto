@@ -1,2 +1,88 @@
 syntax = "proto3";
 
+// 프로토콜 만듭니다.
+package doljabi_test;
+
+message RequestID {
+    uint64 request_id = 1;
+}
+
+// ---------- 클라이언트 -> 서버 ---------- //
+
+//// 게임 들어가기 전 ////
+message GameRoomListUpdateRequestInLobby{}
+
+message EnterRoom {
+    uint32 room_code = 1;
+}
+message LeaveRoom {}
+message SetRoomSetting {
+    bool change_color = 1;
+}
+
+//// 바둑판 사용하는 게임들 공통 ////
+message Chaksu {
+    uint32 coordinate = 1;
+}
+
+message DrawRequest {}
+
+message Pass {}
+
+message Surrender {}
+
+// ---------- 서버 -> 클라이언트 ---------- //
+
+message Ok{}
+message Err{}
+
+//// 게임 들어가기 전 ////
+
+message GameRoomListUpdateDataFromServer{}
+
+enum GameMode {
+    BADUK = 0;
+    OMOK = 1;
+}
+
+enum ErrorType {
+    COMMONERROR = 0;
+}
+
+// ---------- 프로토콜 ---------- //
+// 최상위 메시지 (모든 서버 응답을 감싸는 wrapper)
+// 클라이언트 송신
+message ClientToServer {
+    RequestID request_id = 1;
+    oneof message_type {
+        //// Room 관련 ////
+        GameRoomListUpdateRequestInLobby game_room_list_update_request = 100;
+        EnterRoom enter_room = 101;
+        LeaveRoom leave_room = 102;
+        SetRoomSetting set_room_setting = 103;
+
+        //// 모든 게임 공통 ////
+        DrawRequest draw_request = 201;
+        Surrender surrender = 202;
+
+        //// BadukBoard 관련 ////
+        Chaksu chaksu = 301;
+        Pass pass = 302;
+    }
+}
+
+// 최상위 메시지 (모든 서버 응답을 감싸는 wrapper)
+// 서버 송신
+message ServerToClient {
+    RequestID request_id = 1;
+    oneof message_type {
+        //// ** request 처리한지 여부 출력** ////
+        Ok ok = 3;
+        Err err = 4;
+
+        //// Room 관련 ////
+        GameRoomListUpdateDataFromServer game_room_list_update_data = 100;
+
+        //// BadukBoard 관련 ////
+    }
+}

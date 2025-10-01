@@ -12,12 +12,10 @@ use tokio::sync::{mpsc, Mutex};
 
 pub struct ClientInformation {
     user_id: Option<u64>,
-    location: Option<u16>,
     ws_send_channel: mpsc::Sender<Message>,
 } impl ClientInformation {
     pub fn new(ws_send_channel: mpsc::Sender<Message>) -> Self { Self {
         user_id: None,
-        location: None,
         ws_send_channel: ws_send_channel,
     }}
 }
@@ -71,6 +69,7 @@ async fn handle_client(tcp: TcpStream, addr: SocketAddr, client_table: &Arc<Mute
     // 수신 프로세스: read_rx.recv()로 출력
     while let Some(Ok(ws_receive_data)) = r_stream.next().await {
         match ws_receive_data {
+
             Message::Text(text) => {
                 let receive_text = text;
             },
