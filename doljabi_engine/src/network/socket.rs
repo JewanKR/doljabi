@@ -5,7 +5,10 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{self, tungstenite::Message};
 use tokio::sync::{mpsc, Mutex};
+use serde::{Serialize, Deserialize};
+use axum::{routing::{get, post}, http::StatusCode, Json, Router};
 
+// 수정 예정
 
 // TODO: 클라이언트에서 온 데이터 분류하기
 // TODO: 클라이언트로 보낼 정보 포장하기
@@ -22,7 +25,7 @@ pub struct ClientInformation {
 
 pub async fn main_network(client_table: &Arc<Mutex<HashMap<String, ClientInformation>>>) {
     // TODO: 클라이언트와 통신을 위한 포트 열기
-    let addr = "0.0.0.0:8080";
+    let addr = "0.0.0.0:27000";
     let listener = TcpListener::bind(addr).await.expect("Error: TcpListener::bind !!");
 
     println!("server 대기 중...");
