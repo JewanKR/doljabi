@@ -77,8 +77,8 @@ pub struct BadukBoard {
     }
 
     /// 돌 집어 넣기
-    pub fn push_stone(&mut self, coordinate: u16) {
-        match self.turn {
+    pub fn push_stone(&mut self, coordinate: u16, color: Color) {
+        match color {
             Color::Black => {self.black[coordinate_index(coordinate)] += coordinatde_value(coordinate)},
             Color::White => {self.white[coordinate_index(coordinate)] += coordinatde_value(coordinate)},
             _ => {println!("Error: push_stone: 색 지정이 잘못 되었습니다.")},
@@ -86,8 +86,8 @@ pub struct BadukBoard {
     }
 
     /// 돌 제거하기
-    pub fn delete_stone(&mut self, coordinate: u16) {
-        match self.turn {
+    pub fn delete_stone(&mut self, coordinate: u16, color: Color) {
+        match color {
             Color::Black => {self.black[coordinate_index(coordinate)] -= coordinatde_value(coordinate)},
             Color::White => {self.white[coordinate_index(coordinate)] -= coordinatde_value(coordinate)},
             _ => {println!("Error: delete_stone: 색 지정이 잘못 되었습니다.")},
@@ -99,31 +99,62 @@ pub struct BadukBoard {
 
 #[derive(Clone, Debug, Builder)]
 pub struct Player {
-    user_id: usize,
+    user_id: u64,
     name: String,
-    color: Color,
+
+    remaining_time: u64,
+    start_time: u128,
+
     remaining_overtime: u8,
-    timer: u64,
     overtime: u64,
     match_making_rating: u16,
 } impl Player {
-    pub fn new(user_id: usize) -> Self {
+    pub fn new(user_id: u64) -> Self {
         Self {
             user_id: user_id,
             name: String::new(),
-            color: Color::Free,
             remaining_overtime: 3,
-            timer: 7200000,
+            remaining_time: 7200000,
+            start_time: 0,
             overtime: 60000,
             match_making_rating: 1500,
         }
     }
 
-    // TODO: 색상 변경
-    // TODO: 제한시간 설정
-    // TODO: 초읽기 시간
-    // TODO: 초읽기 횟수
-    // TODO: Rating 적용
+    // player 이름 불러오기
+    pub fn load_name(&mut self) {
+        self.name = String::new(); // TODO: DB에서 이름 불러오기
+    }
+
+    // player MMR 불러오기
+    pub fn load_match_making_rating(&mut self) {
+        self.match_making_rating = self.match_making_rating; // TODO: DB에서 MMR 불러오기
+    }
+
+    // 제한시간 설정
+    pub fn set_remaining_time(&mut self, remaining_time: u64) {
+        self.remaining_time = remaining_time;
+    }
+
+    // 남은 시간 계산
+    pub fn calculate_remaining_time(&mut self) {
+        self.remaining_time = self.remaining_time - (tokio::time::Instant::now().elapsed().as_millis() - self.start_time) as u64;
+    }
+
+    // 시작 시간 설정
+    pub fn set_start_time(&mut self) {
+        self.start_time = tokio::time::Instant::now().elapsed().as_millis();
+    }
+
+    // 초읽기 횟수
+    pub fn set_remaining_overtime(&mut self, remaining_overtime: u8) {
+        self.remaining_overtime = remaining_overtime;
+    }
+
+    // 초읽기 시간
+    pub fn set_overtime(&mut self, overtime: u64) {
+        self.overtime = overtime;
+    }
 }
 
 #[derive(Clone, Debug, Builder)]
@@ -133,7 +164,8 @@ pub struct Players {
 } impl Players {
     pub fn new() -> Self { Self { white_player: None, black_player: None } }
 
-    pub fn push_user(&mut self, user_id: usize) -> Result<(),()> {
+    // player 추가
+    pub fn push_user(&mut self, user_id: u64) -> Result<(),()> {
         match (&self.black_player, &self.white_player) {
             (None, _) => {
                 self.black_player = Some(Player::new(user_id)); Ok(())
@@ -147,7 +179,8 @@ pub struct Players {
         }
     }
 
-    pub fn pop_user(&mut self, user_id: usize) -> Result<(), ()> {
+    // player 제거
+    pub fn pop_user(&mut self, user_id: u64) -> Result<(), ()> {
         if let Some(black_user) = &self.black_player {
             if black_user.user_id == user_id {
                 self.black_player = None
@@ -164,6 +197,9 @@ pub struct Players {
         Err(())
     }
 
-    // TODO: 색상 스위치
+    // 색상 스위치
+    pub fn switch_color(&mut self) {
+        std::mem::swap(&mut self.black_player, &mut self.white_player);
+    }
 }
 

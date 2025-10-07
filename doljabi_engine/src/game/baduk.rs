@@ -31,7 +31,8 @@ pub struct Baduk {
 
 enum BadukCommandList {
     Chaksu = 1,
-    DrawRe
+    DrawRequest = 2,
+    Pass = 3,
 }
 
 // TODO: 연결 된 돌 확인 및 linked_stone_set: HashMap<HashSet>에 저장
@@ -57,3 +58,4 @@ pub fn chaksu(board: &mut Baduk, coordinate: u16) -> Result<(),BadukBoardError> 
 // TODO: 무승부 요청 처리
 // TODO: 기권 처리
 // TODO: 수 넘김 처리
+
