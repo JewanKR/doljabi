@@ -1,2 +1,3 @@
-# 개인 파일
+target/
+mydb.db
 private/
