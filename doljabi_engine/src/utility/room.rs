@@ -42,8 +42,11 @@ pub fn room_router() -> Router {
         .route("/room", get(|| async { "Hello, World!" }))
         .route("/room/:room_id/create", post(|| async { "Hello, World!" }))
         .route("/room/:room_id/setting", patch(|| async { "Hello, World!" }))
+}
 
+pub fn room_ws() -> Router {
+    Router::new()
         // Web Socket 연결 (연결: 입장, 연결 해제: 퇴장)
-        .route("/ws/room/:room_id/players/:user_id", post(|| async { "Hello, World!" }))
-        .route("/ws/room/:room_id/players/:user_id", delete(|| async { "Hello, World!" }))
+        .route("/", post(|| async { "Hello, World!" }))
+        .route("/", delete(|| async { "Hello, World!" }))
 }

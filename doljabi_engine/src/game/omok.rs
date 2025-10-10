@@ -25,11 +25,12 @@ pub struct Omok {
 
 /// 착수 시도 실패 시 Err 출력
 pub fn chaksu(game: &mut Omok, coordinate: u16) -> Result<(),BadukBoardError> {
+    let color = game.board.is_turn();
     if !game.board.is_free(coordinate) {return Err(BadukBoardError::OverLap);}
     // TODO: 33 규칙 확인하기
     // TODO: 다른 착수 금지 규칙 확인하기
     // TODO: 돌 5개 연결 되었는지 확인
-    game.board.push_stone(coordinate);
+    game.board.push_stone(coordinate, color);
     Ok(())
 }
 

@@ -42,11 +42,12 @@ enum BadukCommandList {
 
 /// 착수 시도 실패 시 Err 출력
 pub fn chaksu(board: &mut Baduk, coordinate: u16) -> Result<(),BadukBoardError> {
+    let color = board.board.is_turn();
     if !board.board.is_free(coordinate) {return Err(BadukBoardError::OverLap);}
     // TODO: 상대 돌 먹는지 확인
     // TODO: 자살수 확인
     // TODO: 반복수(패) 금지 확인
-    board.board.push_stone(coordinate);
+    board.board.push_stone(coordinate, color);
     Ok(())
 }
 
