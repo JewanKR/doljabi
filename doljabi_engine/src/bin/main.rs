@@ -2,22 +2,8 @@
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::{self, tungstenite::Message};
-use doljabi_engine::utility::room::{room_router, room_ws};
+use doljabi_engine::utility::{user::user_router,room::{room_router, room_ws}};
 use axum::{routing::get, Router};
-
-// api로 오는 http 요청
-fn router_list() -> Router {
-    Router::new()
-        .route("/", get(|| async { "Hello, World!" }))
-        .nest("/room", room_router())
-}
-
-// ws로 오는 web socket 요청
-fn ws_list() -> Router {
-    Router::new()
-        .nest("/room/:room_id", room_ws())
-}
-
 
 #[tokio::main]
 async fn main() {
@@ -41,3 +27,16 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
+// api로 오는 http 요청
+fn router_list() -> Router {
+    Router::new()
+        .route("/", get(|| async { "Hello, World!" }))
+        .nest("/user", user_router())
+        .nest("/room", room_router())
+}
+
+// ws로 오는 web socket 요청
+fn ws_list() -> Router {
+    Router::new()
+        .nest("/room/:room_id", room_ws())
+}

@@ -56,7 +56,4 @@ pub fn chaksu(board: &mut Baduk, coordinate: u16) -> Result<(),BadukBoardError> 
 // TODO: 집 수 계산 및 계가
 // TODO: 승패 표시
 
-// TODO: 무승부 요청 처리
-// TODO: 기권 처리
 // TODO: 수 넘김 처리
-

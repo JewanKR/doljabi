@@ -35,5 +35,3 @@ pub fn chaksu(game: &mut Omok, coordinate: u16) -> Result<(),BadukBoardError> {
 }
 
 // TODO: 돌 5개 연결 확인 및 게임 종료
-// TODO: 무승부 요청 처리
-// TODO: 기권 처리
