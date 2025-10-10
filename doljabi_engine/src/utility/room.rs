@@ -34,14 +34,17 @@ struct Room {
     // TODO: User 접속 구현
     // TODO: User 방 나가기 구현
 
+    // TODO: 무승부 요청 처리
+    // TODO: 기권 처리
+
 }
 
 // 방 관련 라우터 설정
 pub fn room_router() -> Router {
     Router::new()
-        .route("/room", get(|| async { "Hello, World!" }))
-        .route("/room/:room_id/create", post(|| async { "Hello, World!" }))
-        .route("/room/:room_id/setting", patch(|| async { "Hello, World!" }))
+        .route("/list", get(|| async { "Hello, World!" }))
+        .route("/create", post(|| async { "Hello, World!" }))
+        .route("/setting", patch(|| async { "Hello, World!" }))
 }
 
 pub fn room_ws() -> Router {
