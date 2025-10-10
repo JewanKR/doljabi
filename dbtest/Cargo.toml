@@ -1,0 +1,29 @@
+[package]
+name = "dbtest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# ⬇️ 반드시 0.6 계열 + form feature
+axum = { version = "0.6.20", features = ["macros", "form"] }
+
+# ⬇️ 0.4 계열 (0.4.1도 OK)
+axum-sessions = "0.4"
+
+tower-cookies = "0.9"
+tower-http = { version = "0.4", features = ["fs"] }
+
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+bcrypt = "0.15"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# ⬇️ base64는 0.21로 맞추면 API 경고 없이 위의 새 방식 사용 가능
+base64 = "0.21"
+
+dotenvy = "0.15"
+chrono = "0.4"
+
+# ⬇️ 반드시 추가!
+axum-extra = { version = "0.4", features = ["typed-routing"] }
