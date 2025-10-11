@@ -1,0 +1,55 @@
+openapi: 3.0.0
+info:
+  title: doljabi
+  version: 1.0.0
+  description: doljabi project REST API를 정의한 문서입니다.
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+      required:
+        - username
+        - password
+
+
+paths:
+  /api/user/login:
+    post:
+      summary: 로그인 
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        '200':
+          description: 로그인 성공
+        '400':
+          description: 로그인 실패
+        '500':
+          description: 로그인 실패
+
+  /api/user/signup:
+    post:
+      summary: 회원가입
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        '200':
+          description: 회원가입 성공
+        '400':
+          description: 회원가입 실패
+        '500':
+          description: 회원가입 실패
+
