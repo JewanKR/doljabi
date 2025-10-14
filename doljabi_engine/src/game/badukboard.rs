@@ -6,6 +6,8 @@ const BOARDSIZE: usize = 19;
 pub enum BadukBoardError {
     OutOfBoard,
     OverLap,
+    DoubleThree,  // 3-3 금수
+    GameOver,     // 게임 종료
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -74,6 +76,11 @@ pub struct BadukBoard {
     }
     pub fn is_free(&self, coordinate: u16) -> bool {
         !(self.is_black(coordinate) || self.is_white(coordinate))
+    }
+
+    // 현재 턴 확인
+    pub fn get_turn(&self) -> Color {
+        self.turn
     }
 
     /// 돌 집어 넣기
@@ -195,11 +202,6 @@ pub struct Players {
             return Ok(());
         }
         Err(())
-    }
-
-    // 색상 스위치
-    pub fn switch_color(&mut self) {
-        std::mem::swap(&mut self.black_player, &mut self.white_player);
     }
 }
 

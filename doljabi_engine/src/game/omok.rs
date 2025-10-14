@@ -2,6 +2,16 @@ use derive_builder::Builder;
 use std::collections::{HashMap, HashSet};
 use crate::game::badukboard::{*};
 
+const BOARDSIZE: usize = 19; // 좌표 계산 시 필요한 바둑판 크기
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum GameState {
+    Playing,           // 게임 진행 중
+    BlackWin,         // 흑 승리
+    WhiteWin,         // 백 승리
+    Draw,             // 무승부
+}
+
 #[derive(Clone, Debug, Builder)]
 pub struct Omok {
     board: BadukBoard,
@@ -10,7 +20,10 @@ pub struct Omok {
     black_linked_stone_set: HashMap<u16, HashSet<u16>>,
     white_linked_stone_set: HashMap<u16, HashSet<u16>>,
 
-} impl Omok {
+    game_state: GameState,
+
+} 
+impl Omok {
     pub fn new() -> Self {
         Self {
             board: BadukBoard::new(),
@@ -18,21 +31,229 @@ pub struct Omok {
 
             black_linked_stone_set: HashMap::<u16, HashSet<u16>>::new(),
             white_linked_stone_set: HashMap::<u16, HashSet<u16>>::new(),
+
+            game_state: GameState::Playing,
         }
     }
-    // TODO: 흑백 스위칭
+
+    // 색상확인
+    fn get_color(&self, coordinate: u16) -> Color {
+        if self.board.is_black(coordinate) {
+            Color::Black
+        } else if self.board.is_white(coordinate) {
+            Color::White
+        } else {
+            Color::Free
+        }
+    }
+    
+    // 방향별 돌 개수 세기
+    fn count_direction(&self, coordinate: u16, direction: (i16, i16), color: Color) -> (u16, u16) {
+        // coordinate를 x, y 좌표로 변환
+        let x = (coordinate % BOARDSIZE as u16) as i16;
+        let y = (coordinate / BOARDSIZE as u16) as i16;
+
+        let mut forward_count = 0u16;
+        let mut backward_count = 0u16;
+
+        // forward_count
+        // i를 1부터 시작해서 계속 증가
+        let mut i = 1i16;
+        loop {
+            // 좌표계산
+            let nx = x + direction.0 * i;
+            let ny = y + direction.1 * i;
+            
+            // 경계 체크 보드 밖이면 break
+            if nx < 0 || nx >= BOARDSIZE as i16 || ny < 0 || ny >= BOARDSIZE as i16 {
+                break;
+            }
+
+            // nx, ny를 좌표로 변환
+            let next_coord = (ny as u16) * BOARDSIZE as u16 + (nx as u16);
+
+            // 같은 색 돌인지 확인
+            if self.get_color(next_coord) == color {
+                forward_count += 1;
+                i += 1;
+            } else {
+                break;
+            }
+        }
+
+        // backward_count
+        let mut i = 1i16;
+        // front_count와 동일
+        loop {
+            let nx = x - direction.0 * i;
+            let ny = y - direction.1 * i;
+
+            if nx < 0 || nx >= BOARDSIZE as i16 || ny < 0 || ny >= BOARDSIZE as i16 {
+                break;
+            }
+
+            let next_coord = (ny as u16) * BOARDSIZE as u16 + (nx as u16);
+
+            if self.get_color(next_coord) == color {
+                backward_count += 1;
+                i += 1;
+            } else {
+                break;
+            }
+        }
+
+        (forward_count, backward_count)
+    }
+
+    // 열린 3 판별
+    fn is_open_three(&self, coordinate: u16, direction: (i16, i16), color: Color) -> bool {
+        // count_direction 함수 사용해서 돌 개수 구하기
+        let (forward_count, backward_count) = self.count_direction(coordinate, direction, color);
+        let total_count = forward_count + backward_count + 1;
+
+        // 3개가 아니면 false
+        if total_count != 3 {
+            return false;
+        }
+
+        // 현재 X, Y의 좌표
+        let x = (coordinate % BOARDSIZE as u16) as i16;
+        let y = (coordinate / BOARDSIZE as u16) as i16;
+
+        // 연결된 돌 앞 끝이 비어있는지 확인
+        let front_x = x + direction.0 * (forward_count as i16 + 1);
+        let front_y = y + direction.1 * (forward_count as i16 + 1);
+
+        let front_open = if front_x >= 0 && front_x < BOARDSIZE as i16 
+                         && front_y >= 0 && front_y < BOARDSIZE as i16 {
+            // 2차원 -> 1차원 좌표로 변환
+            let front_coord = (front_y as u16) * BOARDSIZE as u16 + (front_x as u16);
+            self.get_color(front_coord) == Color::Free
+        } else {
+            false
+        };
+
+        // 연결된 돌 뒤 끝이 비어있는지 확인
+        let back_x = x - direction.0 * (backward_count as i16 + 1);
+        let back_y = y - direction.1 * (backward_count as i16 + 1);
+        
+        let back_open = if back_x >= 0 && back_x < BOARDSIZE as i16 
+                        && back_y >= 0 && back_y < BOARDSIZE as i16 {
+            // 2차원 -> 1차원 좌표로 변환
+            let back_coord = (back_y as u16) * BOARDSIZE as u16 + (back_x as u16);
+            self.get_color(back_coord) == Color::Free
+        } else {
+            false
+        };
+
+        // 양쪽이 모두 열려있으면 true
+        front_open && back_open
+    }
+
+    // 3-3 금수 확인
+    pub fn check_double_three(&self, coordinate: u16) -> bool {
+        // 백돌은 금수 없음
+        if self.board.get_turn() != Color::Black {
+            return false;
+        }
+
+        // 4가지 방향 정의
+        let directions = [
+            (1, 0),   // 가로
+            (0, 1),   // 세로
+            (1, 1),   // 대각선 ↘
+            (1, -1),  // 대각선 ↗
+        ];
+
+        // 열린 3의 개수를 세는 카운터 변수
+        let mut open_three_count = 0u8;
+
+        // 각 방향마다 반복문으로 확인
+        for direction in directions {
+            if self.is_open_three(coordinate, direction, Color::Black) {
+                open_three_count += 1;
+            }
+        }
+
+        // 2개 이상이면 금수
+        open_three_count >= 2
+    }
+
+    /// 5개 연결 확인 (승리 조건)
+    fn check_five_in_row(&self, coordinate: u16, color: Color) -> bool {
+        // 방향 정의
+        let directions = [
+            (1, 0),   // 가로
+            (0, 1),   // 세로
+            (1, 1),   // 대각선 ↘
+            (1, -1),  // 대각선 ↗
+        ];
+
+        // 각 방향 확인
+        for direction in directions {
+            let (forward_count, backward_count) = self.count_direction(coordinate, direction, color);
+            let total_count = forward_count + backward_count + 1;
+            
+            // 정확히 5개 연결되면 승리
+            if total_count == 5 {
+                return true;
+            }
+            
+            // 6개 이상: 백돌은 승리, 흑돌은 장목 금수
+            if total_count >= 6 {
+                if color == Color::White {
+                    return true;  // 백돌은 장목 가능
+                }
+                // 흑돌의 6개 이상은 금수이므로 계속 확인
+            }
+        }
+
+        false
+    }
+
+    // 턴 바꾸기
+    pub fn switch_turn(&mut self) {
+        self.board.switch_turn();
+    }
+    
 }
 
 /// 착수 시도 실패 시 Err 출력
-pub fn chaksu(game: &mut Omok, coordinate: u16) -> Result<(),BadukBoardError> {
-    if !game.board.is_free(coordinate) {return Err(BadukBoardError::OverLap);}
-    // TODO: 33 규칙 확인하기
-    // TODO: 다른 착수 금지 규칙 확인하기
-    // TODO: 돌 5개 연결 되었는지 확인
-    game.board.push_stone(coordinate);
-    Ok(())
+pub fn chaksu(game: &mut Omok, coordinate: u16) -> Result<GameState, BadukBoardError> {
+    // 1. 게임이 이미 끝났는지 확인
+    if game.game_state != GameState::Playing {
+        return Err(BadukBoardError::GameOver);
+    }
+    
+    // 2. 겹침 검사
+    if !game.board.is_free(coordinate) {
+        return Err(BadukBoardError::OverLap);
+    }
+    
+    // 3. 3-3 금수 검사 (흑돌만)
+    if game.check_double_three(coordinate) {
+        return Err(BadukBoardError::DoubleThree);
+    }
+    
+    // TODO: 다른 착수 금지 규칙 확인하기 (4-4, 장목)
+    
+    // 4. 돌 놓기
+    let current_turn = game.board.get_turn();
+    game.board.push_stone(coordinate, current_turn);
+    
+    // 5. 승리 조건 확인
+    if game.check_five_in_row(coordinate, current_turn) {
+        game.game_state = if current_turn == Color::Black {
+            GameState::BlackWin
+        } else {
+            GameState::WhiteWin
+        };
+        return Ok(game.game_state.clone());
+    }
+    
+    // 6. 턴 전환
+    game.switch_turn();
+    
+    // 7. 게임 계속 진행
+    Ok(GameState::Playing)
 }
-
-// TODO: 돌 5개 연결 확인 및 게임 종료
-// TODO: 무승부 요청 처리
-// TODO: 기권 처리
