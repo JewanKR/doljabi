@@ -1,3 +1,5 @@
 # 개인 파일
 private/
-mydb.db
+.vscode
+
+*.db
