@@ -1,11 +1,17 @@
 use derive_builder::Builder;
 
-const BOARDSIZE: usize = 19;
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Boardsize {
+    Baduk = 19,
+    Omok = 15,
+}
 
 #[derive(Debug, PartialEq)]
 pub enum BadukBoardError {
     OutOfBoard,
     OverLap,
+    BannedChaksu,
+    InvalidArgument,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -16,11 +22,6 @@ pub enum Color {
     ColorError
 }
 
-/// xy 좌표 표현법 -> 정수 좌표 표현법 함수
-pub fn xy_expression_to_integer_expression(x: u16, y: u16) -> u16 {
-    y * BOARDSIZE as u16 + x
-}
-
 /// bitboard 접근 함수
 pub fn coordinate_index(coordinate: u16) -> usize {
     (coordinate / 64) as usize
@@ -29,18 +30,9 @@ pub fn coordinatde_value(coordinate: u16) -> u64 {
     1u64 << (coordinate % 64)
 }
 
-/// 같은 열인지 확인 하는 함수
-pub fn check_boundary(standard: u16, compare: u16) -> bool {
-    (standard as usize / BOARDSIZE) == (compare as usize / BOARDSIZE)
-}
-
-/// 좌표 값이 0 ~ 380인지 확인 (Out Board인지 확인)
-pub fn check_outboard_coordinate(coordinate: u16) -> Result<(), BadukBoardError> {
-    if coordinate < 381 {Ok(())} else {Err(BadukBoardError::OutOfBoard)} 
-}
-
 #[derive(Clone, Debug)]
 pub struct BadukBoard {
+    boardsize: u16,
     black: [u64; 6],
     white: [u64; 6],
     turn: Color,
@@ -49,6 +41,7 @@ pub struct BadukBoard {
     /// BadukBoard::new(); 형식으로 사용.
     pub fn new() -> Self {
         Self {
+            boardsize: Boardsize::Baduk as u16,
             black: [0; 6],
             white: [0; 6],
             turn: Color::Black,
@@ -61,6 +54,27 @@ pub struct BadukBoard {
     }
     pub fn output_bitboard_white(&self) -> Vec<u64> {
         self.white.to_vec()
+    }
+    pub fn is_turn(&self) -> Color {
+        self.turn.clone()
+    }
+    pub fn boardsize(&self) -> u16 {
+        self.boardsize
+    }
+
+    /// xy 좌표 표현법 -> 정수 좌표 표현법 함수
+    pub fn xy_expression_to_integer_expression(&self, x: u16, y: u16) -> u16 {
+        y * self.boardsize as u16 + x
+    }
+
+    // 열 확인
+    pub fn is_column(&self, coordinate: u16) -> usize {
+        (coordinate / self.boardsize) as usize
+    }
+
+    /// 좌표 값이 0 ~ 380인지 확인 (Out Board인지 확인)
+    pub fn check_outboard_coordinate(&self, coordinate: u16) -> Result<(), BadukBoardError> {
+        if coordinate < (self.boardsize * self.boardsize) {Ok(())} else {Err(BadukBoardError::OutOfBoard)} 
     }
 
     // 돌 확인 함수
@@ -94,11 +108,7 @@ pub struct BadukBoard {
         }
     }
 
-    pub fn is_turn(&self) -> Color {
-        self.turn.clone()
-    }
-    
-    // TODO: 턴 넘김
+    // 턴 넘김
     pub fn switch_turn(&mut self) {
         match self.turn.clone() {
             Color::Black => {self.turn = Color::White;},

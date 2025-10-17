@@ -4,21 +4,46 @@ use axum::{
     Form,       // HTML <form> 데이터 파싱
 };
 use serde::Deserialize;
-use rusqlite::{params, Connection, Result};
-use bcrypt::{hash, verify, DEFAULT_COST};
+use rusqlite::{self, params, Connection, Result};
 use tower_http::services::ServeDir;
+use argon2::{password_hash::{self, rand_core::OsRng, PasswordHash, PasswordHasher, SaltString, PasswordVerifier}, Argon2};
 
 //
 // ✅ DB 함수들
 //
 
+enum UserError {
+    PasswordHash(password_hash::Error),
+    Database(rusqlite::Error),
+}
+
+fn argon2_hash(input: &str) -> Result<String, password_hash::Error> {
+    let salt = SaltString::generate(&mut OsRng);
+    let algorithm = Argon2::default();
+    
+    Ok(algorithm.hash_password(input.as_bytes(), &salt)?.to_string())
+}
+
+fn verify_argon2(input: &str, hashed: &str) -> Result<bool, password_hash::Error> {
+    let algorithm = Argon2::default();
+    let password_hash =  PasswordHash::new(&hashed)?;
+
+    Ok(algorithm.verify_password(input.as_bytes(), &password_hash).is_ok())
+}
+
+
 // 회원가입: DB에 사용자 추가
-fn signup_db(conn: &Connection, username: &str, password_plain: &str) -> Result<()> {
-    let hashed = hash(password_plain, DEFAULT_COST).expect("bcrypt hash 실패");
-    conn.execute(
+fn signup_db(conn: &Connection, username: &str, password_plain: &str) -> Result<(), UserError> {
+    let hashed = match argon2_hash(password_plain) {
+        Ok(hash) => hash,
+        Err(e) => return Err(UserError::PasswordHash(e)),
+    };
+    
+    if let Err(e) = conn.execute(
         "INSERT INTO users (username, password_hash) VALUES (?1, ?2)",
         params![username, hashed],
-    )?;
+    ) {return Err(UserError::Database(e));}
+
     Ok(())
 }
 
@@ -26,7 +51,7 @@ fn signup_db(conn: &Connection, username: &str, password_plain: &str) -> Result<
 fn login_db(conn: &Connection, username: &str, password_plain: &str) -> Result<bool> {
     let mut stmt = conn.prepare("SELECT password_hash FROM users WHERE username = ?1")?;
     let stored_hash: String = stmt.query_row([username], |row| row.get(0))?;
-    Ok(verify(password_plain, &stored_hash).unwrap_or(false))
+    Ok(verify_argon2(password_plain, &stored_hash).unwrap_or(false))
 }
 
 //
@@ -48,20 +73,30 @@ struct LoginForm {
 // ✅ API 핸들러
 //
 async fn signup(Form(form): Form<SignupForm>) -> String {
-    let conn = Connection::open("mydb.db").unwrap();
+    let signup_error_message = "⚠️ 회원가입 에러: 서버 관리자에게 문의하세요".to_string();
+
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("❌ 회원가입 실패: {}", e);
+            return signup_error_message;
+        }
+    };
 
     // users 테이블 없으면 생성
-    conn.execute(
+    if let Err(e) = conn.execute(
         "CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
+            login_id TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
-            rating INTEGER DEFAULT 1000,
-            win INTEGER DEFAULT 0,
-            lose INTEGER DEFAULT 0
+            username TEXT UNIQUE NOT NULL,
+            rating INTEGER DEFAULT 1500,
         )",
         [],
-    ).unwrap();
+    ) {
+        eprintln!("❌ 회원가입 실패: {}", e);
+        return signup_error_message;
+    };
 
     match signup_db(&conn, &form.username, &form.password) {
         Ok(_) => {
@@ -69,14 +104,25 @@ async fn signup(Form(form): Form<SignupForm>) -> String {
             format!("회원가입 성공: {}", form.username)
         }
         Err(e) => {
-            println!("❌ 회원가입 실패: {}", e);
-            format!("회원가입 실패: {}", e)
+            match e {
+                UserError::PasswordHash(e) => {eprintln!("❌ 회원가입 실패: {}", e);}
+                UserError::Database(e) => {eprintln!("❌ 회원가입 실패: {}", e);}
+            }
+            signup_error_message
         }
     }
 }
 
 async fn login(Form(form): Form<LoginForm>) -> String {
-    let conn = Connection::open("mydb.db").unwrap();
+    let login_error_message = "⚠️ 로그인 에러: 서버 관리자에게 문의하세요".to_string();
+
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("⚠️ 로그인 에러: {}", e);
+            return login_error_message;
+        }
+    };
 
     match login_db(&conn, &form.username, &form.password) {
         Ok(true) => {
@@ -88,22 +134,23 @@ async fn login(Form(form): Form<LoginForm>) -> String {
             format!("{} 로그인 실패", form.username)
         }
         Err(e) => {
-            println!("⚠️ 로그인 DB 에러: {}", e);
-            format!("DB 에러: {}", e)
+            eprintln!("⚠️ 로그인 에러: {}", e);
+            login_error_message
         }
     }
 }
 
 pub fn user_router() -> Router {
     Router::new()
-        .route("/signup", post(signup))   // POST /signup
-        .route("/login", post(login))     // POST /login
-        .fallback_service(ServeDir::new("static")) // static/ 폴더에서 HTML, CSS 제공
+        .route("/signup", post(signup))
+        .route("/login", post(login))
 }
 
-/*
+/* 기존 코드
 let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
 println!("🚀 서버 실행중: http://127.0.0.1:3000");
 
 serve(listener, app).await.unwrap();
+Router::new()
+    .fallback_service(ServeDir::new("static")) // static/ 폴더에서 HTML, CSS 제공
 */
