@@ -1,6 +1,8 @@
 use derive_builder::Builder;
-use std::{collections::{linked_list, HashMap, HashSet}, fmt::Pointer};
+use utoipa_axum::router::OpenApiRouter;
+use std::{collections::{HashSet}};
 use crate::game::badukboard::{*};
+use axum::{routing::{get, post, patch, delete}, http::StatusCode, Json, Router};
 
 // 방향 정의
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -36,6 +38,17 @@ pub struct Omok {
         }
     }
 
+    // TODO: User 접속 구현
+    fn enter_user(&mut self, user_id: u64) -> Result<(), ()> {
+        self.players.push_user(user_id)
+    }
+
+    fn leave_user(&mut self, user_id: u64) -> Result<(), ()> {
+        self.players.pop_user(user_id)
+    }
+
+    // TODO: User 방 나가기 구현
+
     // 방향 크기 정의
     pub fn direction_value(&self, dir: Direction) -> u16 {
         match dir {
@@ -64,7 +77,7 @@ pub struct Omok {
         Color::White => self.board.is_white(coordinate),
         Color::Black => self.board.is_black(coordinate),
         Color::Free => self.board.is_free(coordinate),
-        _ => {eprintln!("Error: color 이상한 접근"); true}
+        _ => {eprintln!("Error: color 이상한 접근"); false}
     }}
 
     // 연결된 돌들의 좌표 개수을 반환하는 함수
@@ -256,3 +269,17 @@ pub struct Omok {
 // Vec에 크기가 작은 수 -> 큰 수로 정렬 됨 (Vec.sort() 매소드 이용)
 // HashSet에 Vec를 넣어 중복된 Vec을 제거함
 // 판별만 하면 됨
+
+
+
+
+// TODO: 무승부 요청 처리
+// TODO: 기권 처리
+
+
+pub fn omok_ws() -> Router {
+    Router::new()
+        // Web Socket 연결 (연결: 입장, 연결 해제: 퇴장)
+        .route("/{room_id}/enter", post(|| async { "Hello, World!" }))
+        .route("/{room_id}/leave", delete(|| async { "Hello, World!" }))
+}

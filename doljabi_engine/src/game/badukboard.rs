@@ -207,17 +207,21 @@ pub struct Players {
     pub fn pop_user(&mut self, user_id: u64) -> Result<(), ()> {
         if let Some(black_user) = &self.black_player {
             if black_user.user_id == user_id {
-                self.black_player = None
+                self.black_player = None;
+                return Ok(());
             }
-            return Ok(());
+            
         }
 
         if let Some(white_user) = &self.white_player {
             if white_user.user_id == user_id {
-                self.white_player = None
+                self.white_player = None;
+                return Ok(());
             }
-            return Ok(());
+            
         }
+
+
         Err(())
     }
 
