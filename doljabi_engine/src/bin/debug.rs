@@ -15,7 +15,7 @@ fn main() {
     let coord2 = badukboard::xy_expression_to_integer_expression(10, 10);
 
     println!("\nPushing black stone at (3, 3) -> coord {}", coord1);
-    board.push_stone(coord1);
+    board.push_stone(coord1, Color::Black);
     println!("Board state: {:?}", board);
     println!("Is (3,3) black? {}", board.is_black(coord1));
     println!("Is (3,3) free? {}", board.is_free(coord1));
@@ -29,7 +29,7 @@ fn main() {
     // println!("Is (10,10) white? {}", board.is_white(coord2));
 
     println!("\nDeleting black stone at (3, 3)");
-    board.delete_stone(coord1);
+    board.delete_stone(coord1, Color::Black);
     println!("Board state: {:?}", board);
     println!("Is (3,3) free now? {}", board.is_free(coord1));
 

@@ -94,7 +94,18 @@ pub struct BadukBoard {
         }
     }
 
+    pub fn is_turn(&self) -> Color {
+        self.turn.clone()
+    }
+    
     // TODO: 턴 넘김
+    pub fn switch_turn(&mut self) {
+        match self.turn.clone() {
+            Color::Black => {self.turn = Color::White;},
+            Color::White => {self.turn = Color::Black;},
+            _ => {println!("Error: switch_turn: 색 지정이 잘못 되었습니다.")},
+        }
+    }
 }
 
 #[derive(Clone, Debug, Builder)]
@@ -108,6 +119,8 @@ pub struct Player {
     remaining_overtime: u8,
     overtime: u64,
     match_making_rating: u16,
+
+    ws_addr: Option<String>,
 } impl Player {
     pub fn new(user_id: u64) -> Self {
         Self {
@@ -118,6 +131,7 @@ pub struct Player {
             start_time: 0,
             overtime: 60000,
             match_making_rating: 1500,
+            ws_addr: None,
         }
     }
 
