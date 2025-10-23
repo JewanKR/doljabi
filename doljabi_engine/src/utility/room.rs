@@ -22,15 +22,15 @@ pub enum Game {
 // main() 에서 users = HashMap<id, User>
 /// Arc::new(Mutex::new(User::default()))를 이용해 생성
 struct Room {
-    room_id: u64,
-    game: Game,
+    game_id: Option<u64>,
     enter_code: u16,
+    game: Game,
 } impl Room {
-    pub fn new(roomid: usize, game_mode: Gamemode) -> Self {
+    pub fn new(game_mode: Gamemode) -> Self {
         Self {
-            room_id: roomid as u64,
-            game: set_game(game_mode),
+            game_id: None,
             enter_code: 10000 as u16,
+            game: set_game(game_mode),
         }
     }
 }
@@ -41,7 +41,9 @@ fn set_game(game_mode: Gamemode) -> Game {
         Gamemode::Omok => Game::Omok(omok::Omok::new())
     }
 }
-/* 
+
+
+
 // 방 관련 라우터 설정
 pub fn room_router() -> OpenApiRouter {
     OpenApiRouter::new()
@@ -55,4 +57,6 @@ async fn room_list() {
 async fn create_room() {
 
 }
-*/
+
+
+async fn
