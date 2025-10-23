@@ -179,6 +179,7 @@ impl Omok {
         open_three_count >= 2
     }
 
+<<<<<<< Updated upstream
     /// 5개 연결 확인 (승리 조건)
     fn check_five_in_row(&self, coordinate: u16, color: Color) -> bool {
         // 방향 정의
@@ -188,6 +189,19 @@ impl Omok {
             (1, 1),   // 대각선 ↘
             (1, -1),  // 대각선 ↗
         ];
+=======
+            // 4방향 검사(각각 한 방향 씩)
+            for direction in Direction::four_direction() {
+                let set = self.linked_stone(coordinate, direction, color);
+                // 5개 검사
+                if set == 5 {
+                    self.winner = Some(Color::Black);
+                }
+                // 5개 초과(장목) 검사
+                if set > 5 {
+                    return self.chaksu_error(coordinate, color);
+                }
+>>>>>>> Stashed changes
 
         // 각 방향 확인
         for direction in directions {
@@ -211,9 +225,166 @@ impl Omok {
         false
     }
 
+<<<<<<< Updated upstream
     // 턴 바꾸기
     pub fn switch_turn(&mut self) {
         self.board.switch_turn();
+=======
+    // Vec에서 방향값을 추론하는 함수
+    fn get_direction_from_vec(&self, linked_stone: &Vec<u16>) -> Option<u16> {
+        if linked_stone.len() < 2 {
+            return None;
+        }
+        
+        let diff = linked_stone[1] - linked_stone[0];
+        let boardsize = self.board.boardsize();
+        
+        if diff == 1 {
+            Some(1)
+        } else if diff == boardsize - 1 || diff == (boardsize - 1) * 2 {
+            Some(diff)
+        } else if diff == boardsize || diff == boardsize * 2 {
+            Some(diff)
+        } else if diff == boardsize + 1 || diff == (boardsize + 1) * 2 {
+            Some(diff)
+        } else if diff == 2 {
+            Some(2)
+        } else {
+            None
+        }
+    }
+
+    // dir_value로부터 base_dir 계산 (중복 제거)
+    fn calculate_base_dir(&self, dir_value: u16) -> Option<u16> {
+        let boardsize = self.board.boardsize();
+        
+        if dir_value <= 2 {
+            Some(1)  // 가로
+        } else if dir_value == boardsize - 1 || dir_value == (boardsize - 1) * 2 {
+            Some(boardsize - 1)  // 양의 기울기
+        } else if dir_value == boardsize || dir_value == boardsize * 2 {
+            Some(boardsize)  // 세로
+        } else if dir_value == boardsize + 1 || dir_value == (boardsize + 1) * 2 {
+            Some(boardsize + 1)  // 음의 기울기
+        } else {
+            None
+        }
+    }
+
+    // 연속된 돌인지 확인 (한 칸 띄어진 경우도 고려)
+    fn is_consecutive(&self, linked_stone: &Vec<u16>) -> bool {
+        if linked_stone.len() < 2 {
+            return true;
+        }
+
+        let dir_value = match self.get_direction_from_vec(linked_stone) {
+            Some(v) => v,
+            None => return false,
+        };
+
+        let base_dir = match self.calculate_base_dir(dir_value) {
+            Some(v) => v,
+            None => return false,
+        };
+
+        for i in 0..linked_stone.len() - 1 {
+            let diff = linked_stone[i + 1] - linked_stone[i];
+            if diff != base_dir && diff != base_dir * 2 {
+                return false;
+            }
+        }
+        true
+    }
+
+    // 양쪽 끝이 비어있고 유효한지 확인 (공통 로직)
+    fn check_both_ends(&self, linked_stone: &Vec<u16>, base_dir: u16) -> (bool, bool) {
+        let min_coord = linked_stone[0];
+        let max_coord = linked_stone[linked_stone.len() - 1];
+        let board_max = self.board.boardsize() * self.board.boardsize();
+
+        let left_open = if min_coord >= base_dir {
+            self.board.is_free(min_coord - base_dir) 
+                && self.check_out_board_simple(min_coord, min_coord - base_dir, base_dir)
+        } else {
+            false
+        };
+
+        let right_open = if max_coord + base_dir < board_max {
+            self.board.is_free(max_coord + base_dir)
+                && self.check_out_board_simple(max_coord, max_coord + base_dir, base_dir)
+        } else {
+            false
+        };
+
+        (left_open, right_open)
+    }
+
+    // 3(열린 3, 활삼): 양쪽이 모두 비어있는 3
+    fn check_3(&self, linked_stone: &Vec<u16>) -> bool {
+        if linked_stone.len() != 3 || !self.is_consecutive(linked_stone) {
+            return false;
+        }
+
+        let dir_value = match self.get_direction_from_vec(linked_stone) {
+            Some(v) => v,
+            None => return false,
+        };
+        
+        let base_dir = match self.calculate_base_dir(dir_value) {
+            Some(v) => v,
+            None => return false,
+        };
+        
+        let (left_open, right_open) = self.check_both_ends(linked_stone, base_dir);
+        
+        left_open && right_open
+    }
+
+    // 4(열린 4, 활사): 한쪽 이상이 비어있는 4
+    fn check_4(&self, linked_stone: &Vec<u16>) -> bool {
+        if linked_stone.len() != 4 || !self.is_consecutive(linked_stone) {
+            return false;
+        }
+
+        let dir_value = match self.get_direction_from_vec(linked_stone) {
+            Some(v) => v,
+            None => return false,
+        };
+        
+        let base_dir = match self.calculate_base_dir(dir_value) {
+            Some(v) => v,
+            None => return false,
+        };
+        
+        let (left_open, right_open) = self.check_both_ends(linked_stone, base_dir);
+        
+        left_open || right_open
+    }
+
+    // 보드 경계 체크 간단 버전 (방향값으로)
+    fn check_out_board_simple(&self, ptr1: u16, ptr2: u16, dir_value: u16) -> bool {
+        let column1 = self.board.is_column(ptr1);
+        let column2 = self.board.is_column(ptr2);
+
+        let boardsize = self.board.boardsize();
+
+        // 가로 방향 체크
+        if dir_value == 1 {
+            return column1 == column2;
+        }
+        
+        // 세로 방향 체크 (항상 유효)
+        if dir_value == boardsize {
+            return true;
+        }
+        
+        // 대각선 방향 체크
+        if dir_value == boardsize - 1 || dir_value == boardsize + 1 {
+            return 1 == column1.abs_diff(column2);
+        }
+        
+        false
+>>>>>>> Stashed changes
     }
     
 }
