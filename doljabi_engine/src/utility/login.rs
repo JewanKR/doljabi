@@ -168,12 +168,3 @@ pub fn login_router() -> OpenApiRouter {
         .routes(routes!(signup))
         .routes(routes!(login))
 }
-
-/* 기존 코드
-let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
-println!("🚀 서버 실행중: http://127.0.0.1:3000");
-
-serve(listener, app).await.unwrap();
-Router::new()
-    .fallback_service(ServeDir::new("static")) // static/ 폴더에서 HTML, CSS 제공
-*/

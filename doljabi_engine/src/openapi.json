@@ -1,19 +1,39 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "utoipa-axum",
-    "description": "Utoipa's axum bindings for seamless integration for the two",
+    "title": "doljabi",
+    "description": "doljabi project REST API를 정의한 문서입니다.",
     "contact": {
-      "name": "Juha Kukkonen",
-      "email": "juha7kukkonen@gmail.com"
+      "name": "Doljabi Team",
+      "email": "doljabi2025@gmail.com"
     },
-    "license": {
-      "name": "MIT OR Apache-2.0",
-      "identifier": "MIT OR Apache-2.0"
-    },
-    "version": "0.2.0"
+    "version": "1.0.0"
   },
   "paths": {
+    "/api/admin/openapi": {
+      "get": {
+        "operationId": "swagger_ui_page",
+        "responses": {
+          "200": {
+            "description": "Swagger UI 페이지"
+          }
+        }
+      }
+    },
+    "/api/admin/openapi/openapi.json": {
+      "get": {
+        "summary": "OpenAPI JSON 스펙을 반환하는 엔드포인트",
+        "operationId": "get_openapi_spec",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 스펙 반환 성공"
+          },
+          "500": {
+            "description": "서버 오류"
+          }
+        }
+      }
+    },
     "/api/login": {
       "post": {
         "operationId": "login",
