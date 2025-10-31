@@ -2,8 +2,6 @@ use derive_builder::Builder;
 use std::collections::{HashMap, HashSet};
 use crate::game::badukboard::{*};
 
-const BOARDSIZE: usize = 19;
-
 #[derive(Clone, Debug, Builder)]
 pub struct Baduk {
     board: BadukBoard,
@@ -22,6 +20,7 @@ pub struct Baduk {
             
             black_linked_stone_set: HashMap::<u16, HashSet<u16>>::new(),
             white_linked_stone_set: HashMap::<u16, HashSet<u16>>::new(),
+            
             black_caught_stone: 0,
             white_caught_stone: 0,
         }

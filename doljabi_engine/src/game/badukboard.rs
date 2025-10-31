@@ -121,30 +121,28 @@ pub struct BadukBoard {
 #[derive(Clone, Debug, Builder)]
 pub struct Player {
     user_id: u64,
-    name: String,
+    // name: String,
 
     remaining_time: u64,
     start_time: u128,
 
     remaining_overtime: u8,
     overtime: u64,
-    match_making_rating: u16,
-
-    ws_addr: Option<String>,
+    // match_making_rating: u16,
 } impl Player {
     pub fn new(user_id: u64) -> Self {
         Self {
             user_id: user_id,
-            name: String::new(),
+            // name: String::new(), <- 바로 클라이언트로 보내기
             remaining_overtime: 3,
             remaining_time: 7200000,
             start_time: 0,
             overtime: 60000,
-            match_making_rating: 1500,
-            ws_addr: None,
+            // match_making_rating: 1500,
         }
     }
 
+    /*
     // player 이름 불러오기
     pub fn load_name(&mut self) {
         self.name = String::new(); // TODO: DB에서 이름 불러오기
@@ -154,6 +152,7 @@ pub struct Player {
     pub fn load_match_making_rating(&mut self) {
         self.match_making_rating = self.match_making_rating; // TODO: DB에서 MMR 불러오기
     }
+    */
 
     // 제한시간 설정
     pub fn set_remaining_time(&mut self, remaining_time: u64) {
@@ -205,20 +204,27 @@ pub struct Players {
 
     // player 제거
     pub fn pop_user(&mut self, user_id: u64) -> Result<(), ()> {
+        let mut flag = false;
+
         if let Some(black_user) = &self.black_player {
             if black_user.user_id == user_id {
-                self.black_player = None
+                self.black_player = None;
+                flag = true;
             }
-            return Ok(());
         }
 
         if let Some(white_user) = &self.white_player {
             if white_user.user_id == user_id {
-                self.white_player = None
+                self.white_player = None;
+                flag = true;
             }
-            return Ok(());
         }
-        Err(())
+
+        if flag {
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 
     // 색상 스위치

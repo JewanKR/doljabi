@@ -117,7 +117,7 @@ export default function OmokSinglePlay() {
         if (stone) {
           const x = BOARD_PADDING + col * CELL_SIZE;
           const y = BOARD_PADDING + row * CELL_SIZE;
-          const radius = 21; // 돌 크기
+          const radius = Math.min(21, CELL_SIZE * 0.4); // 돌 크기
 
           // Enhanced 3D stone rendering
           if (stone === 'black') {
@@ -789,11 +789,11 @@ export default function OmokSinglePlay() {
                 </button>
                 <button 
                   onClick={handleResign}
-                  className="w-full py-2 rounded-lg transition-colors cursor-pointer whitespace-nowrap text-white"
-                  style={{ 
-                    background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                    boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)'
-                  }}
+                    className="w-full py-2 rounded-lg transition-colors cursor-pointer whitespace-nowrap text-white"
+                    style={{ 
+                      background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                      boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)'
+                    }}
                 >
                   기권
                 </button>
