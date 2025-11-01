@@ -1,3 +1,12 @@
+<<<<<<< HEAD
 target/
 mydb.db
 private/
+=======
+# 개인 파일
+private/
+.vscode
+
+*.db
+target/
+>>>>>>> 674da0f927ffdad165491a1169676c68386d5301

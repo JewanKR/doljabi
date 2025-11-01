@@ -2,8 +2,6 @@ use derive_builder::Builder;
 use std::collections::{HashMap, HashSet};
 use crate::game::badukboard::{*};
 
-const BOARDSIZE: usize = 19;
-
 #[derive(Clone, Debug, Builder)]
 pub struct Baduk {
     board: BadukBoard,
@@ -22,6 +20,7 @@ pub struct Baduk {
             
             black_linked_stone_set: HashMap::<u16, HashSet<u16>>::new(),
             white_linked_stone_set: HashMap::<u16, HashSet<u16>>::new(),
+            
             black_caught_stone: 0,
             white_caught_stone: 0,
         }
@@ -31,7 +30,8 @@ pub struct Baduk {
 
 enum BadukCommandList {
     Chaksu = 1,
-    DrawRe
+    DrawRequest = 2,
+    Pass = 3,
 }
 
 // TODO: 연결 된 돌 확인 및 linked_stone_set: HashMap<HashSet>에 저장
@@ -41,11 +41,12 @@ enum BadukCommandList {
 
 /// 착수 시도 실패 시 Err 출력
 pub fn chaksu(board: &mut Baduk, coordinate: u16) -> Result<(),BadukBoardError> {
+    let color = board.board.is_turn();
     if !board.board.is_free(coordinate) {return Err(BadukBoardError::OverLap);}
     // TODO: 상대 돌 먹는지 확인
     // TODO: 자살수 확인
     // TODO: 반복수(패) 금지 확인
-    board.board.push_stone(coordinate);
+    board.board.push_stone(coordinate, color);
     Ok(())
 }
 
@@ -54,6 +55,4 @@ pub fn chaksu(board: &mut Baduk, coordinate: u16) -> Result<(),BadukBoardError> 
 // TODO: 집 수 계산 및 계가
 // TODO: 승패 표시
 
-// TODO: 무승부 요청 처리
-// TODO: 기권 처리
 // TODO: 수 넘김 처리
