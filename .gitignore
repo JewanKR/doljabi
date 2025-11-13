@@ -3,4 +3,4 @@ private/
 .vscode
 
 *.db
-target/
+target
