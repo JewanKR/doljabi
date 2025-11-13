@@ -1,3 +1,5 @@
+// 서버 실행법> cargo run --bin debug_login_page
+
 use axum::Router;
 use utoipa_axum::router::OpenApiRouter;
 

@@ -5,7 +5,6 @@ use doljabi_engine::utility::{admin_page::admin_page_router, login::login_router
 use axum::{Router, Json};
 use utoipa::{ToSchema, openapi::{self, ContactBuilder, OpenApi, OpenApiVersion}};
 use utoipa_axum::{router::OpenApiRouter};
-use utoipa_swagger_ui::SwaggerUi;
 
 // api로 오는 http 요청
 fn router_list() -> OpenApiRouter {

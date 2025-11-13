@@ -58,6 +58,7 @@ fn login_db(conn: &Connection, login_id: &str, password_plain: &str) -> Result<b
 struct SignupForm {
     login_id: String,
     password: String,
+    user_name: String,
 }
 
 #[derive(Deserialize, ToSchema)]

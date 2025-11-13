@@ -90,6 +90,26 @@ pub struct BadukBoard {
         !(self.is_black(coordinate) || self.is_white(coordinate))
     }
 
+    /// check_color 함수 사용 권장 (이 함수는 연산이 약 2배 많음)
+    pub fn is_color(&self, coordinate: u16) -> Color {
+        match (self.is_black(coordinate), self.is_white(coordinate)) {
+            (true, true) => {eprintln!("Error: overlap!"); Color::ColorError},
+            (true, false) => Color::Black,
+            (false, true) => Color::White,
+            (false, false) => Color::Free,
+        }
+    }
+
+    // check_color 함수 사용 권장
+    pub fn check_color(&self, coordinate: u16, color: Color) -> bool {
+        match color {
+            Color::Black => self.is_black(coordinate),
+            Color::White => self.is_white(coordinate),
+            Color::Free => self.is_free(coordinate),
+            Color::ColorError => {eprintln!("Error: Check_color: 허용되지 않은 입력"); false}
+        }
+    }
+
     /// 돌 집어 넣기
     pub fn push_stone(&mut self, coordinate: u16, color: Color) {
         match color {
@@ -123,7 +143,7 @@ pub struct Player {
     user_id: u64,
     // name: String,
 
-    remaining_time: u64,
+    main_time: u64,
     start_time: u128,
 
     remaining_overtime: u8,
@@ -133,12 +153,10 @@ pub struct Player {
     pub fn new(user_id: u64) -> Self {
         Self {
             user_id: user_id,
-            // name: String::new(), <- 바로 클라이언트로 보내기
-            remaining_overtime: 3,
-            remaining_time: 7200000,
+            main_time: 7200000,
             start_time: 0,
             overtime: 60000,
-            // match_making_rating: 1500,
+            remaining_overtime: 3,
         }
     }
 
@@ -155,13 +173,13 @@ pub struct Player {
     */
 
     // 제한시간 설정
-    pub fn set_remaining_time(&mut self, remaining_time: u64) {
-        self.remaining_time = remaining_time;
+    pub fn set_remaining_time(&mut self, main_time: u64) {
+        self.main_time = main_time;
     }
 
     // 남은 시간 계산
     pub fn calculate_remaining_time(&mut self) {
-        self.remaining_time = self.remaining_time - (tokio::time::Instant::now().elapsed().as_millis() - self.start_time) as u64;
+        self.main_time = self.main_time - (tokio::time::Instant::now().elapsed().as_millis() - self.start_time) as u64;
     }
 
     // 시작 시간 설정

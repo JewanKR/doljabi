@@ -1,19 +1,32 @@
-use crate::game::{baduk, omok::{self, Omok}};
+use crate::game::{baduk, badukboard::Players, omok::{self, Omok}};
 use axum::{Json, Router, extract::ws::Message, http::StatusCode, response::IntoResponse, routing::{delete, get, patch, post}};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::{broadcast, mpsc}, task::JoinHandle};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
-/* 
-// 방 관련 라우터 설정
-pub fn room_router() -> OpenApiRouter {
-    OpenApiRouter::new()
-        .routes(routes!(create_omok_room))
-        //.routes(routes!(room_list))
+/*
+pub struct CreateOmokRoom {
+    token: String,
+    main_time: u64,
+
+}
+
+pub struct OmokRequestForm {
+    token: String,
+    request: OmokRequestList,
+    coordinate: u16,
+}
+
+pub enum OmokRequestList {
+    Chaksu = 1,
+    DrawRequest = 2,
+    Surrender = 3,
+
 }
 
 pub struct OmokRoom {
-    game: JoinHandle<Result<(), ()>>,
+    game: Omok,
+    players: Players,
 
     game_id: u64,
     enter_code: u16,
@@ -30,6 +43,15 @@ pub struct OmokRoom {
         room_join_channel: tx,
         join_result: None,
     }}
+
+    // User 접속 구현
+    pub fn push_user(&mut self, user_id: u64) -> Result<(), ()> {
+        self.players.push_user(user_id)
+    }
+
+    pub fn pop_user(&mut self, user_id: u64) -> Result<(), ()> {
+        self.players.pop_user(user_id)
+    }
 
     pub fn check_game_id(&self) -> u64 {
         self.game_id
@@ -141,7 +163,7 @@ async fn create_room_requset(
 
 #[utoipa::path(
     post, // HTTP 메소드
-    path = "/api/omok/{game_id}/enter", // 경로
+    path = "/api/omok/enter/{game_id}", // 경로
     responses(
         // 예상되는 응답들
         (status = 200, description = "게임 입장 성공"),
@@ -219,4 +241,17 @@ async fn room_list() -> IntoResponse {
     
 }
 */
-*/
+
+
+
+// TODO: 무승부 요청 처리
+// TODO: 기권 처리
+
+// 방 관련 라우터 설정
+pub fn room_router() -> OpenApiRouter {
+    OpenApiRouter::new()
+        .routes(routes!(create_omok_room))
+        //.routes(routes!(room_list))
+}
+
+        */

@@ -13,6 +13,8 @@ const BadukJoinRoom = lazy(() => import('../pages/baduk/join-room/page'));
 const BadukSinglePlay = lazy(() => import('../pages/baduk/single-play/page'));
 const BadukWaitingRoom = lazy(() => import('../pages/baduk/waiting-room/page'));
 const BadukGameRoom = lazy(() => import('../pages/baduk/game-room/page'));
+const OpenApiDocs = lazy(() => import('../pages/openapi/page'));
+
 
 // Omok pages
 const OmokQuickMatch = lazy(() => import('../pages/omok/quick-match/page'));
@@ -84,6 +86,10 @@ const routes: RouteObject[] = [
   {
     path: '/omok/game-room',
     element: <OmokGameRoom />,
+  },
+  {
+    path: '/openapi',
+    element: <OpenApiDocs />,
   },
   {
     path: '*',

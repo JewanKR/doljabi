@@ -1,14 +1,9 @@
 use derive_builder::Builder;
-use futures_util::{SinkExt, StreamExt};
-use tokio::sync::{mpsc, oneshot};
-use utoipa_axum::{router::OpenApiRouter, routes};
 use std::{collections::{HashSet}};
 use crate::game::badukboard::{*};
-use axum::{Json, Router, extract::{WebSocketUpgrade, ws::{Message, Utf8Bytes, WebSocket}}, response::IntoResponse, routing::{delete, get, patch, post}};
-use hyper::StatusCode;
 
 // 방향 정의
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
 pub enum Direction {
     Horizontal,     // 가로
     Vertical,       // 세로
@@ -26,30 +21,17 @@ pub enum Direction {
 #[derive(Clone, Debug, Builder)]
 pub struct Omok {
     board: BadukBoard,
-    players: Players,
-
     // 게임 사항 None 이면 진행중
     winner: Option<Color>,
 
 } impl Omok {
     pub fn new() -> Self {Self {
         board: BadukBoard::new(),
-        players: Players::new(),
-
         winner: None,
     }}
 
     pub fn is_board(&self) -> BadukBoard {
         self.board.clone()
-    }
-
-    // User 접속 구현
-    pub fn push_user(&mut self, user_id: u64) -> Result<(), ()> {
-        self.players.push_user(user_id)
-    }
-
-    pub fn pop_user(&mut self, user_id: u64) -> Result<(), ()> {
-        self.players.pop_user(user_id)
     }
 
     // 방향 크기 정의
@@ -147,35 +129,35 @@ pub struct Omok {
 
         temp
     }
-
+    
     // 연결된 돌과 한 칸 띄어진 돌의 좌표 Vec을 HashSet에 추가하는 함수
-    fn linked_stone_set(&self, vecs: &mut HashSet<Vec<u16>>, coordinate: u16, direction: Direction) -> () {
-        let dir_value = self.direction_value(direction) * 2;
-
+    fn linked_stone_set(&self, vecs: &mut HashSet<(Direction, Vec<u16>)>, coordinate: u16, direction: Direction) {
         let main_vec = self.linked_stone_vec(coordinate, direction);
         
+        let dir_value = self.direction_value(direction);
         let (upcoordinate, downcoordinate) = match (main_vec.iter().max(), main_vec.iter().min()) {
             (Some(max_value), Some(min_value)) => (max_value.clone(), min_value.clone()),
             _ => (coordinate, coordinate)
         };
 
-        let main_column = self.board.is_column(coordinate);
-        let upcolumn = self.board.is_column(upcoordinate + dir_value);
-        let downcolumn = self.board.is_column(downcoordinate - dir_value);
-
-        
-        if upcolumn.abs_diff(main_column) == 2 {
-            let mut up_vec = self.linked_stone_vec( upcoordinate + dir_value, direction);
-            up_vec.extend(main_vec.clone());
-            up_vec.sort();
-            (*vecs).insert(up_vec);
+        if self.board.is_white(upcoordinate + dir_value) {
+            (*vecs).insert((direction, main_vec.clone()));
+        } else {
+            let mut temp = Vec::<u16>::new();
+            temp.extend(main_vec.clone());
+            temp.extend(self.linked_stone_vec(upcoordinate + dir_value + dir_value, direction));
+            temp.sort();
+            (*vecs).insert((direction, temp));
         }
 
-        if downcolumn.abs_diff(main_column) == 2 {
-            let mut down_vec = self.linked_stone_vec(downcoordinate - dir_value, direction);
-            down_vec.extend(main_vec.clone());
-            down_vec.sort();
-            (*vecs).insert(down_vec);
+        if self.board.is_white(downcoordinate - dir_value) {
+            (*vecs).insert((direction, main_vec.clone()));
+        } else {
+            let mut temp = Vec::<u16>::new();
+            temp.extend(main_vec.clone());
+            temp.extend(self.linked_stone_vec(downcoordinate - dir_value - dir_value, direction));
+            temp.sort();
+            (*vecs).insert((direction, temp));
         }
     }
 
@@ -214,7 +196,7 @@ pub struct Omok {
         }
 
         Color::Black => {
-            let mut linked_stone_list = HashSet::<Vec<u16>>::new();
+            let mut linked_stone_list = HashSet::<(Direction, Vec<u16>)>::new();
 
             // 4방향 검사(각각 한 방향 씩)
             for direction in Direction::four_direction() {
@@ -250,179 +232,28 @@ pub struct Omok {
         Ok(())
     }
 
-
-    // 테스트 함수
-    // Vec에서 방향값을 추론하는 함수
-    fn get_direction_from_vec(&self, linked_stone: &Vec<u16>) -> Option<u16> {
-        if linked_stone.len() < 2 {
-            return None;
-        }
-        
-        let diff = linked_stone[1] - linked_stone[0];
-        let boardsize = self.board.boardsize();
-        
-        if diff == 1 {
-            Some(1)
-        } else if diff == boardsize - 1 || diff == (boardsize - 1) * 2 {
-            Some(diff)
-        } else if diff == boardsize || diff == boardsize * 2 {
-            Some(diff)
-        } else if diff == boardsize + 1 || diff == (boardsize + 1) * 2 {
-            Some(diff)
-        } else if diff == 2 {
-            Some(2)
-        } else {
-            None
-        }
-    }
-
-    // dir_value로부터 base_dir 계산 (중복 제거)
-    fn calculate_base_dir(&self, dir_value: u16) -> Option<u16> {
-        let boardsize = self.board.boardsize();
-        
-        if dir_value <= 2 {
-            Some(1)  // 가로
-        } else if dir_value == boardsize - 1 || dir_value == (boardsize - 1) * 2 {
-            Some(boardsize - 1)  // 양의 기울기
-        } else if dir_value == boardsize || dir_value == boardsize * 2 {
-            Some(boardsize)  // 세로
-        } else if dir_value == boardsize + 1 || dir_value == (boardsize + 1) * 2 {
-            Some(boardsize + 1)  // 음의 기울기
-        } else {
-            None
-        }
-    }
-
-    // 연속된 돌인지 확인 (한 칸 띄어진 경우도 고려)
-    fn is_consecutive(&self, linked_stone: &Vec<u16>) -> bool {
-        if linked_stone.len() < 2 {
-            return true;
-        }
-
-        let dir_value = match self.get_direction_from_vec(linked_stone) {
-            Some(v) => v,
-            None => return false,
-        };
-
-        let base_dir = match self.calculate_base_dir(dir_value) {
-            Some(v) => v,
-            None => return false,
-        };
-
-        for i in 0..linked_stone.len() - 1 {
-            let diff = linked_stone[i + 1] - linked_stone[i];
-            if diff != base_dir && diff != base_dir * 2 {
-                return false;
-            }
-        }
-        true
-    }
-
-    // 양쪽 끝이 비어있고 유효한지 확인 (공통 로직)
-    fn check_both_ends(&self, linked_stone: &Vec<u16>, base_dir: u16) -> (bool, bool) {
-        let min_coord = linked_stone[0];
-        let max_coord = linked_stone[linked_stone.len() - 1];
-        let board_max = self.board.boardsize() * self.board.boardsize();
-
-        let left_open = if min_coord >= base_dir {
-            self.board.is_free(min_coord - base_dir) 
-                && self.check_out_board_simple(min_coord, min_coord - base_dir, base_dir)
-        } else {
-            false
-        };
-
-        let right_open = if max_coord + base_dir < board_max {
-            self.board.is_free(max_coord + base_dir)
-                && self.check_out_board_simple(max_coord, max_coord + base_dir, base_dir)
-        } else {
-            false
-        };
-
-        (left_open, right_open)
-    }
-
-    // 3(열린 3, 활삼): 양쪽이 모두 비어있는 3
-    fn check_3(&self, linked_stone: &Vec<u16>) -> bool {
-        if linked_stone.len() != 3 || !self.is_consecutive(linked_stone) {
-            return false;
-        }
-
-        let dir_value = match self.get_direction_from_vec(linked_stone) {
-            Some(v) => v,
-            None => return false,
-        };
-        
-        let base_dir = match self.calculate_base_dir(dir_value) {
-            Some(v) => v,
-            None => return false,
-        };
-        
-        let (left_open, right_open) = self.check_both_ends(linked_stone, base_dir);
-        
-        left_open && right_open
-    }
-
-    // 4(열린 4, 활사): 한쪽 이상이 비어있는 4
-    fn check_4(&self, linked_stone: &Vec<u16>) -> bool {
-        if linked_stone.len() != 4 || !self.is_consecutive(linked_stone) {
-            return false;
-        }
-
-        let dir_value = match self.get_direction_from_vec(linked_stone) {
-            Some(v) => v,
-            None => return false,
-        };
-        
-        let base_dir = match self.calculate_base_dir(dir_value) {
-            Some(v) => v,
-            None => return false,
-        };
-        
-        let (left_open, right_open) = self.check_both_ends(linked_stone, base_dir);
-        
-        left_open || right_open
-    }
-
-    // 보드 경계 체크 간단 버전 (방향값으로)
-    fn check_out_board_simple(&self, ptr1: u16, ptr2: u16, dir_value: u16) -> bool {
-        let column1 = self.board.is_column(ptr1);
-        let column2 = self.board.is_column(ptr2);
-
-        let boardsize = self.board.boardsize();
-
-        // 가로 방향 체크
-        if dir_value == 1 {
-            return column1 == column2;
-        }
-        
-        // 세로 방향 체크 (항상 유효)
-        if dir_value == boardsize {
-            return true;
-        }
-        
-        // 대각선 방향 체크
-        if dir_value == boardsize - 1 || dir_value == boardsize + 1 {
-            return 1 == column1.abs_diff(column2);
-        }
-        
-        false
-    }
-
-    /*
     // TODO: 3(다음 수로 열린 4가 되는지) 채크
-    fn check_3(&self, linked_stone: &Vec<u16>) -> bool {
-        if linked_stone.len() != 3 {return false;}
+    fn check_3(&self, linked_stone: &(Direction, Vec<u16>)) -> bool {
+        let (direction ,vecs) = linked_stone.clone();
+        if vecs.len() != 3 {return false;}
         // TODO: true 지우고 여기부터 작성
         true
+
     }
 
     // TODO: 4(연속된 돌 4개 중 하나라도 열려있음) 채크
-    fn check_4(&self, linked_stone: &Vec<u16>) -> bool {
-        if linked_stone.len() != 4 {return false;}
+    fn check_4(&self, linked_stone: &(Direction, Vec<u16>)) -> bool {
+        let (direction ,vecs) = linked_stone.clone();
+        if vecs.len() != 4 {return false;}
         // TODO: true 지우고 여기부터 작성
         true
+
     }
-    */
+
+    fn check_5(linked_stone: &(Direction, Vec<u16>)) -> Result<bool, ()> {
+        Err(())
+    }
+
 }
 
 // 현제 사항
@@ -431,26 +262,3 @@ pub struct Omok {
 // Vec에 크기가 작은 수 -> 큰 수로 정렬 됨 (Vec.sort() 매소드 이용)
 // HashSet에 Vec를 넣어 중복된 Vec을 제거함
 // 판별만 하면 됨
-
-
-
-
-// TODO: 무승부 요청 처리
-// TODO: 기권 처리
-
-
-fn f1() {
-    let mut test: Option<u64> = None;
-    test = Some(16);
-    test = None;
-    
-    let str2 = match f2() {
-        Ok(value) => value,
-        _ => "Error".to_string()
-    };
-}
-
-
-fn f2() -> Result<String, ()> {
-    Ok("파일읽기 성공".to_string())
-}

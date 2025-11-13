@@ -1,6 +1,7 @@
 pub mod game;
 pub mod network;
 pub mod utility;
+pub mod room;
 
 /*
 // Protocol Buffer로 생성된 코드를 포함
