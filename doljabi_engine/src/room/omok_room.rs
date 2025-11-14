@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tokio::{sync::{broadcast, mpsc}, task::JoinHandle};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
-/*
+/* 
 pub struct CreateOmokRoom {
     token: String,
     main_time: u64,
@@ -35,7 +35,7 @@ pub struct OmokRoom {
     join_result: Option<bool>,
 } impl OmokRoom {
     pub fn new(game_id: u64, enter_code: u16, tx: mpsc::Sender<u64>) -> Self { Self {
-        game: ,
+        game: Omok::new(),
 
         game_id: game_id,
         enter_code: enter_code,
@@ -253,5 +253,4 @@ pub fn room_router() -> OpenApiRouter {
         .routes(routes!(create_omok_room))
         //.routes(routes!(room_list))
 }
-
         */
