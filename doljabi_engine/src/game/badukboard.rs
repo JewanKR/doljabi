@@ -1,4 +1,5 @@
 use derive_builder::Builder;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Boardsize {
@@ -141,36 +142,25 @@ pub struct BadukBoard {
 #[derive(Clone, Debug, Builder)]
 pub struct Player {
     user_id: u64,
-    // name: String,
 
     main_time: u64,
-    start_time: u128,
-
+    fischer_time: u64,
     remaining_overtime: u8,
     overtime: u64,
-    // match_making_rating: u16,
+
+    set_start_time: u128,
+
 } impl Player {
     pub fn new(user_id: u64) -> Self {
         Self {
             user_id: user_id,
             main_time: 7200000,
-            start_time: 0,
+            fischer_time: 0,
             overtime: 60000,
             remaining_overtime: 3,
+            set_start_time: 0,
         }
     }
-
-    /*
-    // player 이름 불러오기
-    pub fn load_name(&mut self) {
-        self.name = String::new(); // TODO: DB에서 이름 불러오기
-    }
-
-    // player MMR 불러오기
-    pub fn load_match_making_rating(&mut self) {
-        self.match_making_rating = self.match_making_rating; // TODO: DB에서 MMR 불러오기
-    }
-    */
 
     // 제한시간 설정
     pub fn set_remaining_time(&mut self, main_time: u64) {
@@ -179,12 +169,12 @@ pub struct Player {
 
     // 남은 시간 계산
     pub fn calculate_remaining_time(&mut self) {
-        self.main_time = self.main_time - (tokio::time::Instant::now().elapsed().as_millis() - self.start_time) as u64;
+        self.main_time = self.main_time - (tokio::time::Instant::now().elapsed().as_millis() - self.set_start_time) as u64;
     }
 
     // 시작 시간 설정
     pub fn set_start_time(&mut self) {
-        self.start_time = tokio::time::Instant::now().elapsed().as_millis();
+        self.set_start_time = tokio::time::Instant::now().elapsed().as_millis();
     }
 
     // 초읽기 횟수
@@ -195,6 +185,10 @@ pub struct Player {
     // 초읽기 시간
     pub fn set_overtime(&mut self, overtime: u64) {
         self.overtime = overtime;
+    }
+
+    pub fn set_fischer_time(&mut self, fischer_time: u64) {
+        self.fischer_time = fischer_time;
     }
 }
 
@@ -251,3 +245,14 @@ pub struct Players {
     }
 }
 
+#[derive(Deserialize, Serialize)]
+pub struct BadukBoardGameConfig {
+    user_id: u64,
+
+    main_time: u64,
+    fischer_time: u64,
+    remaining_overtime: u8,
+    overtime: u64,
+
+    set_start_time: u128,
+}

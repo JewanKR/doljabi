@@ -13,8 +13,8 @@ fn main() {
 
     let len = std::cmp::max(black_coordinate1.len(), white_coordinate1.len());
     
-    let mut coordinate1: Vec<u16> = black_coordinate1.into_iter().chain(0..)
-        .zip(white_coordinate1.into_iter().chain(0..))
+    let mut coordinate1: Vec<u16> = black_coordinate1.into_iter().chain((0..360).rev())
+        .zip(white_coordinate1.into_iter().chain((0..360).rev()))
         .take(len)
         .flat_map(|(x,y)| vec![x, y])
         .collect();

@@ -58,6 +58,20 @@ pub struct Omok {
         }
     }
 
+    pub fn add_direction(&self, coordinate: u16, dir: Direction) -> Option<u16> {
+        let dir_value = self.direction_value(dir);
+        let after_coordinate = coordinate + dir_value;
+        if self.check_out_board(dir_value, after_coordinate, dir) {return Some(after_coordinate);}
+        None
+    }
+
+    pub fn sub_direction(&self, coordinate: u16, dir: Direction) -> Option<u16> {
+        let dir_value = self.direction_value(dir);
+        let after_coordinate = coordinate - dir_value;
+        if self.check_out_board(after_coordinate, dir_value, dir) {return Some(after_coordinate);}
+        None
+    }
+
     pub fn is_color(&self, coordinate: u16, color: Color) -> bool { match color {
         Color::White => self.board.is_white(coordinate),
         Color::Black => self.board.is_black(coordinate),
@@ -65,32 +79,30 @@ pub struct Omok {
         _ => {eprintln!("Error: color 이상한 접근"); false}
     }}
 
-    // 연결된 돌들의 좌표 개수을 반환하는 함수
+    // 연결된 돌들의 개수을 반환하는 함수
     fn linked_stone(&self, coordinate: u16, direction: Direction, color: Color) -> u16 {
         let mut counter: u16 = 0;
         
         // 방향에 대한 크기(숫자)로 변환
-        let dir_value = self.direction_value(direction);
-
         // 커지는 방향 확인
         let mut pointer = coordinate;
         while self.is_color(pointer, color) {
             counter += 1;
-            // 다음 좌표가 보드 밖으로 넘어가면 break
-            if !(self.check_out_board(pointer, pointer + dir_value, direction)) {
+            if let Some(next_pointer) = self.add_direction(pointer, direction) {
+                pointer = next_pointer;
+            } else {
                 break;
             }
-            pointer += dir_value;
         }
 
         // 작아지는 방향 확인
-        pointer = coordinate - dir_value;
-        while self.is_color(pointer, color) {
-            counter += 1;
-            if !(self.check_out_board(pointer, pointer - dir_value, direction)) {
+        let mut current = coordinate;
+        while let Some(prev_pointer) = self.sub_direction(current, direction) {
+            current = prev_pointer;
+            if !self.is_color(current, color) {
                 break;
             }
-            pointer -= dir_value;
+            counter += 1;
         }
 
         counter
@@ -102,28 +114,26 @@ pub struct Omok {
     // 연결된 돌의 좌표 Vec을 반환하는 함수
     fn linked_stone_vec(&self, coordinate: u16, direction: Direction) -> Vec<u16> {
         let mut temp = Vec::<u16>::new();
-        let dir_value = self.direction_value(direction);
-
         // 커지는 방향 확인
         let mut pointer = coordinate;
         while self.board.is_black(pointer) {
             // Vec에 추가
             temp.push(pointer);
-            // 다음 좌표가 보드 밖으로 넘어가면 break
-            if !(self.check_out_board(pointer, pointer + dir_value, direction)) {
+            if let Some(next_pointer) = self.add_direction(pointer, direction) {
+                pointer = next_pointer;
+            } else {
                 break;
             }
-            pointer += dir_value;
         }
 
         // 작아지는 방향 확인
-        pointer = coordinate - dir_value;
-        while self.board.is_black(pointer) {
-            temp.push(pointer);
-            if !(self.check_out_board(pointer, pointer - dir_value, direction)) {
+        let mut current = coordinate;
+        while let Some(prev_pointer) = self.sub_direction(current, direction) {
+            current = prev_pointer;
+            if !self.board.is_black(current) {
                 break;
             }
-            pointer -= dir_value;
+            temp.push(current);
         }
         temp.sort();
 
@@ -134,30 +144,45 @@ pub struct Omok {
     fn linked_stone_set(&self, vecs: &mut HashSet<(Direction, Vec<u16>)>, coordinate: u16, direction: Direction) {
         let main_vec = self.linked_stone_vec(coordinate, direction);
         
-        let dir_value = self.direction_value(direction);
         let (upcoordinate, downcoordinate) = match (main_vec.iter().max(), main_vec.iter().min()) {
             (Some(max_value), Some(min_value)) => (max_value.clone(), min_value.clone()),
             _ => (coordinate, coordinate)
         };
 
-        if self.board.is_white(upcoordinate + dir_value) {
-            (*vecs).insert((direction, main_vec.clone()));
-        } else {
-            let mut temp = Vec::<u16>::new();
-            temp.extend(main_vec.clone());
-            temp.extend(self.linked_stone_vec(upcoordinate + dir_value + dir_value, direction));
-            temp.sort();
-            (*vecs).insert((direction, temp));
+        match self.add_direction(upcoordinate, direction) {
+            Some(next_up) if self.board.is_white(next_up) => {
+                vecs.insert((direction, main_vec.clone()));
+            }
+            Some(next_up) => {
+                let mut temp = Vec::<u16>::new();
+                temp.extend(main_vec.clone());
+                if let Some(next_next_up) = self.add_direction(next_up, direction) {
+                    temp.extend(self.linked_stone_vec(next_next_up, direction));
+                }
+                temp.sort();
+                vecs.insert((direction, temp));
+            }
+            None => {
+                vecs.insert((direction, main_vec.clone()));
+            }
         }
 
-        if self.board.is_white(downcoordinate - dir_value) {
-            (*vecs).insert((direction, main_vec.clone()));
-        } else {
-            let mut temp = Vec::<u16>::new();
-            temp.extend(main_vec.clone());
-            temp.extend(self.linked_stone_vec(downcoordinate - dir_value - dir_value, direction));
-            temp.sort();
-            (*vecs).insert((direction, temp));
+        match self.sub_direction(downcoordinate, direction) {
+            Some(next_down) if self.board.is_white(next_down) => {
+                vecs.insert((direction, main_vec.clone()));
+            }
+            Some(next_down) => {
+                let mut temp = Vec::<u16>::new();
+                temp.extend(main_vec.clone());
+                if let Some(next_next_down) = self.sub_direction(next_down, direction) {
+                    temp.extend(self.linked_stone_vec(next_next_down, direction));
+                }
+                temp.sort();
+                vecs.insert((direction, temp));
+            }
+            None => {
+                vecs.insert((direction, main_vec.clone()));
+            }
         }
     }
 
@@ -214,51 +239,148 @@ pub struct Omok {
                 self.linked_stone_set(&mut linked_stone_list, coordinate, direction);
             }
 
-            let mut count3 = 0;
-            let mut count4 = 0;
+            let mut count3 = false;
+            let mut count4 = false;
             for linked_stone in linked_stone_list {
-                if self.check_3(&linked_stone) {count3 += 1;}
-                if self.check_4(&linked_stone) {count4 += 1;}
+                if self.check_3(&linked_stone) {
+                    if count3 {return Err(BadukBoardError::BannedChaksu);}
+                    else {count3 = true;}
+                }
+                if self.check_4(&linked_stone) {
+                    if count4 {return Err(BadukBoardError::BannedChaksu);}
+                    else {count4 = true;}
+                }
             }
-
-            if count3 >= 2 {return Err(BadukBoardError::BannedChaksu);}
-            if count4 >= 2 {return Err(BadukBoardError::BannedChaksu);}
-
             // TODO: 거짓금수(중간 발표 이후)
         }
         
         _ => {return self.chaksu_error(coordinate, color);}}
 
+        self.board.switch_turn();
         Ok(())
     }
 
     // TODO: 3(다음 수로 열린 4가 되는지) 채크
-    fn check_3(&self, linked_stone: &(Direction, Vec<u16>)) -> bool {
-        let (direction ,vecs) = linked_stone.clone();
-        if vecs.len() != 3 {return false;}
-        // TODO: true 지우고 여기부터 작성
-        true
+    fn check_3(&self, map: &(Direction, Vec<u16>)) -> bool {
+        let (direction ,linked_stone) = map.clone();
+        if linked_stone.len() != 3 {return false;}
 
+        let mut check_point = HashSet::<u16>::new();
+
+        for &stone in &linked_stone {
+            if let Some(next) = self.add_direction(stone, direction) {
+                check_point.insert(next);
+            }
+            if let Some(prev) = self.sub_direction(stone, direction) {
+                check_point.insert(prev);
+            }
+        }
+        for i in &linked_stone {
+            check_point.remove(&i);
+        }
+        // 빈 좌표만 찾아서 새로운 set 으로 만들기
+        check_point.retain(|pos| self.board.is_free(*pos));
+
+        for i in check_point {
+            let mut stone_vec = vec![i];
+            stone_vec.extend(&linked_stone.clone());
+            stone_vec.sort();
+            if self.check_open_4(&(direction, stone_vec)) {return true;}
+        }
+
+        false
+    }
+
+    fn check_open_4(&self, map: &(Direction, Vec<u16>)) -> bool {
+        let (direction ,linked_stone) = map.clone();
+        let mut check_point = HashSet::<u16>::new();
+
+        for &stone in &linked_stone {
+            if let Some(next) = self.add_direction(stone, direction) {
+                check_point.insert(next);
+            }
+            if let Some(prev) = self.sub_direction(stone, direction) {
+                check_point.insert(prev);
+            }
+        }
+        for i in &linked_stone {
+            check_point.remove(&i);
+        }
+        // 빈 좌표만 찾아서 새로운 set 으로 만들기
+        check_point.retain(|pos| self.board.is_free(*pos));
+        
+        let mut coutner = false;
+        for i in check_point {
+            let mut stone_vec = vec![i];
+            stone_vec.extend(&linked_stone.clone());
+            stone_vec.sort();
+            if let Some(true) = self.check_5(&(direction, stone_vec)) {
+                if coutner {return true;}
+                else {coutner = true;}
+            }
+        }
+        
+        false
     }
 
     // TODO: 4(연속된 돌 4개 중 하나라도 열려있음) 채크
-    fn check_4(&self, linked_stone: &(Direction, Vec<u16>)) -> bool {
-        let (direction ,vecs) = linked_stone.clone();
-        if vecs.len() != 4 {return false;}
-        // TODO: true 지우고 여기부터 작성
-        true
+    fn check_4(&self, map: &(Direction, Vec<u16>)) -> bool {
+        let (direction ,linked_stone) = map.clone();
+        if linked_stone.len() != 4 {return false;}
 
+        let mut check_point = HashSet::<u16>::new();
+
+        for &stone in &linked_stone {
+            if let Some(next) = self.add_direction(stone, direction) {
+                check_point.insert(next);
+            }
+            if let Some(prev) = self.sub_direction(stone, direction) {
+                check_point.insert(prev);
+            }
+        }
+        for i in &linked_stone {
+            check_point.remove(&i);
+        }
+        // 빈 좌표만 찾아서 새로운 set 으로 만들기
+        check_point.retain(|pos| self.board.is_free(*pos));
+        
+        for i in check_point {
+            let mut stone_vec = vec![i];
+            stone_vec.extend(&linked_stone.clone());
+            stone_vec.sort();
+            if let Some(true) = self.check_5(&(direction, stone_vec)) {return true;}
+        }
+        
+        false
     }
 
-    fn check_5(linked_stone: &(Direction, Vec<u16>)) -> Result<bool, ()> {
-        Err(())
-    }
+    fn check_5(&self, map: &(Direction, Vec<u16>)) -> Option<bool> {
+        let (direction ,linked_stone) = map.clone();
+        let is_sequence = linked_stone.windows(2).all(|window| {
+            if let Some(next) = self.add_direction(window[0], direction) {
+                next == window[1]
+            } else {
+                false
+            }
+        });
 
+        if !is_sequence {
+            return None;
+        }
+
+        let first = linked_stone[0];
+        let last = *linked_stone.last().unwrap();
+
+        let blocked_start = match self.sub_direction(first, direction) {
+            Some(prev) => self.board.is_black(prev),
+            None => false,
+        };
+
+        let blocked_end = match self.add_direction(last, direction) {
+            Some(next) => self.board.is_black(next),
+            None => false,
+        };
+
+        Some(!(blocked_start || blocked_end))
+    }
 }
-
-// 현제 사항
-// 흰색 완료, 검정색 5목 장목 완료,
-// 33과 44 체크를 위한 Set까지 완료
-// Vec에 크기가 작은 수 -> 큰 수로 정렬 됨 (Vec.sort() 매소드 이용)
-// HashSet에 Vec를 넣어 중복된 Vec을 제거함
-// 판별만 하면 됨

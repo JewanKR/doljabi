@@ -36,6 +36,9 @@
     },
     "/api/login": {
       "post": {
+        "tags": [
+          "auth"
+        ],
         "operationId": "login",
         "requestBody": {
           "content": {
@@ -49,19 +52,73 @@
         },
         "responses": {
           "200": {
-            "description": "유저 생성 성공"
+            "description": "로그인 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
           },
           "400": {
-            "description": "잘못된 요청"
+            "description": "아이디 또는 비밀번호가 틀림",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
           },
           "500": {
-            "description": "로그인 오류"
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/session_check": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "session_check",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionCheckForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "세션 존재 여부 확인",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionCheckResponse"
+                }
+              }
+            }
           }
         }
       }
     },
     "/api/signup": {
       "post": {
+        "tags": [
+          "auth"
+        ],
         "operationId": "signup",
         "requestBody": {
           "content": {
@@ -74,14 +131,35 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "유저 생성 성공"
+          "201": {
+            "description": "유저 생성 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
           },
           "400": {
-            "description": "잘못된 요청"
+            "description": "이미 존재하는 아이디 또는 잘못된 요청",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
           },
           "500": {
-            "description": "로그인 오류"
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -89,6 +167,21 @@
   },
   "components": {
     "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        }
+      },
       "LoginForm": {
         "type": "object",
         "required": [
@@ -97,10 +190,63 @@
         ],
         "properties": {
           "login_id": {
-            "type": "string"
+            "type": "string",
+            "description": "로그인에 사용할 아이디"
           },
           "password": {
+            "type": "string",
+            "description": "평문 비밀번호"
+          }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "message": {
             "type": "string"
+          },
+          "session_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "success": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SessionCheckForm": {
+        "type": "object",
+        "required": [
+          "session_key"
+        ],
+        "properties": {
+          "session_key": {
+            "type": "string"
+          }
+        }
+      },
+      "SessionCheckResponse": {
+        "type": "object",
+        "required": [
+          "exists"
+        ],
+        "properties": {
+          "exists": {
+            "type": "boolean"
+          },
+          "user_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
           }
         }
       },
@@ -108,18 +254,16 @@
         "type": "object",
         "required": [
           "login_id",
-          "password",
-          "user_name"
+          "password"
         ],
         "properties": {
           "login_id": {
-            "type": "string"
+            "type": "string",
+            "description": "로그인에 사용할 아이디"
           },
           "password": {
-            "type": "string"
-          },
-          "user_name": {
-            "type": "string"
+            "type": "string",
+            "description": "평문 비밀번호"
           }
         }
       }
