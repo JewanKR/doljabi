@@ -50,6 +50,12 @@ pub struct Omok {
         let column1 = self.board.is_column(ptr1);
         let column2 = self.board.is_column(ptr2);
 
+        // 좌표 값이 보드 밖으로 나가는지 확인
+        let out_board = self.board.boardsize().pow(2) as usize;
+        if column1 >= out_board || column2 >= out_board {
+            return false;
+        }
+
         // 확인 하는 방향이 가로면 같으면 true
         // 확인 하는 방향이 세로 및 대각선이면 차이가 1이면 true
         match direction {
@@ -58,17 +64,22 @@ pub struct Omok {
         }
     }
 
+    // 더한 좌표 값이 연결 된 좌표인지 확인
     pub fn add_direction(&self, coordinate: u16, dir: Direction) -> Option<u16> {
         let dir_value = self.direction_value(dir);
         let after_coordinate = coordinate + dir_value;
-        if self.check_out_board(dir_value, after_coordinate, dir) {return Some(after_coordinate);}
+        if self.check_out_board(coordinate, after_coordinate, dir) {return Some(after_coordinate);}
         None
     }
 
+    // 뺀 좌표 값이 연결 된 좌표인지 확인
     pub fn sub_direction(&self, coordinate: u16, dir: Direction) -> Option<u16> {
         let dir_value = self.direction_value(dir);
-        let after_coordinate = coordinate - dir_value;
-        if self.check_out_board(after_coordinate, dir_value, dir) {return Some(after_coordinate);}
+        let after_coordinate = match coordinate.checked_sub(dir_value) {
+            Some(a) => a,
+            None => {return None;}
+        };
+        if self.check_out_board(after_coordinate, coordinate, dir) {return Some(after_coordinate);}
         None
     }
 
@@ -107,9 +118,6 @@ pub struct Omok {
 
         counter
     }
-
-    // ---------- 33, 44 규칙을 위한 좌표 저장 ---------- //
-    // 다른 좋은 방식이 있으면 사용하시면 됩니다.
 
     // 연결된 돌의 좌표 Vec을 반환하는 함수
     fn linked_stone_vec(&self, coordinate: u16, direction: Direction) -> Vec<u16> {
@@ -186,8 +194,6 @@ pub struct Omok {
         }
     }
 
-    // ---------- 끝 ---------- //
-
     // 착수 금지 에러 처리
     fn chaksu_error(&mut self, coordinate: u16, color: Color) -> Result<(), BadukBoardError>{
         if !self.board.is_black(coordinate) {
@@ -198,11 +204,11 @@ pub struct Omok {
     }
 
     /// 착수 시도 실패 시 Err 출력
-    pub fn chaksu(&mut self, coordinate: u16) -> Result<(),BadukBoardError> {
-        // 색상 저장 및 좌표가 비었는지 확인
+    pub fn chaksu(&mut self, coordinate: u16, main_check: bool) -> Result<(),BadukBoardError> {
         let color = self.board.is_turn();
 
-        if self.board.is_free(coordinate) {
+        // 색상 저장 및 좌표가 비었는지 확인
+        if !self.board.is_free(coordinate) {
             return Err(BadukBoardError::OverLap);
         }
 
@@ -215,53 +221,70 @@ pub struct Omok {
                 // 돌 5개 이상이면 승리
                 if self.linked_stone(coordinate, direction, color) >= 5 {
                     self.winner = Some(Color::White);
-                    break;
                 }
             }
         }
 
         Color::Black => {
+            if main_check {    
+                // 4방향 검사(각각 한 방향 씩)
+                for direction in Direction::four_direction() {
+                    let set = self.linked_stone(coordinate, direction, color);
+                    // 5개 검사
+                    if set == 5 {
+                        self.winner = Some(Color::Black);
+                        break;
+                    }
+                }
+            }
+
             let mut linked_stone_list = HashSet::<(Direction, Vec<u16>)>::new();
 
             // 4방향 검사(각각 한 방향 씩)
-            for direction in Direction::four_direction() {
-                let set = self.linked_stone(coordinate, direction, color);
-                // 5개 검사
-                if set == 5 {
-                    self.winner = Some(Color::Black);
-                }
-                // 5개 초과(장목) 검사
-                if set > 5 {
-                    return self.chaksu_error(coordinate, color);
+            if let None = self.winner {
+                for direction in Direction::four_direction() {
+                    let set = self.linked_stone(coordinate, direction, color);
+                    // 5개 초과(장목) 검사
+                    if set > 5 {
+                        return self.chaksu_error(coordinate, color);
+                    }
+
+                    // 돌들 좌표 추가하기
+                    self.linked_stone_set(&mut linked_stone_list, coordinate, direction);
                 }
 
-                // 돌들 좌표 추가하기
-                self.linked_stone_set(&mut linked_stone_list, coordinate, direction);
-            }
-
-            let mut count3 = false;
-            let mut count4 = false;
-            for linked_stone in linked_stone_list {
-                if self.check_3(&linked_stone) {
-                    if count3 {return Err(BadukBoardError::BannedChaksu);}
-                    else {count3 = true;}
-                }
-                if self.check_4(&linked_stone) {
-                    if count4 {return Err(BadukBoardError::BannedChaksu);}
-                    else {count4 = true;}
+                let mut count3 = false;
+                let mut count4 = false;
+                for linked_stone in linked_stone_list {
+                    if self.check_3(&linked_stone, main_check) {
+                        if count3 {return self.chaksu_error(coordinate, color);}
+                        else {count3 = true;}
+                    }
+                    if self.check_4(&linked_stone, main_check) {
+                        if count4 {return self.chaksu_error(coordinate, color);}
+                        else {count4 = true;}
+                    }
                 }
             }
-            // TODO: 거짓금수(중간 발표 이후)
         }
         
         _ => {return self.chaksu_error(coordinate, color);}}
 
-        self.board.switch_turn();
-        Ok(())
+        match main_check {
+            true => {
+                self.board.switch_turn();
+                Ok(())
+            }
+            false => {
+                self.board.delete_stone(coordinate, color);
+                Ok(())
+            }
+        }
+
     }
 
-    // TODO: 3(다음 수로 열린 4가 되는지) 채크
-    fn check_3(&self, map: &(Direction, Vec<u16>)) -> bool {
+    // 3(다음 수로 열린 4가 되는 수가 1개 이상) 채크
+    fn check_3(&mut self, map: &(Direction, Vec<u16>), main_check: bool) -> bool {
         let (direction ,linked_stone) = map.clone();
         if linked_stone.len() != 3 {return false;}
 
@@ -275,13 +298,18 @@ pub struct Omok {
                 check_point.insert(prev);
             }
         }
-        for i in &linked_stone {
+        for &i in &linked_stone {
             check_point.remove(&i);
         }
         // 빈 좌표만 찾아서 새로운 set 으로 만들기
         check_point.retain(|pos| self.board.is_free(*pos));
 
         for i in check_point {
+            if main_check {
+                if let Err(_) = self.chaksu(i, false) {
+                    continue;
+                };
+            }
             let mut stone_vec = vec![i];
             stone_vec.extend(&linked_stone.clone());
             stone_vec.sort();
@@ -291,6 +319,7 @@ pub struct Omok {
         false
     }
 
+    // 열린 4(다음 수로 5가 되는 수가 2개 이상) 채크
     fn check_open_4(&self, map: &(Direction, Vec<u16>)) -> bool {
         let (direction ,linked_stone) = map.clone();
         let mut check_point = HashSet::<u16>::new();
@@ -303,7 +332,7 @@ pub struct Omok {
                 check_point.insert(prev);
             }
         }
-        for i in &linked_stone {
+        for &i in &linked_stone {
             check_point.remove(&i);
         }
         // 빈 좌표만 찾아서 새로운 set 으로 만들기
@@ -323,8 +352,8 @@ pub struct Omok {
         false
     }
 
-    // TODO: 4(연속된 돌 4개 중 하나라도 열려있음) 채크
-    fn check_4(&self, map: &(Direction, Vec<u16>)) -> bool {
+    // 4(다음 수로 5가 되는 수가 1개 이상) 채크
+    fn check_4(&mut self, map: &(Direction, Vec<u16>), main_check: bool) -> bool {
         let (direction ,linked_stone) = map.clone();
         if linked_stone.len() != 4 {return false;}
 
@@ -338,13 +367,18 @@ pub struct Omok {
                 check_point.insert(prev);
             }
         }
-        for i in &linked_stone {
+        for &i in &linked_stone {
             check_point.remove(&i);
         }
         // 빈 좌표만 찾아서 새로운 set 으로 만들기
         check_point.retain(|pos| self.board.is_free(*pos));
         
         for i in check_point {
+            if main_check {
+                if let Err(_) = self.chaksu(i, false) {
+                    continue;
+                };
+            }
             let mut stone_vec = vec![i];
             stone_vec.extend(&linked_stone.clone());
             stone_vec.sort();
@@ -354,8 +388,11 @@ pub struct Omok {
         false
     }
 
+    // 수를 넣었을 때 5개가 연속인지 확인 + 장목인지 확인
     fn check_5(&self, map: &(Direction, Vec<u16>)) -> Option<bool> {
         let (direction ,linked_stone) = map.clone();
+        if linked_stone.len() != 5 {return None;}
+
         let is_sequence = linked_stone.windows(2).all(|window| {
             if let Some(next) = self.add_direction(window[0], direction) {
                 next == window[1]
@@ -368,15 +405,12 @@ pub struct Omok {
             return None;
         }
 
-        let first = linked_stone[0];
-        let last = *linked_stone.last().unwrap();
-
-        let blocked_start = match self.sub_direction(first, direction) {
+        let blocked_start = match self.sub_direction(linked_stone[0], direction) {
             Some(prev) => self.board.is_black(prev),
             None => false,
         };
 
-        let blocked_end = match self.add_direction(last, direction) {
+        let blocked_end = match self.add_direction(*linked_stone.last().unwrap(), direction) {
             Some(next) => self.board.is_black(next),
             None => false,
         };

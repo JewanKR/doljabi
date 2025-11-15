@@ -1,5 +1,6 @@
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Boardsize {
@@ -245,7 +246,7 @@ pub struct Players {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 pub struct BadukBoardGameConfig {
     user_id: u64,
 

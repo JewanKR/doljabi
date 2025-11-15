@@ -1,10 +1,11 @@
+/* 
 use std::{collections::{HashMap, HashSet, VecDeque}, sync::Arc};
-
 use axum::{Json, extract::State, response::IntoResponse};
 use serde::{self, Deserialize, Serialize};
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{RwLock, mpsc, oneshot};
+use utoipa::ToSchema;
 use crate::{game::badukboard::BadukBoardGameConfig, soyul::session::{SessionStore, UserId}};
- /* 
+
 pub struct EnterCodeManager {
     counter: u16,
     released_number: VecDeque<u16>,
@@ -34,7 +35,7 @@ pub struct EnterCodeManager {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 #[serde(tag = "game_type", content = "game_config")]
 pub enum CreateRoomRequest {
     #[serde(rename = "baduk")]
@@ -53,12 +54,36 @@ pub enum GameRomeRequest {
 
 type RoomChannelManager = Arc<RwLock<HashMap<u16, mpsc::Sender<GameRoomRequest>>>>;
 
+
+#[utoipa::path(
+    post,
+    path = "api/game/create",
+    request_body = CreateRoomRequest,
+    responses(
+        (status = 201, description = "방 생성 성공", ),
+        (status = 400, description = "잘못된 요청"),
+        (status = 500, description = "서버 오류"),
+    )
+)]
 pub async fn crate_room(
     State(room_channel_manager): State<RoomChannelManager>,
-    State(session_storage): State<SessionStore>,
     Json(paylode): Json<CreateRoomRequest>,
 ) -> impl IntoResponse {
-    let user_id = session_storage
-        
+    
+    let (poweroff_task, mut receive_poweroff_task) = oneshot::channel::<()>();
+
+
+    
+    tokio::spawn( async move {
+        tokio::select! {
+            _ => async {
+
+            } => {}
+
+            _ => receive_poweroff_task.read_rx() {
+
+            }
+        }
+    })
 }
 */

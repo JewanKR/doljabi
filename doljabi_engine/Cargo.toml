@@ -22,7 +22,7 @@ utoipa = { version = "5", features = ["axum_extras"]}
 utoipa-axum = "0.2"
 base64 = "0.22"
 # utoipa-swagger-ui = { version = "9", features = ["axum"] }
-# prost = "0.14"
+prost = "0.14"
 
 # 오류 처리
 tracing = "0.1"
@@ -37,5 +37,5 @@ argon2 = { version = "0.5", features = ["std"] }
 [lib]
 path = "src/lib.rs"
 
-# [build-dependencies]
-# prost-build = "0.14.1"
+[build-dependencies]
+prost-build = "0.14.1"
