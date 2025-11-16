@@ -1,0 +1,124 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "doljabi",
+    "description": "doljabi project REST API를 정의한 문서입니다.",
+    "contact": {
+      "name": "Doljabi Team",
+      "email": "doljabi2025@gmail.com"
+    },
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/admin/openapi": {
+      "get": {
+        "operationId": "swagger_ui_page",
+        "responses": {
+          "200": {
+            "description": "Swagger UI 페이지"
+          }
+        }
+      }
+    },
+    "/api/admin/openapi/openapi.json": {
+      "get": {
+        "summary": "OpenAPI JSON 스펙을 반환하는 엔드포인트",
+        "operationId": "get_openapi_spec",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 스펙 반환 성공"
+          },
+          "500": {
+            "description": "서버 오류"
+          }
+        }
+      }
+    },
+    "/api/login": {
+      "post": {
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "유저 생성 성공"
+          },
+          "400": {
+            "description": "잘못된 요청"
+          },
+          "500": {
+            "description": "로그인 오류"
+          }
+        }
+      }
+    },
+    "/api/signup": {
+      "post": {
+        "operationId": "signup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "유저 생성 성공"
+          },
+          "400": {
+            "description": "잘못된 요청"
+          },
+          "500": {
+            "description": "로그인 오류"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LoginForm": {
+        "type": "object",
+        "required": [
+          "login_id",
+          "password"
+        ],
+        "properties": {
+          "login_id": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "SignupForm": {
+        "type": "object",
+        "required": [
+          "login_id",
+          "password"
+        ],
+        "properties": {
+          "login_id": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
