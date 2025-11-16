@@ -41,3 +41,71 @@ pub async fn remove_session(store: &SessionStore, session_key: &str) {
         .await;
     map.remove(session_key);
 }
+
+/// 세션키로 유저 아이디 조회
+pub async fn session_to_user_id(
+    session_store: &SessionStore,
+    session_key: &str,
+) -> Option<UserId> {
+    let map = session_store.read().await;
+    map.get(session_key).copied()
+}
+
+// 단위 테스트
+/*#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio; // #[tokio::test]용
+
+    #[tokio::test]
+    async fn generate_session_key_is_random_and_long() {
+        let k1 = generate_session_key();
+        let k2 = generate_session_key();
+
+        // 1) 둘은 거의 항상 달라야 함
+        assert_ne!(k1, k2);
+
+        // 2) 충분히 긴지 (512바이트 base64라 600자 이상)
+        assert!(k1.len() > 600);
+    }
+
+    #[tokio::test]
+    async fn insert_and_get_session_works() {
+        let store: SessionStore = Arc::new(RwLock::new(HashMap::new()));
+        let key = generate_session_key();
+        let user_id: UserId = 42;
+
+        insert_session(&store, key.clone(), user_id).await;
+
+        let got = get_user_id_by_session(&store, &key).await;
+        assert_eq!(got, Some(user_id));
+    }
+
+    #[tokio::test]
+    async fn remove_session_works() {
+        let store: SessionStore = Arc::new(RwLock::new(HashMap::new()));
+        let key = generate_session_key();
+        let user_id: UserId = 99;
+
+        insert_session(&store, key.clone(), user_id).await;
+        assert!(get_user_id_by_session(&store, &key).await.is_some());
+
+        remove_session(&store, &key).await;
+        assert!(get_user_id_by_session(&store, &key).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn session_to_user_id_works() {
+        let store: SessionStore = Arc::new(RwLock::new(HashMap::new()));
+        let key = generate_session_key();
+        let user_id: UserId = 777;
+
+        insert_session(&store, key.clone(), user_id).await;
+
+        let got = session_to_user_id(&store, &key).await;
+        assert_eq!(got, Some(user_id));
+
+        let got_none = session_to_user_id(&store, "non-existent-key").await;
+        assert_eq!(got_none, None);
+    }
+}*/
