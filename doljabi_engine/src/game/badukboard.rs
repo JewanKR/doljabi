@@ -3,9 +3,15 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Boardsize {
-    Baduk = 19,
-    Omok = 15,
+pub enum BoardType {
+    Baduk,
+    Omok,
+}
+pub fn board_size(board_type: BoardType) -> u16 {
+    match board_type {
+        BoardType::Baduk => 19,
+        BoardType::Omok => 15,
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -41,9 +47,9 @@ pub struct BadukBoard {
 
 } impl BadukBoard {
     /// BadukBoard::new(); 형식으로 사용.
-    pub fn new() -> Self {
+    pub fn new(board_size: u16) -> Self {
         Self {
-            boardsize: Boardsize::Baduk as u16,
+            boardsize: board_size,
             black: [0; 6],
             white: [0; 6],
             turn: Color::Black,
@@ -51,16 +57,22 @@ pub struct BadukBoard {
     }
 
     // 내부 요소 출력 함수
-    pub fn output_bitboard_black(&self) -> Vec<u64> {
+    pub fn bitboard_black(&self) -> [u64; 6] {
+        self.black.clone()
+    }
+    pub fn bitboard_white(&self) -> [u64; 6] {
+        self.white.clone()
+    }
+    pub fn output_bitboard_black_vec(&self) -> Vec<u64> {
         self.black.to_vec()
     }
-    pub fn output_bitboard_white(&self) -> Vec<u64> {
+    pub fn output_bitboard_white_vec(&self) -> Vec<u64> {
         self.white.to_vec()
     }
     pub fn is_turn(&self) -> Color {
         self.turn.clone()
     }
-    pub fn boardsize(&self) -> u16 {
+    pub fn is_boardsize(&self) -> u16 {
         self.boardsize
     }
 
@@ -201,22 +213,16 @@ pub struct Players {
     pub fn new() -> Self { Self { white_player: None, black_player: None } }
 
     // player 추가
-    pub fn push_user(&mut self, user_id: u64) -> Result<(),()> {
+    pub fn push_user(&mut self, user_id: u64) -> bool {
         match (&self.black_player, &self.white_player) {
-            (None, _) => {
-                self.black_player = Some(Player::new(user_id)); Ok(())
-            }
-            (Some(_), None) => {
-                self.white_player = Some(Player::new(user_id)); Ok(())
-            }
-            (Some(_), Some(_)) => {
-                Err(())
-            }
+            (None, _) => { self.black_player = Some(Player::new(user_id)); true }
+            (Some(_), None) => { self.white_player = Some(Player::new(user_id)); true }
+            (Some(_), Some(_)) => false
         }
     }
 
     // player 제거
-    pub fn pop_user(&mut self, user_id: u64) -> Result<(), ()> {
+    pub fn pop_user(&mut self, user_id: u64) -> bool {
         let mut flag = false;
 
         if let Some(black_user) = &self.black_player {
@@ -233,11 +239,7 @@ pub struct Players {
             }
         }
 
-        if flag {
-            Ok(())
-        } else {
-            Err(())
-        }
+        flag
     }
 
     // 색상 스위치
@@ -246,7 +248,7 @@ pub struct Players {
     }
 }
 
-#[derive(Deserialize, Serialize, ToSchema)]
+#[derive(Deserialize, Serialize, ToSchema, Clone, Copy)]
 pub struct BadukBoardGameConfig {
     user_id: u64,
 

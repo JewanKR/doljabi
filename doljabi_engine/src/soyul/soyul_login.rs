@@ -2,12 +2,17 @@ use axum::{extract::State, Json};
 use hyper::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use rusqlite::{self, params, Connection, Result};
-use argon2::{password_hash::{self, rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,},Argon2};
+use rusqlite::{self, params, Connection};
+use argon2::{
+    password_hash::{
+        self, rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
+    },
+    Argon2,
+};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::soyul::session::{SessionStore, generate_session_key, insert_session, get_user_id_by_session};
+use crate::soyul::session::{get_user_id_by_session, generate_session_key, insert_session, SessionStore};
 
 //
 // 공통 에러 타입
@@ -20,34 +25,76 @@ enum UserError {
 //
 // Argon2 유틸 함수
 //
-fn argon2_hash(input: &str) -> Result<String, password_hash::Error> {
+fn argon2_hash(input: &str) -> std::result::Result<String, password_hash::Error> {
     let salt = SaltString::generate(&mut OsRng);
     let algorithm = Argon2::default();
 
     Ok(algorithm.hash_password(input.as_bytes(), &salt)?.to_string())
 }
 
-fn verify_argon2(input: &str, hashed: &str) -> Result<bool, password_hash::Error> {
+fn verify_argon2(input: &str, hashed: &str) -> std::result::Result<bool, password_hash::Error> {
     let algorithm = Argon2::default();
     let password_hash = PasswordHash::new(&hashed)?;
 
-    Ok(algorithm.verify_password(input.as_bytes(), &password_hash).is_ok())
+    Ok(algorithm
+        .verify_password(input.as_bytes(), &password_hash)
+        .is_ok())
 }
 
 //
 // DB 함수들
 //
+#[derive(Serialize, ToSchema, Debug)]
+pub struct UserProfile {
+    pub id: u64,
+    pub login_id: String,
+    pub username: Option<String>, // NULL 가능성 있으니까 Option
+    pub rating: i32,
+    // 나중에 필드 더 추가 가능 (예: created_at, bio 등)
+}
+
+/// user_id로 유저 프로필 가져오기
+fn get_user_profile_by_id(
+    conn: &Connection,
+    user_id: u64,
+) -> rusqlite::Result<Option<UserProfile>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, login_id, username, rating
+         FROM users
+         WHERE id = ?1",
+    )?;
+
+    let result = stmt.query_row([user_id as i64], |row| {
+        Ok(UserProfile {
+            id: row.get::<_, i64>(0)? as u64,
+            login_id: row.get(1)?,
+            username: row.get(2)?,
+            rating: row.get(3)?,
+        })
+    });
+
+    match result {
+        Ok(profile) => Ok(Some(profile)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
 
 /// 회원가입: DB에 사용자 추가 + 생성된 user_id 리턴
-fn signup_db(conn: &Connection, login_id: &str, password_plain: &str) -> Result<u64, UserError> {
+fn signup_db(
+    conn: &Connection,
+    login_id: &str,
+    password_plain: &str,
+    username: &str,
+) -> std::result::Result<u64, UserError> {
     let hashed = match argon2_hash(password_plain) {
         Ok(hash) => hash,
         Err(e) => return Err(UserError::PasswordHash(e)),
     };
 
     if let Err(e) = conn.execute(
-        "INSERT INTO users (login_id, password_hash) VALUES (?1, ?2)",
-        params![login_id, hashed],
+        "INSERT INTO users (login_id, password_hash, username) VALUES (?1, ?2, ?3)",
+        params![login_id, hashed, username],
     ) {
         return Err(UserError::Database(e));
     }
@@ -58,7 +105,11 @@ fn signup_db(conn: &Connection, login_id: &str, password_plain: &str) -> Result<
 }
 
 /// 로그인: 비밀번호 검증 + 성공 시 user_id 리턴
-fn login_db(conn: &Connection, login_id: &str, password_plain: &str) -> Result<Option<u64>> {
+fn login_db(
+    conn: &Connection,
+    login_id: &str,
+    password_plain: &str,
+) -> std::result::Result<Option<u64>, rusqlite::Error> {
     let mut stmt = conn.prepare("SELECT id, password_hash FROM users WHERE login_id = ?1")?;
 
     let row = stmt.query_row([login_id], |row| {
@@ -91,6 +142,8 @@ pub struct SignupForm {
     pub login_id: String,
     /// 평문 비밀번호
     pub password: String,
+    /// 사용자 이름 (닉네임)
+    pub username: String,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -125,6 +178,20 @@ pub struct SessionCheckForm {
 pub struct SessionCheckResponse {
     pub exists: bool,
     pub user_id: Option<u64>,
+}
+
+// 🔹 유저 프로필 조회용 요청/응답
+#[derive(Deserialize, ToSchema)]
+pub struct UserProfileRequest {
+    /// 조회할 유저의 고유 ID
+    pub user_id: u64,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct UserProfileResponse {
+    pub success: bool,
+    pub message: String,
+    pub user: Option<UserProfile>,
 }
 
 //
@@ -177,7 +244,7 @@ pub async fn signup(Json(form): Json<SignupForm>) -> (StatusCode, Json<ApiRespon
         );
     };
 
-    match signup_db(&conn, &form.login_id, &form.password) {
+    match signup_db(&conn, &form.login_id, &form.password, &form.username) {
         Ok(user_id) => {
             println!("✅ 회원가입 성공, user_id = {}", user_id);
             (
@@ -331,9 +398,76 @@ pub async fn session_check(
     )
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/user/profile",
+    tag = "user",
+    request_body = UserProfileRequest,
+    responses(
+        (status = 200, description = "유저 정보 조회 성공", body = UserProfileResponse),
+        (status = 404, description = "해당 유저 없음", body = UserProfileResponse),
+        (status = 500, description = "서버 내부 오류", body = UserProfileResponse),
+    )
+)]
+pub async fn get_user_profile_handler(
+    Json(req): Json<UserProfileRequest>,
+) -> (StatusCode, Json<UserProfileResponse>) {
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("⚠️ 유저 정보 조회(DB 오픈 실패): {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(UserProfileResponse {
+                    success: false,
+                    message: "데이터베이스 연결 오류".into(),
+                    user: None,
+                }),
+            );
+        }
+    };
+
+    match get_user_profile_by_id(&conn, req.user_id) {
+        Ok(Some(profile)) => {
+            println!("✅ 유저 정보 조회 성공: {:?}", profile);
+            (
+                StatusCode::OK,
+                Json(UserProfileResponse {
+                    success: true,
+                    message: "유저 정보 조회 성공".into(),
+                    user: Some(profile),
+                }),
+            )
+        }
+        Ok(None) => {
+            println!("❌ 유저 정보 없음: user_id = {}", req.user_id);
+            (
+                StatusCode::NOT_FOUND,
+                Json(UserProfileResponse {
+                    success: false,
+                    message: "해당 유저를 찾을 수 없습니다.".into(),
+                    user: None,
+                }),
+            )
+        }
+        Err(e) => {
+            eprintln!("⚠️ 유저 정보 조회 중 에러: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(UserProfileResponse {
+                    success: false,
+                    message: "유저 정보 조회 중 오류가 발생했습니다.".into(),
+                    user: None,
+                }),
+            )
+        }
+    }
+}
+
 pub fn login_router() -> OpenApiRouter<SessionStore> {
     OpenApiRouter::new()
         .routes(routes!(signup))
         .routes(routes!(login))
         .routes(routes!(session_check))
+        .routes(routes!(get_user_profile_handler))
 }

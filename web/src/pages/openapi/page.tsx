@@ -9,3 +9,13 @@ export default function OpenApiDocs() {
     </div>
   );
 }
+
+/** openapi 명세 페이지 만들기
+ * 
+ * /src/router/config.tsx 파일에 붙여 넣기
+ {
+    path: '/openapi',
+    element: <OpenApiDocs />,
+  },
+ *
+ */

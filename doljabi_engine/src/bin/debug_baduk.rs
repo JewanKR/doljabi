@@ -1,30 +1,51 @@
-use doljabi_engine::game::baduk;
+use std::collections::{VecDeque};
+use doljabi_engine::game::{baduk::{Baduk, chaksu}, badukboard::{BadukBoardError}};
 
 fn main() {
-    let mut test_baduk = baduk::Baduk::new();
+    let mut test_baduk = Baduk::new();
 
-    let black_coordinate1 = vec![60,61,62,79,80,81,98,99,100];
-    
-    // 60,61
-    // 41,42,59,62,79,80
-    // 60,61,62,79,80,81,98,99,100
-    // 41,42,43,59,63,78,82,97,101,117,118,119
-    let white_coordinate1 = vec![41,42,43,59,63,78,82,97,101,117,118,119];
+    // 기본으로 그리는 크기
+    let black_coordinate: VecDeque<u16> = VecDeque::from([]);
+    let white_coordinate: VecDeque<u16> = VecDeque::from([]);
 
-    let len = std::cmp::max(black_coordinate1.len(), white_coordinate1.len());
-    
-    let mut coordinate1: Vec<u16> = black_coordinate1.into_iter().chain((0..360).rev())
-        .zip(white_coordinate1.into_iter().chain((0..360).rev()))
-        .take(len)
-        .flat_map(|(x,y)| vec![x, y])
-        .collect();
+    try_chaksu(&mut test_baduk, black_coordinate, white_coordinate);
+}
 
+fn try_chaksu(baduk: &mut Baduk, black_coordinate: VecDeque<u16>, white_coordinate: VecDeque<u16>) {
+    let temp_coordinate: VecDeque<u16> = (0..baduk.is_board().is_boardsize().pow(2)).rev().collect();
 
-    coordinate1.push(61);
+    let mut black = black_coordinate;
+    black.extend(temp_coordinate.clone());
 
-    println!("{:?}", coordinate1);
-    
-    for ptr in coordinate1 {
-        let _ = baduk::chaksu(&mut test_baduk, ptr);
+    let mut white = white_coordinate;
+    white.extend(temp_coordinate);
+
+    while let Some(ptr) = black.pop_front() {
+        match chaksu(baduk, ptr) {
+            Ok(_) => {
+                println!("흑색: {} 착수 성공!", ptr);
+                while let Some(ptr2) = white.pop_front() {
+                    if let Ok(_) = chaksu(baduk, ptr2) {
+                        println!("백색: {} 착수 성공!", ptr2);
+                        break;
+                    }
+                }
+            }
+            Err(error_code) => {print_error_code(error_code, ptr);}
+        }
     }
 }
+
+fn print_error_code(error_code: BadukBoardError, ptr: u16) {
+    match error_code {
+        BadukBoardError::BannedChaksu => {println!("{} 착수 실패: 착수 금지", ptr);}
+        BadukBoardError::OutOfBoard => {println!("{} 착수 실패: 보드 밖 참조",ptr);}
+        BadukBoardError::OverLap => {println!("{} 착수 실패: 돌 겹침", ptr);}
+        BadukBoardError::InvalidArgument => {println!("{} 착수 실패: 잘못된 인수", ptr);}
+    }
+}
+
+// 60,61
+// 41,42,59,62,79,80
+// 60,61,62,79,80,81,98,99,100
+// 41,42,43,59,63,78,82,97,101,117,118,119

@@ -1,5 +1,5 @@
 use derive_builder::Builder;
-use std::{collections::{HashSet}};
+use std::{collections::HashSet, vec};
 use crate::game::badukboard::{*};
 
 // 방향 정의
@@ -26,7 +26,7 @@ pub struct Omok {
 
 } impl Omok {
     pub fn new() -> Self {Self {
-        board: BadukBoard::new(),
+        board: BadukBoard::new(board_size(BoardType::Omok)),
         winner: None,
     }}
 
@@ -38,9 +38,9 @@ pub struct Omok {
     pub fn direction_value(&self, dir: Direction) -> u16 {
         match dir {
             Direction::Horizontal => 1,
-            Direction::Vertical => self.board.boardsize(),
-            Direction::PlueSlope => self.board.boardsize() - 1,
-            Direction::MinusSlope => self.board.boardsize() + 1
+            Direction::Vertical => self.board.is_boardsize(),
+            Direction::PlueSlope => self.board.is_boardsize() - 1,
+            Direction::MinusSlope => self.board.is_boardsize() + 1
         }
     }
 
@@ -51,7 +51,7 @@ pub struct Omok {
         let column2 = self.board.is_column(ptr2);
 
         // 좌표 값이 보드 밖으로 나가는지 확인
-        let out_board = self.board.boardsize().pow(2) as usize;
+        let out_board = self.board.is_boardsize() as usize;
         if column1 >= out_board || column2 >= out_board {
             return false;
         }
@@ -67,7 +67,10 @@ pub struct Omok {
     // 더한 좌표 값이 연결 된 좌표인지 확인
     pub fn add_direction(&self, coordinate: u16, dir: Direction) -> Option<u16> {
         let dir_value = self.direction_value(dir);
-        let after_coordinate = coordinate + dir_value;
+        let after_coordinate = match coordinate.checked_add(dir_value) {
+            Some(a) => a,
+            None => {return None;}
+        };
         if self.check_out_board(coordinate, after_coordinate, dir) {return Some(after_coordinate);}
         None
     }
@@ -120,10 +123,12 @@ pub struct Omok {
     }
 
     // 연결된 돌의 좌표 Vec을 반환하는 함수
-    fn linked_stone_vec(&self, coordinate: u16, direction: Direction) -> Vec<u16> {
+    fn linked_stone_vec(&self, coordinate: u16, direction: Direction) -> Option<Vec<u16>> {
         let mut temp = Vec::<u16>::new();
         // 커지는 방향 확인
         let mut pointer = coordinate;
+
+        if !self.board.is_black(pointer) {return None;}
         while self.board.is_black(pointer) {
             // Vec에 추가
             temp.push(pointer);
@@ -145,62 +150,62 @@ pub struct Omok {
         }
         temp.sort();
 
-        temp
+        Some(temp)
     }
     
     // 연결된 돌과 한 칸 띄어진 돌의 좌표 Vec을 HashSet에 추가하는 함수
     fn linked_stone_set(&self, vecs: &mut HashSet<(Direction, Vec<u16>)>, coordinate: u16, direction: Direction) {
-        let main_vec = self.linked_stone_vec(coordinate, direction);
+        let main_vec = match self.linked_stone_vec(coordinate, direction) {
+            Some(a) => a,
+            None => {return ;}
+        };
         
         let (upcoordinate, downcoordinate) = match (main_vec.iter().max(), main_vec.iter().min()) {
             (Some(max_value), Some(min_value)) => (max_value.clone(), min_value.clone()),
             _ => (coordinate, coordinate)
         };
-
+        
         match self.add_direction(upcoordinate, direction) {
-            Some(next_up) if self.board.is_white(next_up) => {
-                vecs.insert((direction, main_vec.clone()));
-            }
-            Some(next_up) => {
-                let mut temp = Vec::<u16>::new();
-                temp.extend(main_vec.clone());
-                if let Some(next_next_up) = self.add_direction(next_up, direction) {
-                    temp.extend(self.linked_stone_vec(next_next_up, direction));
+            Some(next_up) if self.board.is_free(next_up) =>  {
+                match self.add_direction(next_up, direction) {
+                    Some(next_next_up) if self.board.is_black(next_next_up) => {
+                        let mut temp = Vec::<u16>::new();
+                        temp.extend(main_vec.clone());
+                        if let Some(vec) = self.linked_stone_vec(next_next_up, direction) {
+                            temp.extend(vec);
+                        }
+                        temp.sort();
+                        vecs.insert((direction, temp));
+                    }
+                    _ => {vecs.insert((direction, main_vec.clone()));}
                 }
-                temp.sort();
-                vecs.insert((direction, temp));
             }
-            None => {
-                vecs.insert((direction, main_vec.clone()));
-            }
+            _ => {vecs.insert((direction, main_vec.clone()));}
         }
 
         match self.sub_direction(downcoordinate, direction) {
-            Some(next_down) if self.board.is_white(next_down) => {
-                vecs.insert((direction, main_vec.clone()));
-            }
-            Some(next_down) => {
-                let mut temp = Vec::<u16>::new();
-                temp.extend(main_vec.clone());
-                if let Some(next_next_down) = self.sub_direction(next_down, direction) {
-                    temp.extend(self.linked_stone_vec(next_next_down, direction));
+            Some(next_down) if self.board.is_free(next_down) =>  {
+                match self.sub_direction(next_down, direction) {
+                    Some(next_next_down) if self.board.is_black(next_next_down) => {
+                        let mut temp = Vec::<u16>::new();
+                        temp.extend(main_vec.clone());
+                        if let Some(vec) = self.linked_stone_vec(next_next_down, direction) {
+                            temp.extend(vec);
+                        }
+                        temp.sort();
+                        vecs.insert((direction, temp));
+                    }
+                    _ => {vecs.insert((direction, main_vec.clone()));}
                 }
-                temp.sort();
-                vecs.insert((direction, temp));
             }
-            None => {
-                vecs.insert((direction, main_vec.clone()));
-            }
-        }
+            _ => {vecs.insert((direction, main_vec.clone()));}
+        }    
     }
 
     // 착수 금지 에러 처리
-    fn chaksu_error(&mut self, coordinate: u16, color: Color) -> Result<(), BadukBoardError>{
-        if !self.board.is_black(coordinate) {
-            return Err(BadukBoardError::InvalidArgument);
-        }
-        self.board.delete_stone(coordinate, color);
-        return Err(BadukBoardError::BannedChaksu);
+    fn chaksu_error(&mut self, coordinate: u16) -> BadukBoardError {
+        self.board.delete_stone(coordinate, Color::Black);
+        return BadukBoardError::BannedChaksu;
     }
 
     /// 착수 시도 실패 시 Err 출력
@@ -241,12 +246,12 @@ pub struct Omok {
             let mut linked_stone_list = HashSet::<(Direction, Vec<u16>)>::new();
 
             // 4방향 검사(각각 한 방향 씩)
-            if let None = self.winner {
+            if true {
                 for direction in Direction::four_direction() {
                     let set = self.linked_stone(coordinate, direction, color);
                     // 5개 초과(장목) 검사
                     if set > 5 {
-                        return self.chaksu_error(coordinate, color);
+                        return Err(self.chaksu_error(coordinate));
                     }
 
                     // 돌들 좌표 추가하기
@@ -257,18 +262,18 @@ pub struct Omok {
                 let mut count4 = false;
                 for linked_stone in linked_stone_list {
                     if self.check_3(&linked_stone, main_check) {
-                        if count3 {return self.chaksu_error(coordinate, color);}
+                        if count3 {return Err(self.chaksu_error(coordinate));}
                         else {count3 = true;}
                     }
                     if self.check_4(&linked_stone, main_check) {
-                        if count4 {return self.chaksu_error(coordinate, color);}
+                        if count4 {return Err(self.chaksu_error(coordinate));}
                         else {count4 = true;}
                     }
                 }
             }
         }
         
-        _ => {return self.chaksu_error(coordinate, color);}}
+        _ => {return Err(self.chaksu_error(coordinate));}}
 
         match main_check {
             true => {
@@ -414,7 +419,6 @@ pub struct Omok {
             Some(next) => self.board.is_black(next),
             None => false,
         };
-
         Some(!(blocked_start || blocked_end))
     }
 }

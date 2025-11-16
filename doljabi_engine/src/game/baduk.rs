@@ -1,11 +1,10 @@
 use derive_builder::Builder;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
 use crate::game::badukboard::*;
 
 #[derive(Clone, Debug, Builder)]
 pub struct Baduk {
     board: BadukBoard,
-    players: Players,
 
     black_caught_stone: u16,
     white_caught_stone: u16,
@@ -14,16 +13,19 @@ pub struct Baduk {
 impl Baduk {
     pub fn new() -> Self {
         Self {
-            board: BadukBoard::new(),
-            players: Players::new(),
+            board: BadukBoard::new(board_size(BoardType::Baduk)),
 
             black_caught_stone: 0,
             white_caught_stone: 0,
         }
     }
 
+    pub fn is_board(&self) -> BadukBoard {
+        self.board.clone()
+    }
+
     fn adjacent_coordinates(&self, coordinate: u16) -> Vec<u16> {
-        let board_size = self.board.boardsize();
+        let board_size = self.board.is_boardsize();
         let mut result = Vec::new();
         let x = coordinate % board_size;
         let y = coordinate / board_size;

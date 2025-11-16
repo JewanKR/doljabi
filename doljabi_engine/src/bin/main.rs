@@ -3,6 +3,7 @@ use std::{collections::HashMap, fs, net::SocketAddr, sync::Arc};
 use tokio::{sync::{mpsc, Mutex}};
 use doljabi_engine::{soyul::{session::SessionStore, soyul_login::login_router}, utility::admin_page::admin_page_router};
 use axum::{Router, Json};
+use tower_http::cors::{Any, CorsLayer};
 use utoipa::{ToSchema, openapi::{self, ContactBuilder, OpenApi, OpenApiVersion}};
 use utoipa_axum::{router::OpenApiRouter};
 
@@ -39,9 +40,15 @@ async fn main() {
     let openapi_json = openapi_doc.to_pretty_json().expect("Failed to convert openapi doc to json");
     fs::write("./src/openapi.json", openapi_json).expect("Failed to save openapi doc to json");
 
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     // axum 라우터 생성
     let app = Router::new()
-        .merge(api_router);
+        .merge(api_router)
+        .layer(cors);
 
     // 서버 주소 설정
     let addr = "127.0.0.1:27000";
