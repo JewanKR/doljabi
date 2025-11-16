@@ -1,31 +1,19 @@
-import { useState, useEffect } from 'react';
+
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export default function OmokQuickMatch() {
   const navigate = useNavigate();
-  const [countdown, setCountdown] = useState(3);
 
   useEffect(() => {
-    if (countdown > 0) {
-      const timer = setTimeout(() => {
-        setCountdown(countdown - 1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    } else {
-      // 카운트다운 종료 후 대기실로 이동
-      const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-      navigate('/omok/waiting-room', { 
-        state: { 
-          roomCode,
-          isHost: true,
-          opponent: {
-            nickname: '매칭된플레이어',
-            rating: 1520
-          }
-        } 
-      });
-    }
-  }, [countdown, navigate]);
+    // 즉시 대기실로 이동
+    navigate('/omok/waiting-room', { 
+      state: { 
+        isHost: true,
+        gameType: 'quick'
+      } 
+    });
+  }, [navigate]);
 
   return (
     <div className="min-h-screen text-white flex items-center justify-center" style={{ backgroundColor: '#0b0c10' }}>
@@ -35,9 +23,14 @@ export default function OmokQuickMatch() {
                background: 'linear-gradient(135deg, #1f6feb 0%, #1b4fd8 100%)',
                boxShadow: '0 8px 32px rgba(31, 111, 235, 0.4)'
              }}>
-          <div className="text-6xl font-bold text-white">
-            {countdown}
-          </div>
+          <svg width="64" height="64" viewBox="0 0 64 64" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="32" r="6" fill="white"/>
+            <circle cx="24" cy="32" r="6" fill="white"/>
+            <circle cx="32" cy="32" r="6" fill="white"/>
+            <circle cx="40" cy="32" r="6" fill="white"/>
+            <circle cx="48" cy="32" r="6" fill="white"/>
+            <line x1="18" y1="32" x2="46" y2="32" stroke="white" strokeWidth="2"/>
+          </svg>
         </div>
         
         <h2 className="text-3xl font-bold mb-4" style={{ color: '#e8eaf0' }}>

@@ -17,7 +17,7 @@ export default function Home() {
   
   const [signupForm, setSignupForm] = useState({
     username: '',
-    email: '',
+    nickname: '',
     password: '',
     confirmPassword: ''
   });
@@ -48,8 +48,8 @@ export default function Home() {
       return;
     }
     
-    if (!signupForm.email.trim()) {
-      setSignupError('이메일을 입력해주세요.');
+    if (!signupForm.nickname.trim()) {
+      setSignupError('닉네임을 입력해주세요.');
       return;
     }
     
@@ -68,15 +68,9 @@ export default function Home() {
       return;
     }
     
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(signupForm.email)) {
-      setSignupError('올바른 이메일 형식을 입력해주세요.');
-      return;
-    }
-    
     setShowSignupModal(false);
     setShowSignupSuccess(true);
-    setSignupForm({ username: '', email: '', password: '', confirmPassword: '' });
+    setSignupForm({ username: '', nickname: '', password: '', confirmPassword: '' });
   };
 
   const resetLoginModal = () => {
@@ -87,7 +81,7 @@ export default function Home() {
 
   const resetSignupModal = () => {
     setShowSignupModal(false);
-    setSignupForm({ username: '', email: '', password: '', confirmPassword: '' });
+    setSignupForm({ username: '', nickname: '', password: '', confirmPassword: '' });
     setSignupError('');
   };
 
@@ -523,7 +517,7 @@ export default function Home() {
                       className="w-full px-4 py-3 rounded-lg border text-sm"
                       style={{ 
                         backgroundColor: '#141822', 
-                        borderColor: '#2a2a33',
+                        borderColor: '#2a3a33',
                         color: '#e8eaf0'
                       }}
                       placeholder="아이디를 입력하세요"
@@ -531,19 +525,19 @@ export default function Home() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2" style={{ color: '#e8eaf0' }}>
-                      이메일
+                      닉네임
                     </label>
                     <input
-                      type="email"
-                      value={signupForm.email}
-                      onChange={(e) => setSignupForm(prev => ({ ...prev, email: e.target.value }))}
+                      type="text"
+                      value={signupForm.nickname}
+                      onChange={(e) => setSignupForm(prev => ({ ...prev, nickname: e.target.value }))}
                       className="w-full px-4 py-3 rounded-lg border text-sm"
                       style={{ 
                         backgroundColor: '#141822', 
                         borderColor: '#2a2a33',
                         color: '#e8eaf0'
                       }}
-                      placeholder="이메일을 입력하세요"
+                      placeholder="닉네임을 입력하세요"
                     />
                   </div>
                   <div>
@@ -581,7 +575,7 @@ export default function Home() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="mt-6 space-y-3">
                   <button 
                     onClick={handleSignupSubmit}
