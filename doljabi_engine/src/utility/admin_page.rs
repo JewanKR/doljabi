@@ -7,6 +7,7 @@ use std::fs;
 #[utoipa::path(
     get,    
     path = "/api/admin/openapi/openapi.json",
+    tag = "openapi",
     responses(
         (status = 200, description = "OpenAPI 스펙 반환 성공"),
         (status = 500, description = "서버 오류"),
@@ -34,6 +35,7 @@ async fn get_openapi_spec() -> impl IntoResponse {
 #[utoipa::path(
     get,
     path = "/api/admin/openapi",
+    tag = "openapi",
     responses(
         (status = 200, description = "Swagger UI 페이지"),
     )
