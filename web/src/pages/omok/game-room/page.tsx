@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { decodeServerResponse, sendRequestViaWebSocket, bitboardToBoardArray, colorEnumToString } from '../../../proto/proto-utils';
 
 interface Player {
   nickname: string;
@@ -13,9 +14,9 @@ interface Player {
 
 export default function GameRoom() {
   const navigate = useNavigate();
-  const [boardSize] = useState(19);
+  const [boardSize] = useState(15);
   const [board, setBoard] = useState<(null | 'black' | 'white')[][]>(
-    Array(19).fill(null).map(() => Array(19).fill(null))
+    Array(15).fill(null).map(() => Array(15).fill(null))
   );
   
   const [currentTurn, setCurrentTurn] = useState<'black' | 'white'>('black');
@@ -44,7 +45,148 @@ export default function GameRoom() {
   const [initialTime] = useState({ black: 1800, white: 1800 });
   const [isInByoyomi, setIsInByoyomi] = useState({ black: false, white: false });
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const websocketRef = useRef<WebSocket | null>(null);
+  const sessionKeyRef = useRef<string>('example-session-key');
 
+  // WebSocket 연결 및 메시지 수신
+  useEffect(() => {
+    // WebSocket 연결 (TODO: 실제 서버 주소로 변경)
+    const wsUrl = 'ws://localhost:27000';
+    const ws = new WebSocket(wsUrl);
+    websocketRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('WebSocket 연결 성공');
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        // 바이너리 데이터 받기
+        let buffer: Uint8Array;
+        if (event.data instanceof ArrayBuffer) {
+          buffer = new Uint8Array(event.data);
+        } else if (event.data instanceof Blob) {
+          // Blob인 경우 ArrayBuffer로 변환 필요
+          event.data.arrayBuffer().then((arrayBuffer) => {
+            const uint8Buffer = new Uint8Array(arrayBuffer);
+            handleServerMessage(uint8Buffer);
+          });
+          return;
+        } else {
+          buffer = new Uint8Array(event.data);
+        }
+
+        handleServerMessage(buffer);
+      } catch (error) {
+        console.error('메시지 수신 오류:', error);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket 오류:', error);
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket 연결 종료');
+    };
+
+    return () => {
+      if (websocketRef.current) {
+        websocketRef.current.close();
+      }
+    };
+  }, []);
+
+  // 서버 메시지 처리
+  const handleServerMessage = (buffer: Uint8Array) => {
+    try {
+      const response = decodeServerResponse(buffer);
+
+      // GameState 추출 (ChaksuResponse 또는 PassTurnResponse에서)
+      let gameState = null;
+      if (response.coordinate && response.coordinate.gameState) {
+        gameState = response.coordinate.gameState;
+      } else if (response.passTurn && response.passTurn.gameState) {
+        gameState = response.passTurn.gameState;
+      }
+
+      if (gameState) {
+        // 바둑판 업데이트
+        if (gameState.board) {
+          const newBoard = bitboardToBoardArray(
+            gameState.board.black,
+            gameState.board.white,
+            boardSize
+          );
+          setBoard(newBoard);
+        }
+
+        // 턴 정보 업데이트
+        if (gameState.turn !== undefined && gameState.turn !== null) {
+          const turnColor = colorEnumToString(gameState.turn);
+          if (turnColor) {
+            setCurrentTurn(turnColor);
+          }
+        }
+
+        // 플레이어 시간 정보 업데이트
+        if (gameState.blackTime) {
+          const blackTime = gameState.blackTime;
+          setPlayers(prev => ({
+            ...prev,
+            black: {
+              ...prev.black,
+              mainTime: blackTime.mainTime / 1000, // 밀리초를 초로 변환
+              byoyomiTime: blackTime.overtime / 1000,
+              byoyomiCount: blackTime.remainingOvertime || prev.black.byoyomiCount,
+            }
+          }));
+
+          // 초읽기 상태 업데이트
+          if (blackTime.mainTime === 0) {
+            setIsInByoyomi(prev => ({ ...prev, black: true }));
+          }
+        }
+
+        if (gameState.whiteTime) {
+          const whiteTime = gameState.whiteTime;
+          setPlayers(prev => ({
+            ...prev,
+            white: {
+              ...prev.white,
+              mainTime: whiteTime.mainTime / 1000,
+              byoyomiTime: whiteTime.overtime / 1000,
+              byoyomiCount: whiteTime.remainingOvertime || prev.white.byoyomiCount,
+            }
+          }));
+
+          // 초읽기 상태 업데이트
+          if (whiteTime.mainTime === 0) {
+            setIsInByoyomi(prev => ({ ...prev, white: true }));
+          }
+        }
+      }
+
+      // 기타 응답 처리 (기권, 무승부 등)
+      if (response.resign) {
+        alert('상대방이 기권했습니다.');
+        // TODO: 게임 종료 처리
+      }
+
+      if (response.drawOffer) {
+        if (response.drawOffer.accepted) {
+          alert('무승부가 수락되었습니다.');
+          // TODO: 게임 종료 처리
+        } else {
+          alert('무승부가 거절되었습니다.');
+        }
+      }
+    } catch (error) {
+      console.error('서버 응답 처리 오류:', error);
+    }
+  };
+
+  // 타이머 (로컬 시간 감소)
   useEffect(() => {
     timerRef.current = setInterval(() => {
       setPlayers(prev => {
@@ -74,19 +216,6 @@ export default function GameRoom() {
       }
     };
   }, [currentTurn]);
-
-  // 서버에서 시간 업데이트 받을 때
-  const updateTimeFromServer = (serverTime: { black: Player; white: Player }) => {
-    // 기존 타이머 폐기
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-    
-    // 서버 시간으로 업데이트
-    setPlayers(serverTime);
-    
-    // 새 타이머 시작은 useEffect에서 자동으로 처리됨
-  };
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -131,20 +260,19 @@ export default function GameRoom() {
     // 좌표를 0~360 정수형으로 변환
     const coordinate = row * 19 + col;
 
-    const moveData = {
-      sessionKey: 'example-session-key',
-      roomNumber: 'OMOK-2024',
-      move: 'place',
-      coordinate: coordinate
-    };
+   // WebSocket으로 요청 전송
+   if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+    try {
+      sendRequestViaWebSocket(websocketRef.current, sessionKeyRef.current, 'coordinate', coordinate);
+    } catch (error) {
+      console.error('요청 전송 오류:', error);
+      alert('서버로 요청을 보낼 수 없습니다.');
+    }
+  } else {
+    alert('서버에 연결되지 않았습니다.');
+  }
 
-    console.log('서버로 전송:', JSON.stringify(moveData));
-
-    const newBoard = board.map(row => [...row]);
-    newBoard[row][col] = currentTurn;
-    setBoard(newBoard);
-    
-    setCurrentTurn(currentTurn === 'black' ? 'white' : 'black');
+  // 선택 초기화 (서버 응답으로 실제 업데이트가 올 때까지는 UI에서 제거)
     setSelectedPosition(null);
   };
 
@@ -153,19 +281,34 @@ export default function GameRoom() {
       return; // 내 차례가 아니면 아무것도 하지 않음
     }
 
-    const moveData = {
-      sessionKey: 'example-session-key',
-      roomNumber: 'OMOK-2024',
-      move: 'pass',
-      coordinate: -1
-    };
-
-    console.log('서버로 전송:', JSON.stringify(moveData));
-    setCurrentTurn(currentTurn === 'black' ? 'white' : 'black');
+    // WebSocket으로 패스 요청 전송
+    if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+      try {
+        sendRequestViaWebSocket(websocketRef.current, sessionKeyRef.current, 'passTurn');
+      } catch (error) {
+        console.error('요청 전송 오류:', error);
+        alert('서버로 요청을 보낼 수 없습니다.');
+      }
+    } else {
+      alert('서버에 연결되지 않았습니다.');
+    }
+  
   };
 
   const handleResign = () => {
     if (confirm('정말 기권하시겠습니까?')) {
+      // WebSocket으로 기권 요청 전송
+      if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+        try {
+          sendRequestViaWebSocket(websocketRef.current, sessionKeyRef.current, 'resign');
+          // TODO: 서버 응답 대기 후 게임 종료 처리
+        } catch (error) {
+          console.error('요청 전송 오류:', error);
+          alert('서버로 요청을 보낼 수 없습니다.');
+        }
+      } else {
+        alert('서버에 연결되지 않았습니다.');
+      }
       navigate('/');
     }
   };
@@ -175,7 +318,19 @@ export default function GameRoom() {
       return; // 내 차례가 아니면 아무것도 하지 않음
     }
     
-    alert('무승부 신청이 상대방에게 전송되었습니다.');
+    
+    // WebSocket으로 무승부 제안 전송
+    if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+      try {
+        sendRequestViaWebSocket(websocketRef.current, sessionKeyRef.current, 'drawOffer');
+        alert('무승부 신청이 상대방에게 전송되었습니다.');
+      } catch (error) {
+        console.error('요청 전송 오류:', error);
+        alert('서버로 요청을 보낼 수 없습니다.');
+      }
+    } else {
+      alert('서버에 연결되지 않았습니다.');
+    }
   };
 
   const isMyTurn = currentTurn === myColor;

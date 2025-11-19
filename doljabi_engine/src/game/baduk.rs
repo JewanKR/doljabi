@@ -120,12 +120,6 @@ impl Baduk {
     }
 }
 
-enum BadukCommandList {
-    Chaksu = 1,
-    DrawRequest = 2,
-    Pass = 3,
-}
-
 // TODO: 반복수 검사 구현
 
 /// 착수 시도 실패 시 Err 출력

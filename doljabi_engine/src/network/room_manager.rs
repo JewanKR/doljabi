@@ -8,9 +8,20 @@ use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use crate::{game::badukboard::BadukBoardGameConfig, network::{baduk_room::BadukRoom, omok_room::OmokRoom}, proto::badukboardproto::{ClientToServerRequest, ServerToClientResponse}};
 
-pub enum RoomCommunicationDataForm {
-    EnterRoomRequest(u64),
-    ClientToServerRequest(ClientToServerRequest)
+pub struct RoomCommunicationDataForm {
+    pub user_id: u64,
+    pub client_to_server_request: Option<ClientToServerRequest>,
+} impl RoomCommunicationDataForm {
+    pub fn new(user_id: u64, client_to_server_request: Option<ClientToServerRequest>) -> Self { Self {
+        user_id: user_id, client_to_server_request: client_to_server_request
+    }}
+
+    pub fn send(self) -> ClientToServerRequest {
+        match self.client_to_server_request {
+            Some(a) => a,
+            None => ClientToServerRequest { session_key: "".to_string(), payload: None }
+        }
+    }
 }
 
 pub fn convert_game2proto_color(color: crate::game::badukboard::Color) -> crate::proto::badukboardproto::Color {
@@ -154,7 +165,7 @@ pub struct Room {
 
     pub fn input_data(&mut self, data: ClientToServerRequest) -> ServerToClientResponse {
         match &mut self.core {
-            RoomCore::Baduk(baduk_room) => {
+            RoomCore::Baduk(_baduk_room) => {
                 // baduk_room.input_data(data);
                 ServerToClientResponse { response_type: false, payload: None }
             },
@@ -179,14 +190,21 @@ pub struct Room {
         match &mut self.core {
             RoomCore::Baduk(core) => {
                 let result = core.pop_user(user_id);
-                if core.check_emtpy_room() {core.send_poweroff();}
+                if core.check_emtpy_room() {let _ = core.send_poweroff();}
                 result
             }
             RoomCore::Omok(core) => {
                 let result = core.pop_user(user_id);
-                if core.check_emtpy_room() {core.send_poweroff();}
+                if core.check_emtpy_room() {let _ = core.send_poweroff();}
                 result
             }
+        }
+    }
+
+    pub fn turn_user_id(&self) -> Option<u64> {
+        match &self.core {
+            RoomCore::Baduk(core) => core.turn_user_id(),
+            RoomCore::Omok(core) => core.turn_user_id(),
         }
     }
 }
@@ -206,14 +224,14 @@ pub async fn create_room_request (
     Json(payload): Json<CreateRoomRequestForm>,
 ) -> impl IntoResponse {
     let (poweroff_tx, mut poweroff_rx) = mpsc::channel::<()>(1);
-    let (mpsc_tx, mut mpsc_rx) = mpsc::channel::<RoomCommunicationDataForm>(1024);
-    let (broadcast_tx, mut broadcast_rx) = broadcast::channel::<ServerToClientResponse>(1024);
+    let (mpsc_tx, mpsc_rx) = mpsc::channel::<RoomCommunicationDataForm>(16);
+    let (broadcast_tx, _) = broadcast::channel::<ServerToClientResponse>(16);
 
     let (enter_code_u16, enter_code) = {
         let mut manager= room_manager.lock().await;
         let enter_code = match manager.get_enter_code() {
             Ok(code) => code,
-            Err(_) => {return StatusCode::INTERNAL_SERVER_ERROR.into_response();}
+            Err(_) => {println!("방 생성 실패: EnterCode 생성 실패"); return StatusCode::INTERNAL_SERVER_ERROR.into_response();}
         };
         manager.register_room(enter_code.as_u16(), (mpsc_tx, broadcast_tx.clone()));
         (enter_code.as_u16(), enter_code)
@@ -224,8 +242,9 @@ pub async fn create_room_request (
         Err(enter_code) => {
             let mut manager = room_manager.lock().await;
             manager.release_enter_code(enter_code);
+            println!("방 생성 실패: Room 생성 실패");
             return StatusCode::BAD_REQUEST.into_response();
-        }
+        } 
     };
 
     // room 비동기 테스크 생성 및 실행
@@ -234,15 +253,21 @@ pub async fn create_room_request (
         // 타임 아웃 설정
         let empty_room_timeout = tokio::time::sleep(Duration::from_secs(30));
         tokio::pin!(empty_room_timeout);
+        
 
         loop { tokio::select! {
             Some(data) = room.mpsc_rx.recv() => {
                 println!("데이터 수신!");
-                match data {
-                    RoomCommunicationDataForm::EnterRoomRequest(user_id) => {
-                        if room.push_user(user_id) {empty_player = false;}
+                match &data.client_to_server_request {
+                    Some(_) => {
+                        if Some(data.user_id) == room.turn_user_id() {
+                            let response = room.input_data(data.send());
+                            let _ = room.broadcast_tx.send(response);
+                        }
+                    },
+                    None => {
+                        if room.push_user(data.user_id.clone()) {empty_player = false;}
                     }
-                    RoomCommunicationDataForm::ClientToServerRequest(data) => {room.input_data(data);}
                 }
             }
 
@@ -265,6 +290,7 @@ pub async fn create_room_request (
         }
     });
 
+    println!("{}: 방 생성 성공", enter_code_u16);
     (StatusCode::CREATED, Json(CreateRoomResponseForm::new(enter_code_u16))).into_response()
 }
 

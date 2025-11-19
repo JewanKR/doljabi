@@ -30,7 +30,7 @@ async fn main() {
     let router_list = OpenApiRouter::new()
         .merge(login_router().with_state(session_manager.clone()))
         .merge(create_room_router().with_state(room_manager.clone()))
-        .merge(web_socket_upgrade_router().with_state(( room_manager.clone(), session_manager.clone())))
+        .merge(web_socket_upgrade_router().with_state((room_manager.clone(), session_manager.clone())))
         .merge(admin_page_router());
 
     // openapi 명세와 라우터 분리

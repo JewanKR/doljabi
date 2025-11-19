@@ -1,5 +1,5 @@
 use tokio::sync::mpsc;
-use crate::game::{baduk::Baduk, badukboard::{BadukBoardGameConfig, Color, Players}};
+use crate::game::{baduk::Baduk, badukboard::{BadukBoardGameConfig, Players}};
 
 pub struct BadukRoom {
     game: Baduk,
@@ -33,6 +33,11 @@ pub struct BadukRoom {
     */
     pub fn check_emtpy_room(&self) -> bool {
         self.players.check_emtpy_room()
+    }
+
+    pub fn turn_user_id(&self) -> Option<u64> {
+        let color = self.game.is_board().is_turn();
+        self.players.user_id(color)
     }
 
     pub async fn send_poweroff(&mut self) {

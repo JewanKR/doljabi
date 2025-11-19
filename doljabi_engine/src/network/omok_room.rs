@@ -39,20 +39,29 @@ pub struct OmokRoom {
         let _ = self.poweroff.send(()).await;
     }
 
+    pub fn turn_user_id(&self) -> Option<u64> {
+        let color = self.game.is_board().is_turn();
+        self.players.user_id(color)
+    }
+
     pub fn input_data(&mut self, data: ClientToServerRequest) -> ServerToClientResponse {
         use crate::proto::badukboardproto::client_to_server_request::Payload;
 
         match data.payload {
             Some(Payload::Coordinate(chaksu_request)) => {
                 use crate::proto::badukboardproto::{ChaksuResponse, GameState, BadukBoardState, PlayerTimeInfo};
+                let turn =  self.game.is_board().is_turn();
 
                 // 착수 시도
                 let success = match self.game.chaksu(chaksu_request.coordinate as u16, true) {
-                    Ok(_) => {true}
+                    Ok(_) => {
+                        self.players.switch_turn(turn);
+                        true
+                    }
                     Err(_) => {false}
                 };
                 
-                if let Some(winner) = self.check_winner() {
+                if let Some(_winner) = self.check_winner() {
                     let _ = self.poweroff.send(());
                 }
 
@@ -93,13 +102,20 @@ pub struct OmokRoom {
             Some(Payload::Resign(_resign_request)) => {
                 use crate::proto::badukboardproto::ResignResponse;
 
-                // TODO: 기권 로직 수행
-                let _resign_response = ResignResponse {};
+                let user_color = self.game.is_board().is_turn();
 
+                let _winner = match user_color {
+                    Color::Black => {Color::White}
+                    Color::White => {Color::Black}
+                    Color::Free => {Color::Free}
+                    _ => {Color::ColorError}
+                };
+
+                let resign_response = ResignResponse {};
+                
                 ServerToClientResponse {
-                    response_type: false,
-                    payload: None,
-                    //payload: Some(server_to_client_response::Payload::Resign(resign_response)),
+                    response_type: true,
+                    payload: Some(server_to_client_response::Payload::Resign(resign_response)),
                 }
             },
             Some(Payload::DrawOffer(_draw_request)) => {
@@ -120,8 +136,10 @@ pub struct OmokRoom {
             },
             Some(Payload::PassTurn(_pass_request)) => {
                 use crate::proto::badukboardproto::{PassTurnResponse, GameState, BadukBoardState, PlayerTimeInfo};
+                let turn = self.game.is_board().is_turn();
 
                 // turn 변경
+                self.players.switch_turn(turn);
                 self.game.switch_turn();
 
                 // 게임 정보

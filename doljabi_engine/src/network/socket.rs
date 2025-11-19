@@ -66,13 +66,13 @@ async fn handle_websocket(
     let (mut ws_tx, mut ws_rx) = socket.split();
 
     // 방 접속 실패 시 종료
-    if let Err(_) = mpsc_tx.send(RoomCommunicationDataForm::EnterRoomRequest(user_id)).await {return ;}
+    if let Err(_) = mpsc_tx.send(RoomCommunicationDataForm::new(user_id, None)).await {return ;}
 
     let send_task = tokio::spawn(async move {
         while let Some(Ok(message)) = ws_rx.next().await {
             if let Message::Binary(data) = message {
                 if let Ok(request) = ClientToServerRequest::decode(&data[..]) {
-                    let _ = mpsc_tx.send(RoomCommunicationDataForm::ClientToServerRequest(request)).await;
+                    let _ = mpsc_tx.send(RoomCommunicationDataForm::new(user_id, Some(request))).await;
                 }
             }
         }

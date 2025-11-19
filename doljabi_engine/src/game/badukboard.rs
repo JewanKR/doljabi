@@ -200,10 +200,17 @@ pub struct Player {
         self.overtime = overtime;
     }
 
+    // 피셔 시간 설정
     pub fn set_fischer_time(&mut self, fischer_time: u64) {
         self.fischer_time = fischer_time;
     }
 
+    // user_id 반환
+    pub fn user_id(&self) -> u64 {
+        self.user_id
+    }
+
+    // 유저 전체 시간 설정
     pub fn set_player(&mut self, config: &BadukBoardGameConfig) {
         let (main_time, fischer_time, remaining_overtime, overtime) = config.output();
         self.set_remaining_time(main_time);
@@ -212,6 +219,7 @@ pub struct Player {
         self.set_overtime(overtime);
     }
 
+    // 유저 시간 출력
     pub fn player_status(&self) -> BadukBoardGameConfig { BadukBoardGameConfig::new(
         self.main_time, self.fischer_time, self.remaining_overtime, self.overtime
     )}
@@ -259,7 +267,7 @@ pub struct Players {
         std::mem::swap(&mut self.black_player, &mut self.white_player);
     }
 
-    // 플레이어 시간 설정정
+    // 플레이어 시간 설정
     pub fn set_players(&mut self, config: &BadukBoardGameConfig) -> bool {
         let black_success = self.set_black_player(config);
         let white_success = self.set_white_player(config);
@@ -299,6 +307,34 @@ pub struct Players {
         match (&self.black_player, &self.white_player) {
             (None, None) => true,
             _ => false
+        }
+    }
+
+    pub fn switch_turn(&mut self, end_player: Color) -> bool {
+        let (black_player, white_player) = match (&mut self.black_player, &mut self.white_player) {
+            (Some(black), Some(white)) => (black, white),
+            _ => {return false;}
+        };
+
+        match &end_player {
+            Color::Black => {
+                black_player.calculate_remaining_time();
+                white_player.set_start_time();
+                true
+            }
+            Color::White => {
+                white_player.calculate_remaining_time();
+                black_player.set_start_time();
+                true
+            }
+            _ => false
+        }        
+    }
+    pub fn user_id(&self, color: Color) -> Option<u64> {
+        match color {
+            Color::Black => self.black_player.as_ref().map(|b| b.user_id()),
+            Color::White => self.white_player.as_ref().map(|w| w.user_id()),
+            _ => None
         }
     }
 }
