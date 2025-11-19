@@ -30,8 +30,16 @@ pub struct Omok {
         winner: None,
     }}
 
+    pub fn winner(&self) -> Option<Color> {
+        self.winner.clone()
+    }
+
     pub fn is_board(&self) -> BadukBoard {
         self.board.clone()
+    }
+
+    pub fn switch_turn(&mut self) {
+        self.board.switch_turn();
     }
 
     // 방향 크기 정의

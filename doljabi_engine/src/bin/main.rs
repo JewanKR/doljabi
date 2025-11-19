@@ -1,10 +1,10 @@
 // 실행 방법: cargo run --bin main
-use std::{collections::HashMap, fs, net::SocketAddr, sync::Arc};
-use tokio::{sync::{mpsc, Mutex}};
-use doljabi_engine::{soyul::{session::SessionStore, soyul_login::login_router}, utility::admin_page::admin_page_router};
-use axum::{Router, Json};
+use std::{fs, sync::Arc};
+use tokio::{sync::{Mutex}};
+use doljabi_engine::{network::{room_manager::{RoomManagement, create_room_router}, socket::web_socket_upgrade_router}, soyul::{session::SessionStore, soyul_login::login_router}, utility::admin_page::admin_page_router};
+use axum::{Router};
 use tower_http::cors::{Any, CorsLayer};
-use utoipa::{ToSchema, openapi::{self, ContactBuilder, OpenApi, OpenApiVersion}};
+use utoipa::{openapi::{ContactBuilder, OpenApi, OpenApiVersion}};
 use utoipa_axum::{router::OpenApiRouter};
 
 fn add_openapi_info(openapi_doc: &mut OpenApi) {
@@ -24,10 +24,13 @@ fn add_openapi_info(openapi_doc: &mut OpenApi) {
 #[tokio::main]
 async fn main() {
     let session_manager = SessionStore::default();
+    let room_manager = Arc::new(Mutex::new(RoomManagement::new()));
 
     // 최종 라우터 생성
     let router_list = OpenApiRouter::new()
         .merge(login_router().with_state(session_manager.clone()))
+        .merge(create_room_router().with_state(room_manager.clone()))
+        .merge(web_socket_upgrade_router().with_state(( room_manager.clone(), session_manager.clone())))
         .merge(admin_page_router());
 
     // openapi 명세와 라우터 분리

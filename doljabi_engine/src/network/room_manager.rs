@@ -1,9 +1,29 @@
-/*
-use std::{collections::{HashMap, HashSet, VecDeque}, sync::Arc};
+
+use std::{collections::{HashMap, HashSet, VecDeque}, sync::Arc, time::Duration};
+use axum::{Json, extract::State, response::IntoResponse};
+use hyper::StatusCode;
 use serde::{self, Deserialize, Serialize};
 use tokio::sync::{Mutex, broadcast, mpsc};
 use utoipa::ToSchema;
+use utoipa_axum::{router::OpenApiRouter, routes};
 use crate::{game::badukboard::BadukBoardGameConfig, network::{baduk_room::BadukRoom, omok_room::OmokRoom}, proto::badukboardproto::{ClientToServerRequest, ServerToClientResponse}};
+
+pub enum RoomCommunicationDataForm {
+    EnterRoomRequest(u64),
+    ClientToServerRequest(ClientToServerRequest)
+}
+
+pub fn convert_game2proto_color(color: crate::game::badukboard::Color) -> crate::proto::badukboardproto::Color {
+    use crate::game::badukboard::Color as GameColor;
+    use crate::proto::badukboardproto::Color as ProtoColor;
+    
+    match color {
+        GameColor::Black => ProtoColor::Black,
+        GameColor::White => ProtoColor::White,
+        GameColor::Free => ProtoColor::Free,
+        GameColor::ColorError => ProtoColor::Error,
+    }
+}
 
 #[derive(Eq, Hash, PartialEq)]
 pub struct EnterCode { code : u16 }
@@ -12,7 +32,7 @@ impl EnterCode {
     pub fn as_u16(&self) -> u16 { self.code }
 }
 
-pub type RoomCommunicationChannel = (mpsc::Sender<ClientToServerRequest>, broadcast::Receiver<ServerToClientResponse>);
+pub type RoomCommunicationChannel = (mpsc::Sender<RoomCommunicationDataForm>, broadcast::Sender<ServerToClientResponse>);
 
 pub struct EnterCodeManagement {
     counter: u16,
@@ -30,8 +50,8 @@ pub struct EnterCodeManagement {
         }
     }
 
-    fn release(&mut self, num: EnterCode) {
-        self.released_number.push_back(num.as_u16());
+    fn release(&mut self, enter_code: EnterCode) {
+        self.released_number.push_back(enter_code.as_u16());
     }
 
     pub fn check_overlap_in_released_number(&self) {
@@ -47,7 +67,7 @@ pub struct RoomManagement {
     enter_code_management: EnterCodeManagement,
     room_communication_channel_map: HashMap<u16, RoomCommunicationChannel>,
 } impl RoomManagement {
-    fn new() -> Self { Self {
+    pub fn new() -> Self { Self {
         enter_code_management: EnterCodeManagement::new(),
         room_communication_channel_map: HashMap::<u16, RoomCommunicationChannel>::new(),
     }}
@@ -60,9 +80,17 @@ pub struct RoomManagement {
         self.room_communication_channel_map.insert(enter_code, room_communication_channel);
     }
 
-    pub fn delete_room(&mut self, enter_code: EnterCode) {
+    pub fn release_enter_code(&mut self, enter_code: EnterCode) {
         self.room_communication_channel_map.remove(&enter_code.as_u16());
         self.enter_code_management.release(enter_code);
+    }
+
+    pub fn get_communication_channel(&self, enter_code: u16) -> Option<(mpsc::Sender<RoomCommunicationDataForm>, broadcast::Receiver<ServerToClientResponse>)> {
+        let (mpsc_tx, broadcast_tx) = match self.room_communication_channel_map.get(&enter_code) {
+            Some(channel) => {channel}
+            None => {return None;}
+        };
+        Some((mpsc_tx.clone(), broadcast_tx.subscribe()))
     }
 }
 
@@ -78,14 +106,21 @@ pub enum CreateRoomRequestForm {
     Omok(BadukBoardGameConfig),
 }
 
+#[derive(Deserialize, Serialize, ToSchema, Clone, Copy)]
+pub struct CreateRoomResponseForm {
+    enter_code: u16,
+} impl CreateRoomResponseForm {
+    pub fn new(enter_code: u16) -> Self { Self { enter_code: enter_code }}
+}
+
 pub enum RoomCore {
     Baduk(BadukRoom),
     Omok(OmokRoom),
 } impl RoomCore {
-    pub fn new(game_config: CreateRoomRequestForm) -> Self {
+    pub fn new(game_config: CreateRoomRequestForm, poweroff: mpsc::Sender<()>) -> Option<Self> {
         match game_config {
-            CreateRoomRequestForm::Baduk(game_config) => Self::Baduk(BadukRoom::new(game_config)),
-            CreateRoomRequestForm::Omok(game_config) => Self::Omok(OmokRoom::new(game_config)),
+            CreateRoomRequestForm::Baduk(game_config) => Some(Self::Baduk(BadukRoom::new(game_config, poweroff))),
+            CreateRoomRequestForm::Omok(game_config) => Some(Self::Omok(OmokRoom::new(game_config, poweroff))),
         }
     }
 }
@@ -93,82 +128,146 @@ pub enum RoomCore {
 pub struct Room {
     enter_code: EnterCode,
     core: RoomCore,
-    mpsc_rx: mpsc::Receiver<ClientToServerRequest>,
+    mpsc_rx: mpsc::Receiver<RoomCommunicationDataForm>,
     broadcast_tx: broadcast::Sender<ServerToClientResponse>,
-
 } impl Room {
     pub fn new(
         enter_code: EnterCode,
         game_config: CreateRoomRequestForm,
-        mpsc_rx: mpsc::Receiver<ClientToServerRequest>,
+        mpsc_rx: mpsc::Receiver<RoomCommunicationDataForm>,
         broadcast_tx: broadcast::Sender<ServerToClientResponse>,
-    ) -> Self { Self {
-        enter_code: enter_code,
-        core: RoomCore::new(game_config),
+        poweroff: mpsc::Sender<()>,
+    ) -> Result<Self, EnterCode> {
+        match RoomCore::new(game_config, poweroff) {
+            Some(core) => Ok(Self {
+                enter_code: enter_code,
+                core: core,
+    
+                mpsc_rx: mpsc_rx,
+                broadcast_tx: broadcast_tx
+            }),
+            None => Err(enter_code)
+        }
+    }
 
-        mpsc_rx: mpsc_rx,
-        broadcast_tx: broadcast_tx,
-    }}
+    pub fn delete_room(self) -> EnterCode {self.enter_code}
+
+    pub fn input_data(&mut self, data: ClientToServerRequest) -> ServerToClientResponse {
+        match &mut self.core {
+            RoomCore::Baduk(baduk_room) => {
+                // baduk_room.input_data(data);
+                ServerToClientResponse { response_type: false, payload: None }
+            },
+            RoomCore::Omok(omok_room) => {
+                omok_room.input_data(data)
+            },
+        }
+    }
+
+    pub fn push_user(&mut self,user_id: u64) -> bool {
+        match &mut self.core {
+            RoomCore::Baduk(core) => {
+                core.push_user(user_id)
+            }
+            RoomCore::Omok(core ) => {
+                core.push_user(user_id)
+            }
+        }
+    }
+
+    pub fn pop_user(&mut self, user_id: u64) -> bool {
+        match &mut self.core {
+            RoomCore::Baduk(core) => {
+                let result = core.pop_user(user_id);
+                if core.check_emtpy_room() {core.send_poweroff();}
+                result
+            }
+            RoomCore::Omok(core) => {
+                let result = core.pop_user(user_id);
+                if core.check_emtpy_room() {core.send_poweroff();}
+                result
+            }
+        }
+    }
 }
-
 
 #[utoipa::path(
     post,
-    path = "api/game/create",
+    path = "/api/room/create",
     request_body = CreateRoomRequestForm,
     responses(
-        (status = 201, description = "방 생성 성공", body = CreateRoomResponse),
+        (status = 201, description = "방 생성 성공", body = CreateRoomResponseForm),
         (status = 400, description = "잘못된 요청"),
         (status = 500, description = "서버 오류"),
     )
 )]
-pub async fn crate_room_request (
+pub async fn create_room_request (
     State(room_manager): State<RoomManager>,
-    Json(paylode): Json<CreateRoomRequestForm>,
+    Json(payload): Json<CreateRoomRequestForm>,
 ) -> impl IntoResponse {
-    let (poweroff_tx, mut poweroff_rx) = oneshot::channel::<()>();
-    let (mpsc_tx, mut mpsc_rx) = mpsc::channel::<ClientToServerRequest>(1024);
+    let (poweroff_tx, mut poweroff_rx) = mpsc::channel::<()>(1);
+    let (mpsc_tx, mut mpsc_rx) = mpsc::channel::<RoomCommunicationDataForm>(1024);
     let (broadcast_tx, mut broadcast_rx) = broadcast::channel::<ServerToClientResponse>(1024);
 
-    let (enter_code, enter_code_u16) = {
-        let manager= room_manager.lock().await;
-        let enter_code = match manager.get_enter_code(){
+    let (enter_code_u16, enter_code) = {
+        let mut manager= room_manager.lock().await;
+        let enter_code = match manager.get_enter_code() {
             Ok(code) => code,
-            Err(_) => {return StatusCode::INTERNAL_SERVER_ERROR;}
+            Err(_) => {return StatusCode::INTERNAL_SERVER_ERROR.into_response();}
         };
-        manager.register_room(enter_code.as_u16(), (mpsc_tx, broadcast_rx));
-        (enter_code, enter_code.as_u16())
+        manager.register_room(enter_code.as_u16(), (mpsc_tx, broadcast_tx.clone()));
+        (enter_code.as_u16(), enter_code)
     };
-    
-    let room_tash = tokio::spawn( async move {
-        let empty_room_timeout = Some(tokio::time::sleep(
-            std::time::Duration::from_secs(30)
-        ));
-    
-        loop {
-            tokio::select! {
 
-                _ = &mut poweroff_rx => {
-                    println!("{} 방 종료 신호 수신", enter_code);
-                    break;
-                }
-        
-                // empty room timeout
-                _ = async {
-                    match &mut empty_room_timeout {
-                        Some(sleep) => sleep.await,
-                        None => std::future::pending().await,
+    let mut room = match Room::new(enter_code, payload, mpsc_rx, broadcast_tx, poweroff_tx.clone()) {
+        Ok(room) => room,
+        Err(enter_code) => {
+            let mut manager = room_manager.lock().await;
+            manager.release_enter_code(enter_code);
+            return StatusCode::BAD_REQUEST.into_response();
+        }
+    };
+
+    // room 비동기 테스크 생성 및 실행
+    tokio::spawn( async move {
+        let mut empty_player = true;
+        // 타임 아웃 설정
+        let empty_room_timeout = tokio::time::sleep(Duration::from_secs(30));
+        tokio::pin!(empty_room_timeout);
+
+        loop { tokio::select! {
+            Some(data) = room.mpsc_rx.recv() => {
+                println!("데이터 수신!");
+                match data {
+                    RoomCommunicationDataForm::EnterRoomRequest(user_id) => {
+                        if room.push_user(user_id) {empty_player = false;}
                     }
-                } => {
-                    println!("빈 방 {} 타임아웃으로 종료", enter_code);
-                    break;
+                    RoomCommunicationDataForm::ClientToServerRequest(data) => {room.input_data(data);}
                 }
             }
-        }
-    })
 
-    (StatusCode::CREATED, Json(CreateRoomRequestForm {
-        enter_code: enter_code_u16
-    })).into_response()
+            _ = poweroff_rx.recv() => {
+                println!("{} 방 종료 신호 수신", room.enter_code.as_u16());
+                break;
+            }
+
+            _ = (&mut empty_room_timeout), if empty_player  => {
+                println!("{} 빈 방 종료", room.enter_code.as_u16());
+                break;
+            }
+        }}
+
+        // 테스크 종료 로직
+        let release_enter_code = room.delete_room();
+        {
+            let mut manager = room_manager.lock().await;
+            manager.release_enter_code(release_enter_code);
+        }
+    });
+
+    (StatusCode::CREATED, Json(CreateRoomResponseForm::new(enter_code_u16))).into_response()
 }
-*/
+
+pub fn create_room_router() -> OpenApiRouter<RoomManager> {
+    OpenApiRouter::new().routes(routes!(create_room_request))
+}

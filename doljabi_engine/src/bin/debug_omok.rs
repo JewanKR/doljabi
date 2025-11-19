@@ -1,4 +1,4 @@
-use std::collections::{VecDeque};
+use std::{collections::VecDeque, time::UNIX_EPOCH};
 
 use doljabi_engine::game::{badukboard::{BadukBoardError, Color}, omok::{self, Omok}};
 
@@ -29,21 +29,28 @@ fn try_chaksu(omok: &mut Omok, black: VecDeque<u16>, white: VecDeque<u16>) {
 
     let mut main_white = white;
     main_white.extend(white_temp);
+    let mut counter = 0;
 
+    let time = std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
     for ptr in black {
+        counter += 1;
         match omok.chaksu(ptr, true) {
             Ok(_) => {
                 println!("흑색: {} 착수 성공!", ptr);
                 while let Some(ptr2) = main_white.pop_front() {
+                    counter += 1;
                     if let Ok(_) = omok.chaksu(ptr2.clone(), true) {
+
                         println!("백색: {} 착수 성공!", ptr2);
                         break;
                     }
                 }
             }
             Err(error_code) => {print_error_code(error_code, ptr);}
-        }
+        }   
     }
+    let time2 = std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
+    println!("{}, {}", time2 - time, counter);
 }
 
 fn print_error_code(error_code: BadukBoardError, ptr: u16) {

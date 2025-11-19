@@ -1,11 +1,13 @@
-/* 
-use axum::{extract::{Path, State, ws::WebSocketUpgrade}, response::IntoResponse};
+
+use axum::{extract::{Path, State, ws::{self, WebSocketUpgrade}}, response::IntoResponse};
+use futures_util::{SinkExt, StreamExt};
 use hyper::StatusCode;
 use serde::{Deserialize, Serialize};
+use tokio::sync::{broadcast, mpsc};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::{network::room_manager::{self, RoomManager}, soyul::session::SessionStore};
+use crate::{network::room_manager::{RoomCommunicationDataForm, RoomManager}, proto::badukboardproto::{ClientToServerRequest, ServerToClientResponse}, soyul::session::SessionStore};
 
 #[derive(Deserialize, Serialize, ToSchema)]
 pub enum EnterRoomErrorCode {
@@ -15,27 +17,83 @@ pub enum EnterRoomErrorCode {
 
 #[utoipa::path(
     get,
-    path = "/api/room/{enter_code}/session={session_key}",
+    path = "/api/room/{enter_code}/session/{session_key}",
     params(
         ("enter_code" = u16, Path, description = "방 입장 코드"),
         ("session_key" = String, Path, description = "세션 키")
     ),
     responses(
-        (status = 201, description = "방 입장 성공", body = u16),
-        (status = 404, description = "잘못된 요청", body = EnterRoomErrorCode),
-        (status = 500, description = "서버 내부 오류"),
+        (status = 101, description = "WebSocket 연결 성공: 방 입장 성공"),
+        (status = 400, description = "유효하지 않은 세션 키"),
+        (status = 404, description = "존재하지 않는 방"),
     )
 )]
 pub async fn enter_room(
     ws: WebSocketUpgrade,
     Path((enter_code, session_key)): Path<(u16, String)>,
-    State(room_manager): State<RoomManager>,
-    State(session_store): State<SessionStore>,
+    State((room_manager, session_store)): State<(RoomManager, SessionStore)>
 ) -> impl IntoResponse {
+    let _user_id = {
+        session_store.read().await.get(&session_key.to_string()).cloned()
+    };
 
+    let user_id = match _user_id {
+        Some(user_id) => user_id,
+        None => {return StatusCode::BAD_REQUEST.into_response();}
+    };
+
+    let communication_channel = {
+        room_manager.lock().await.get_communication_channel(enter_code)
+    };
+
+    let (mpsc_tx, broadcast_rx) = match communication_channel {
+        Some(channel) => channel,
+        None => {return StatusCode::NOT_FOUND.into_response();}
+    };
+
+    ws.on_upgrade(move |socket| handle_websocket(socket, mpsc_tx, broadcast_rx, user_id))
 }
 
-pub fn web_socket_upgrade_router() -> OpenApiRouter {
+async fn handle_websocket(
+    socket: ws::WebSocket,
+    mpsc_tx: mpsc::Sender<RoomCommunicationDataForm>,
+    mut broadcast_rx: broadcast::Receiver<ServerToClientResponse>,
+    user_id: u64,
+) {
+    use ws::Message;
+    use prost::Message as ProstMessage;
+
+    let (mut ws_tx, mut ws_rx) = socket.split();
+
+    // 방 접속 실패 시 종료
+    if let Err(_) = mpsc_tx.send(RoomCommunicationDataForm::EnterRoomRequest(user_id)).await {return ;}
+
+    let send_task = tokio::spawn(async move {
+        while let Some(Ok(message)) = ws_rx.next().await {
+            if let Message::Binary(data) = message {
+                if let Ok(request) = ClientToServerRequest::decode(&data[..]) {
+                    let _ = mpsc_tx.send(RoomCommunicationDataForm::ClientToServerRequest(request)).await;
+                }
+            }
+        }
+    });
+
+    let recv_task = tokio::spawn(async move {
+        while let Ok(response) = broadcast_rx.recv().await {
+            let mut buf = Vec::new();
+            if response.encode(&mut buf).is_ok() {
+                let _ = ws_tx.send(Message::Binary(buf.into())).await;
+            }
+        }
+    });
+
+    tokio::select! {
+        _ = send_task => {},
+        _ = recv_task => {},
+    }
+}
+
+
+pub fn web_socket_upgrade_router() -> OpenApiRouter<(RoomManager, SessionStore)> {
     OpenApiRouter::new().routes(routes!(enter_room))
 }
-*/

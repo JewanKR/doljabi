@@ -203,6 +203,18 @@ pub struct Player {
     pub fn set_fischer_time(&mut self, fischer_time: u64) {
         self.fischer_time = fischer_time;
     }
+
+    pub fn set_player(&mut self, config: &BadukBoardGameConfig) {
+        let (main_time, fischer_time, remaining_overtime, overtime) = config.output();
+        self.set_remaining_time(main_time);
+        self.set_fischer_time(fischer_time);
+        self.set_remaining_overtime(remaining_overtime);
+        self.set_overtime(overtime);
+    }
+
+    pub fn player_status(&self) -> BadukBoardGameConfig { BadukBoardGameConfig::new(
+        self.main_time, self.fischer_time, self.remaining_overtime, self.overtime
+    )}
 }
 
 #[derive(Clone, Debug, Builder)]
@@ -246,16 +258,76 @@ pub struct Players {
     pub fn switch_color(&mut self) {
         std::mem::swap(&mut self.black_player, &mut self.white_player);
     }
+
+    // 플레이어 시간 설정정
+    pub fn set_players(&mut self, config: &BadukBoardGameConfig) -> bool {
+        let black_success = self.set_black_player(config);
+        let white_success = self.set_white_player(config);
+        black_success && white_success
+    }
+
+    pub fn set_black_player(&mut self, config: &BadukBoardGameConfig) -> bool {
+        match &mut self.black_player {
+            Some(player) => {player.set_player(config); true},
+            None => false,
+        }
+    }
+
+    // 플레이어 시간 출력
+    pub fn set_white_player(&mut self, config: &BadukBoardGameConfig) -> bool {
+        match &mut self.white_player {
+            Some(player) => {player.set_player(config); true},
+            None => false,
+        }
+    }
+
+    pub fn black_player_state(&self) -> BadukBoardGameConfig {
+        match &self.black_player {
+            Some(black) => black.player_status(),
+            None => BadukBoardGameConfig::empty()
+        }
+    }
+
+    pub fn white_player_state(&self) -> BadukBoardGameConfig {
+        match &self.white_player {
+            Some(white) => white.player_status(),
+            None => BadukBoardGameConfig::empty()
+        }
+    }
+
+    pub fn check_emtpy_room(&self) -> bool {
+        match (&self.black_player, &self.white_player) {
+            (None, None) => true,
+            _ => false
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, ToSchema, Clone, Copy)]
 pub struct BadukBoardGameConfig {
-    user_id: u64,
-
     main_time: u64,
     fischer_time: u64,
     remaining_overtime: u8,
     overtime: u64,
+} impl BadukBoardGameConfig {
+    pub fn new(main_time: u64, fischer_time: u64, remaining_overtime: u8, overtime: u64) -> Self { Self {
+        main_time: main_time,
+        fischer_time: fischer_time,
+        remaining_overtime: remaining_overtime,
+        overtime: overtime,
+    }}
 
-    set_start_time: u128,
+    pub fn output(&self) -> (u64, u64, u8, u64) {(
+        self.main_time,
+        self.fischer_time,
+        self.remaining_overtime,
+        self.overtime
+    )}
+
+    pub fn empty() -> Self { Self {
+        main_time: 0,
+        fischer_time: 0,
+        remaining_overtime: 0,
+        overtime: 0,
+    }}
 }

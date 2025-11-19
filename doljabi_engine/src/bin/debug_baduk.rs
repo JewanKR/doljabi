@@ -1,4 +1,4 @@
-use std::collections::{VecDeque};
+use std::{collections::VecDeque, time::UNIX_EPOCH};
 use doljabi_engine::game::{baduk::{Baduk, chaksu}, badukboard::{BadukBoardError}};
 
 fn main() {
@@ -15,11 +15,12 @@ fn try_chaksu(baduk: &mut Baduk, black_coordinate: VecDeque<u16>, white_coordina
     let temp_coordinate: VecDeque<u16> = (0..baduk.is_board().is_boardsize().pow(2)).rev().collect();
 
     let mut black = black_coordinate;
-    black.extend(temp_coordinate.clone());
+    black.extend(temp_coordinate.clone().iter().rev());
 
     let mut white = white_coordinate;
     white.extend(temp_coordinate);
 
+    let time = std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
     while let Some(ptr) = black.pop_front() {
         match chaksu(baduk, ptr) {
             Ok(_) => {
@@ -34,6 +35,8 @@ fn try_chaksu(baduk: &mut Baduk, black_coordinate: VecDeque<u16>, white_coordina
             Err(error_code) => {print_error_code(error_code, ptr);}
         }
     }
+    let time2 = std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
+    println!("{}", time2 - time);
 }
 
 fn print_error_code(error_code: BadukBoardError, ptr: u16) {
