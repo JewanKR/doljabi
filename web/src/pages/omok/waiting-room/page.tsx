@@ -1,23 +1,6 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-
-// --- API Interfaces Definition (Based on openapi.json) ---
-
-interface BadukBoardGameConfig {
-  main_time: number;          // int64
-  fischer_time: number;       // int64 (UI: additionalTime)
-  overtime: number;           // int64 (UI: byoyomiTime)
-  remaining_overtime: number; // int32 (UI: byoyomiCount)
-}
-
-interface CreateRoomRequestForm {
-  game_type: 'omok' | 'baduk';
-  game_config: BadukBoardGameConfig;
-}
-
-interface CreateRoomResponseForm {
-  enter_code: number; // int32
-}
 
 interface Player {
   id: number;
@@ -32,13 +15,11 @@ export default function OmokWaitingRoom() {
   const location = useLocation();
   const state = location.state as { roomCode?: string; isHost?: boolean; opponent?: any } | null;
   
+  const [roomCode] = useState(() => 
+    state?.roomCode || Math.random().toString(36).substring(2, 8).toUpperCase()
+  );
   const [isHost] = useState(state?.isHost !== false);
   
-  // 변경: roomCode를 서버에서 받아오기 위해 setRoomCode 추가, 초기값 로딩 표시
-  const [roomCode, setRoomCode] = useState<string>(() => 
-    state?.roomCode || (isHost ? '생성 중...' : '')
-  );
-
   const [players, setPlayers] = useState<Player[]>(() => {
     if (state?.opponent) {
       return [
@@ -106,55 +87,6 @@ export default function OmokWaitingRoom() {
     useByoyomiCount: true
   });
 
-  // --- 방 생성 API 요청 함수 ---
-  const createRoomOnServer = async () => {
-    try {
-      // UI 설정을 API 스펙에 맞게 매핑
-      const requestBody: CreateRoomRequestForm = {
-        game_type: 'omok',
-        game_config: {
-          // 사용 여부(toggle)가 false면 0으로 전송 (혹은 요구사항에 따라 처리)
-          main_time: gameSettings.useMainTime ? gameSettings.mainTime : 0,
-          fischer_time: gameSettings.useAdditionalTime ? gameSettings.additionalTime : 0,
-          overtime: gameSettings.useByoyomiTime ? gameSettings.byoyomiTime : 0,
-          remaining_overtime: gameSettings.useByoyomiCount ? gameSettings.byoyomiCount : 0
-        }
-      };
-
-      const response = await fetch('/api/room/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        throw new Error('방 생성에 실패했습니다.');
-      }
-
-      const data: CreateRoomResponseForm = await response.json();
-      
-      // 서버에서 받은 enter_code(int32)를 roomCode로 설정
-      setRoomCode(data.enter_code.toString());
-      console.log('방 생성 성공:', data.enter_code);
-
-    } catch (error) {
-      console.error('API Error:', error);
-      alert('방을 생성하는 중 오류가 발생했습니다.');
-      navigate('/'); // 에러 발생 시 메인으로 이동
-    }
-  };
-
-  // 호스트일 경우 컴포넌트 마운트 시 방 생성 요청
-  useEffect(() => {
-    if (isHost && !state?.roomCode) {
-      createRoomOnServer();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost]); // 최초 1회만 실행 (설정 변경 시 재호출 로직이 필요하다면 의존성 추가 필요)
-
-
   useEffect(() => {
     if (isHost && players[1].nickname === '대기 중...' && !state?.opponent) {
       const timer = setTimeout(() => {
@@ -212,9 +144,6 @@ export default function OmokWaitingRoom() {
   const toggleSetting = (field: 'useMainTime' | 'useAdditionalTime' | 'useByoyomiTime' | 'useByoyomiCount') => {
     if (isHost) {
       setGameSettings(prev => ({ ...prev, [field]: !prev[field] }));
-      // 주의: API 스펙상 방 생성(create)만 있고 수정(update)이 없다면, 
-      // 방 생성 후 설정을 변경해도 서버에는 반영되지 않을 수 있습니다.
-      // 이 경우 "설정 변경 적용" 버튼을 만들어 방을 재생성하거나 API 수정이 필요할 수 있습니다.
     }
   };
 
@@ -248,25 +177,19 @@ export default function OmokWaitingRoom() {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm mb-1" style={{ color: '#9aa1ad' }}>방 입장 코드</div>
-                  <div className="text-2xl font-bold tracking-wider" style={{ color: '#e8eaf0' }}>
-                    {roomCode}
-                  </div>
+                  <div className="text-2xl font-bold tracking-wider" style={{ color: '#e8eaf0' }}>{roomCode}</div>
                 </div>
                 <button 
                   onClick={copyRoomCode}
-                  disabled={roomCode === '생성 중...'}
                   className="px-6 py-3 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center space-x-2 border"
                   style={{ 
                     backgroundColor: '#141822', 
                     borderColor: '#2a2a33',
-                    color: '#e8eaf0',
-                    opacity: roomCode === '생성 중...' ? 0.5 : 1
+                    color: '#e8eaf0'
                   }}
                   onMouseEnter={(e) => {
-                    if (roomCode !== '생성 중...') {
-                      e.currentTarget.style.borderColor = '#8ab4f8';
-                      e.currentTarget.style.color = '#8ab4f8';
-                    }
+                    e.currentTarget.style.borderColor = '#8ab4f8';
+                    e.currentTarget.style.color = '#8ab4f8';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = '#2a2a33';
@@ -281,7 +204,6 @@ export default function OmokWaitingRoom() {
               </div>
             </div>
 
-            {/* ... (이하 나머지 UI 코드는 동일) ... */}
             {/* 플레이어 목록 - 상대방이 있을 때만 표시 */}
             {hasOpponent && (
               <div className="rounded-xl p-6 border mb-6"
