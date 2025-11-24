@@ -12,6 +12,9 @@
   "paths": {
     "/api/admin/openapi": {
       "get": {
+        "tags": [
+          "openapi"
+        ],
         "operationId": "swagger_ui_page",
         "responses": {
           "200": {
@@ -22,6 +25,9 @@
     },
     "/api/admin/openapi/openapi.json": {
       "get": {
+        "tags": [
+          "openapi"
+        ],
         "summary": "OpenAPI JSON 스펙을 반환하는 엔드포인트",
         "operationId": "get_openapi_spec",
         "responses": {
@@ -80,6 +86,77 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/room/create": {
+      "post": {
+        "operationId": "create_room_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRoomRequestForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "방 생성 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRoomResponseForm"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "잘못된 요청"
+          },
+          "500": {
+            "description": "서버 오류"
+          }
+        }
+      }
+    },
+    "/api/room/{enter_code}/session/{session_key}": {
+      "get": {
+        "operationId": "enter_room",
+        "parameters": [
+          {
+            "name": "enter_code",
+            "in": "path",
+            "description": "방 입장 코드",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "session_key",
+            "in": "path",
+            "description": "세션 키",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "WebSocket 연결 성공: 방 입장 성공"
+          },
+          "400": {
+            "description": "유효하지 않은 세션 키"
+          },
+          "404": {
+            "description": "존재하지 않는 방"
           }
         }
       }
@@ -229,6 +306,90 @@
           },
           "success": {
             "type": "boolean"
+          }
+        }
+      },
+      "BadukBoardGameConfig": {
+        "type": "object",
+        "required": [
+          "main_time",
+          "fischer_time",
+          "remaining_overtime",
+          "overtime"
+        ],
+        "properties": {
+          "fischer_time": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "main_time": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "overtime": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "remaining_overtime": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "CreateRoomRequestForm": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "game_config",
+              "game_type"
+            ],
+            "properties": {
+              "game_config": {
+                "$ref": "#/components/schemas/BadukBoardGameConfig"
+              },
+              "game_type": {
+                "type": "string",
+                "enum": [
+                  "baduk"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "game_config",
+              "game_type"
+            ],
+            "properties": {
+              "game_config": {
+                "$ref": "#/components/schemas/BadukBoardGameConfig"
+              },
+              "game_type": {
+                "type": "string",
+                "enum": [
+                  "omok"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "CreateRoomResponseForm": {
+        "type": "object",
+        "required": [
+          "enter_code"
+        ],
+        "properties": {
+          "enter_code": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
           }
         }
       },
