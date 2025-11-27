@@ -80,6 +80,31 @@ export interface components {
         SignupForm: {
             login_id: string;
             password: string;
+            username: string;
+        };
+        BadukBoardGameConfig: {
+            main_time: number;
+            fischer_time: number;
+            remaining_overtime: number;
+            overtime: number;
+        };
+        CreateRoomRequestForm: {
+            game_config: components["schemas"]["BadukBoardGameConfig"];
+            game_type: "baduk" | "omok";
+        };
+        CreateRoomResponseForm: {
+            enter_code: number;
+        };
+        SessionCheckForm: {
+            session_key: string;
+        };
+        SessionCheckResponse: {
+            exists: boolean;
+            user_id?: number | null;
+        };
+        ApiResponse: {
+            success: boolean;
+            message: string;
         };
     };
     responses: never;

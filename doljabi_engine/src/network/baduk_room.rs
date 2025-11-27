@@ -1,5 +1,5 @@
 use tokio::sync::mpsc;
-use crate::game::{baduk::Baduk, badukboard::{BadukBoardGameConfig, Players}};
+use crate::{game::{baduk::Baduk, badukboard::{BadukBoardGameConfig, Players}}, network::{room_manager::GameLogic, socket::RoomCommunicationDataForm}, proto::badukboardproto::ServerToClientResponse};
 
 pub struct BadukRoom {
     game: Baduk,
@@ -14,25 +14,20 @@ pub struct BadukRoom {
         poweroff: poweroff,
     }}
 
-    // User 접속 구현
-    pub fn push_user(&mut self, user_id: u64) -> bool {
-        self.players.push_user(user_id)
+    pub fn game(&self) -> &Baduk {
+        &self.game
     }
 
-    pub fn pop_user(&mut self, user_id: u64) -> bool {
-        self.players.pop_user(user_id)
+    pub fn players_mut(&mut self) -> &mut Players {
+        &mut self.players
     }
 
-    pub fn run(&mut self) -> bool {
-        self.players.set_players(&self.game_config)
+    pub fn players(&self) -> &Players {
+        &self.players
     }
-    /*
-    pub fn check_winner(&self) -> Option<Color> {
-        self.game.winner()
-    }
-    */
-    pub fn check_emtpy_room(&self) -> bool {
-        self.players.check_emtpy_room()
+
+    pub fn send_poweroff(&mut self) {
+        let _ = self.poweroff.try_send(());
     }
 
     pub fn turn_user_id(&self) -> Option<u64> {
@@ -40,10 +35,72 @@ pub struct BadukRoom {
         self.players.user_id(color)
     }
 
-    pub async fn send_poweroff(&mut self) {
-        let _ = self.poweroff.send(()).await;
+    pub fn baduk_board_state(&self) -> crate::proto::badukboardproto::BadukBoardState {
+        use crate::proto::badukboardproto::BadukBoardState;
+        
+        let game_state = self.game.is_board();
+        BadukBoardState {
+            black: game_state.bitboard_black().to_vec(),
+            white: game_state.bitboard_white().to_vec()
+        }
+    }
+
+    pub fn black_player_time_info(&self) -> crate::proto::badukboardproto::PlayerTimeInfo {
+        use crate::proto::badukboardproto::PlayerTimeInfo;
+
+        let player_state = match self.players.black_player_state() {
+            Some(player) => player.output(),
+            None => BadukBoardGameConfig::empty().output(),
+        };
+
+        PlayerTimeInfo {
+            main_time: player_state.0,
+            fischer_time: player_state.1,
+            remaining_overtime: player_state.2 as u32,
+            overtime: player_state.3
+        }
+    }
+
+    pub fn white_player_time_info(&self) -> crate::proto::badukboardproto::PlayerTimeInfo {
+        use crate::proto::badukboardproto::PlayerTimeInfo;
+
+        let player_state = match self.players.white_player_state() {
+            Some(player) => player.output(),
+            None => BadukBoardGameConfig::empty().output(),
+        };
+
+        PlayerTimeInfo {
+            main_time: player_state.0,
+            fischer_time: player_state.1,
+            remaining_overtime: player_state.2 as u32,
+            overtime: player_state.3
+        }
     }
 }
+
+impl GameLogic for BadukRoom {
+    fn check_emtpy_room(&self) -> bool {
+        self.players().check_emtpy_room()
+    }
+
+    fn input_data(&mut self, input_data: RoomCommunicationDataForm) -> Option<ServerToClientResponse> {
+        let _data = match input_data {
+            _ => input_data
+        };
+        
+        // 알 수 없는 요청 처리
+        /*
+        ServerToClientResponse {
+            response_type: false,
+            the_winner: None,
+            payload: None,
+        }
+        */
+        None
+    }
+
+}
+
 // TODO: 착수 요청 처리
 // TODO: 무승부 요청 처리
 // TODO: 기권 처리

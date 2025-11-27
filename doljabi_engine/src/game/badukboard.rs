@@ -127,8 +127,8 @@ pub struct BadukBoard {
     /// 돌 집어 넣기
     pub fn push_stone(&mut self, coordinate: u16, color: Color) {
         match color {
-            Color::Black => {self.black[coordinate_index(coordinate)] += coordinatde_value(coordinate)},
-            Color::White => {self.white[coordinate_index(coordinate)] += coordinatde_value(coordinate)},
+            Color::Black => {self.black[coordinate_index(coordinate)] |= coordinatde_value(coordinate)},
+            Color::White => {self.white[coordinate_index(coordinate)] |= coordinatde_value(coordinate)},
             _ => {println!("Error: push_stone: 색 지정이 잘못 되었습니다.")},
         }
     }
@@ -136,8 +136,8 @@ pub struct BadukBoard {
     /// 돌 제거하기
     pub fn delete_stone(&mut self, coordinate: u16, color: Color) {
         match color {
-            Color::Black => {self.black[coordinate_index(coordinate)] -= coordinatde_value(coordinate)},
-            Color::White => {self.white[coordinate_index(coordinate)] -= coordinatde_value(coordinate)},
+            Color::Black => {self.black[coordinate_index(coordinate)] &= !coordinatde_value(coordinate)},
+            Color::White => {self.white[coordinate_index(coordinate)] &= !coordinatde_value(coordinate)},
             _ => {println!("Error: delete_stone: 색 지정이 잘못 되었습니다.")},
         }
     }
@@ -281,7 +281,6 @@ pub struct Players {
         }
     }
 
-    // 플레이어 시간 출력
     pub fn set_white_player(&mut self, config: &BadukBoardGameConfig) -> bool {
         match &mut self.white_player {
             Some(player) => {player.set_player(config); true},
@@ -289,25 +288,27 @@ pub struct Players {
         }
     }
 
-    pub fn black_player_state(&self) -> BadukBoardGameConfig {
+    // 플레이어 시간 출력
+    pub fn black_player_state(&self) -> Option<BadukBoardGameConfig> {
         match &self.black_player {
-            Some(black) => black.player_status(),
-            None => BadukBoardGameConfig::empty()
+            Some(black) => Some(black.player_status()),
+            None => None
         }
     }
 
-    pub fn white_player_state(&self) -> BadukBoardGameConfig {
+    pub fn white_player_state(&self) -> Option<BadukBoardGameConfig> {
         match &self.white_player {
-            Some(white) => white.player_status(),
-            None => BadukBoardGameConfig::empty()
+            Some(white) => Some(white.player_status()),
+            None => None
         }
+    }
+
+    pub fn full_players(&self) -> bool {
+        self.black_player.is_some() && self.white_player.is_some()
     }
 
     pub fn check_emtpy_room(&self) -> bool {
-        match (&self.black_player, &self.white_player) {
-            (None, None) => true,
-            _ => false
-        }
+        self.black_player.is_none() && self.white_player.is_none()
     }
 
     pub fn switch_turn(&mut self, end_player: Color) -> bool {

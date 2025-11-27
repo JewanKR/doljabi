@@ -1,6 +1,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { login, signup } from '../../api/authClient';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -10,23 +11,25 @@ export default function Home() {
   const [showSignupSuccess, setShowSignupSuccess] = useState(false);
   
   const [loginForm, setLoginForm] = useState({
-    username: '',
+    login_id: '',
     password: ''
   });
   const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   
   const [signupForm, setSignupForm] = useState({
+    login_id: '',
     username: '',
-    nickname: '',
     password: '',
     confirmPassword: ''
   });
   const [signupError, setSignupError] = useState('');
+  const [isSigningUp, setIsSigningUp] = useState(false);
 
-  const handleLoginSubmit = () => {
+  const handleLoginSubmit = async () => {
     setLoginError('');
     
-    if (!loginForm.username.trim()) {
+    if (!loginForm.login_id.trim()) {
       setLoginError('아이디를 입력해주세요.');
       return;
     }
@@ -36,19 +39,41 @@ export default function Home() {
       return;
     }
     
-    setShowLoginModal(false);
-    setLoginForm({ username: '', password: '' });
+    setIsLoggingIn(true);
+    
+    try {
+      const result = await login({
+        login_id: loginForm.login_id,
+        password: loginForm.password
+      });
+      
+      if (result.status === 200 && result.data?.success) {
+        // 로그인 성공 - session_key는 authClient에서 자동으로 저장됨
+        setShowLoginModal(false);
+        setLoginForm({ login_id: '', password: '' });
+        // 페이지 새로고침 또는 상태 업데이트
+        window.location.reload();
+      } else {
+        // 로그인 실패
+        setLoginError(result.message || '로그인에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('로그인 오류:', error);
+      setLoginError('로그인 처리 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
-  const handleSignupSubmit = () => {
+  const handleSignupSubmit = async () => {
     setSignupError('');
     
-    if (!signupForm.username.trim()) {
+    if (!signupForm.login_id.trim()) {
       setSignupError('아이디를 입력해주세요.');
       return;
     }
     
-    if (!signupForm.nickname.trim()) {
+    if (!signupForm.username.trim()) {
       setSignupError('닉네임을 입력해주세요.');
       return;
     }
@@ -68,20 +93,39 @@ export default function Home() {
       return;
     }
     
-    setShowSignupModal(false);
-    setShowSignupSuccess(true);
-    setSignupForm({ username: '', nickname: '', password: '', confirmPassword: '' });
+    setIsSigningUp(true);
+    
+    try {
+      const result = await signup({
+        login_id: signupForm.login_id,
+        password: signupForm.password,
+        username: signupForm.username
+      });
+      
+      if (result.status === 201 || result.status === 200) {
+        setShowSignupModal(false);
+        setShowSignupSuccess(true);
+        setSignupForm({ login_id: '', username: '', password: '', confirmPassword: '' });
+      } else {
+        setSignupError(result.message || '회원가입에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('회원가입 오류:', error);
+      setSignupError('회원가입 처리 중 오류가 발생했습니다.');
+    } finally {
+      setIsSigningUp(false);
+    }
   };
 
   const resetLoginModal = () => {
     setShowLoginModal(false);
-    setLoginForm({ username: '', password: '' });
+    setLoginForm({ login_id: '', password: '' });
     setLoginError('');
   };
 
   const resetSignupModal = () => {
     setShowSignupModal(false);
-    setSignupForm({ username: '', nickname: '', password: '', confirmPassword: '' });
+    setSignupForm({ login_id: '', username: '', password: '', confirmPassword: '' });
     setSignupError('');
   };
 
@@ -414,8 +458,8 @@ export default function Home() {
                     </label>
                     <input
                       type="text"
-                      value={loginForm.username}
-                      onChange={(e) => setLoginForm(prev => ({ ...prev, username: e.target.value }))}
+                      value={loginForm.login_id}
+                      onChange={(e) => setLoginForm(prev => ({ ...prev, login_id: e.target.value }))}
                       className="w-full px-4 py-3 rounded-lg border text-sm"
                       style={{ 
                         backgroundColor: '#141822', 
@@ -423,6 +467,7 @@ export default function Home() {
                         color: '#e8eaf0'
                       }}
                       placeholder="아이디를 입력하세요"
+                      disabled={isLoggingIn}
                     />
                   </div>
                   <div>
@@ -440,6 +485,12 @@ export default function Home() {
                         color: '#e8eaf0'
                       }}
                       placeholder="비밀번호를 입력하세요"
+                      disabled={isLoggingIn}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          handleLoginSubmit();
+                        }
+                      }}
                     />
                   </div>
                 </div>
@@ -447,13 +498,14 @@ export default function Home() {
                 <div className="mt-6 space-y-3">
                   <button 
                     onClick={handleLoginSubmit}
-                    className="w-full py-3 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap text-white"
+                    disabled={isLoggingIn}
+                    className="w-full py-3 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ 
                       background: 'linear-gradient(180deg, #1f6feb, #1b4fd8)',
                       boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
                     }}
                   >
-                    로그인
+                    {isLoggingIn ? '로그인 중...' : '로그인'}
                   </button>
                   <button 
                     onClick={resetLoginModal}
@@ -512,15 +564,16 @@ export default function Home() {
                     </label>
                     <input
                       type="text"
-                      value={signupForm.username}
-                      onChange={(e) => setSignupForm(prev => ({ ...prev, username: e.target.value }))}
+                      value={signupForm.login_id}
+                      onChange={(e) => setSignupForm(prev => ({ ...prev, login_id: e.target.value }))}
                       className="w-full px-4 py-3 rounded-lg border text-sm"
                       style={{ 
                         backgroundColor: '#141822', 
-                        borderColor: '#2a3a33',
+                        borderColor: '#2a2a33',
                         color: '#e8eaf0'
                       }}
                       placeholder="아이디를 입력하세요"
+                      disabled={isSigningUp}
                     />
                   </div>
                   <div>
@@ -529,8 +582,8 @@ export default function Home() {
                     </label>
                     <input
                       type="text"
-                      value={signupForm.nickname}
-                      onChange={(e) => setSignupForm(prev => ({ ...prev, nickname: e.target.value }))}
+                      value={signupForm.username}
+                      onChange={(e) => setSignupForm(prev => ({ ...prev, username: e.target.value }))}
                       className="w-full px-4 py-3 rounded-lg border text-sm"
                       style={{ 
                         backgroundColor: '#141822', 
@@ -538,6 +591,7 @@ export default function Home() {
                         color: '#e8eaf0'
                       }}
                       placeholder="닉네임을 입력하세요"
+                      disabled={isSigningUp}
                     />
                   </div>
                   <div>
@@ -555,6 +609,7 @@ export default function Home() {
                         color: '#e8eaf0'
                       }}
                       placeholder="비밀번호를 입력하세요 (6자 이상)"
+                      disabled={isSigningUp}
                     />
                   </div>
                   <div>
@@ -572,6 +627,12 @@ export default function Home() {
                         color: '#e8eaf0'
                       }}
                       placeholder="비밀번호를 다시 입력하세요"
+                      disabled={isSigningUp}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSignupSubmit();
+                        }
+                      }}
                     />
                   </div>
                 </div>
@@ -579,13 +640,14 @@ export default function Home() {
                 <div className="mt-6 space-y-3">
                   <button 
                     onClick={handleSignupSubmit}
-                    className="w-full py-3 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap text-white"
+                    disabled={isSigningUp}
+                    className="w-full py-3 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ 
                       background: 'linear-gradient(180deg, #1f6feb, #1b4fd8)',
                       boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
                     }}
                   >
-                    회원가입
+                    {isSigningUp ? '회원가입 중...' : '회원가입'}
                   </button>
                   <button 
                     onClick={resetSignupModal}

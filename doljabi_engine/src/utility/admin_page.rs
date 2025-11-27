@@ -1,5 +1,4 @@
-use axum::{Json, response::{Html, IntoResponse}};
-use hyper::StatusCode;
+use axum::{Json, response::{Html, IntoResponse}, http::StatusCode};
 use utoipa_axum::{router::OpenApiRouter, routes};
 use std::fs;
 

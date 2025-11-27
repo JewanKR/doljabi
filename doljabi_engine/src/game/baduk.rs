@@ -20,8 +20,8 @@ impl Baduk {
         }
     }
 
-    pub fn is_board(&self) -> BadukBoard {
-        self.board.clone()
+    pub fn is_board(&self) -> &BadukBoard {
+        &self.board
     }
 
     fn adjacent_coordinates(&self, coordinate: u16) -> Vec<u16> {

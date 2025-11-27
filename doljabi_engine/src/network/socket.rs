@@ -1,18 +1,33 @@
-
-use axum::{extract::{Path, State, ws::{self, WebSocketUpgrade}}, response::IntoResponse};
+use std::sync::Arc;
+use axum::{extract::{Path, State, ws::{self, WebSocketUpgrade}}, response::IntoResponse, http::StatusCode};
 use futures_util::{SinkExt, StreamExt};
-use hyper::StatusCode;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::{network::room_manager::{RoomCommunicationDataForm, RoomManager}, proto::badukboardproto::{ClientToServerRequest, ServerToClientResponse}, soyul::session::SessionStore};
+use crate::{network::room_manager::RoomManager, proto::badukboardproto::{ClientToServerRequest, ServerToClientResponse}, soyul::session::SessionStore};
 
 #[derive(Deserialize, Serialize, ToSchema)]
 pub enum EnterRoomErrorCode {
     EnterCodeError,
     IncorrectSessionKey,
+}
+
+pub struct RoomCommunicationDataForm {
+    pub user_id: u64,
+    pub client_to_server_request: Option<ClientToServerRequest>,
+} impl RoomCommunicationDataForm {
+    pub fn new(user_id: u64, client_to_server_request: Option<ClientToServerRequest>) -> Self { Self {
+        user_id: user_id, client_to_server_request: client_to_server_request
+    }}
+
+    pub fn to_request(self) -> ClientToServerRequest {
+        match self.client_to_server_request {
+            Some(a) => a,
+            None => ClientToServerRequest { session_key: "".to_string(), payload: None }
+        }
+    }
 }
 
 #[utoipa::path(
@@ -57,7 +72,7 @@ pub async fn enter_room(
 async fn handle_websocket(
     socket: ws::WebSocket,
     mpsc_tx: mpsc::Sender<RoomCommunicationDataForm>,
-    mut broadcast_rx: broadcast::Receiver<ServerToClientResponse>,
+    mut broadcast_rx: broadcast::Receiver<Arc<ServerToClientResponse>>,
     user_id: u64,
 ) {
     use ws::Message;
@@ -69,11 +84,25 @@ async fn handle_websocket(
     if let Err(_) = mpsc_tx.send(RoomCommunicationDataForm::new(user_id, None)).await {return ;}
 
     let send_task = tokio::spawn(async move {
-        while let Some(Ok(message)) = ws_rx.next().await {
-            if let Message::Binary(data) = message {
-                if let Ok(request) = ClientToServerRequest::decode(&data[..]) {
-                    let _ = mpsc_tx.send(RoomCommunicationDataForm::new(user_id, Some(request))).await;
+        while let Some(message) = ws_rx.next().await {
+            match message {
+                Ok(Message::Binary(data)) => {
+                    if let Ok(request) = ClientToServerRequest::decode(&data[..]) {
+                        let _ = mpsc_tx.send(RoomCommunicationDataForm::new(user_id, Some(request))).await;
+                    }
                 }
+
+                Ok(Message::Close(_)) => {
+                    break;
+                }
+
+                Err(_) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("web socket: 데이터 전송 에러");
+
+                    break;
+                }
+                _ => {}
             }
         }
     });

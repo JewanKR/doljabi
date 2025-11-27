@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { getSessionKey } from '../../../api/authClient';
 
 interface Player {
   nickname: string;
@@ -182,9 +183,17 @@ export default function GameRoom() {
     // 좌표를 0~360 정수형으로 변환
     const coordinate = row * 19 + col;
 
+    // localStorage에서 세션 키 가져오기
+    const sessionKey = getSessionKey();
+    if (!sessionKey) {
+      alert('세션 키가 없습니다. 로그인이 필요합니다.');
+      navigate('/');
+      return;
+    }
+
     // 서버로 전송할 데이터
     const moveData = {
-      sessionKey: 'example-session-key',
+      sessionKey: sessionKey,
       roomNumber: roomCode,
       move: 'place',
       coordinate,
@@ -204,8 +213,16 @@ export default function GameRoom() {
   const handlePass = () => {
     if (currentTurn !== myColor || !gameStarted) return;
 
+    // localStorage에서 세션 키 가져오기
+    const sessionKey = getSessionKey();
+    if (!sessionKey) {
+      alert('세션 키가 없습니다. 로그인이 필요합니다.');
+      navigate('/');
+      return;
+    }
+
     const moveData = {
-      sessionKey: 'example-session-key',
+      sessionKey: sessionKey,
       roomNumber: roomCode,
       move: 'pass',
       coordinate: -1,

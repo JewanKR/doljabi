@@ -1,5 +1,4 @@
-use axum::{extract::State, Json};
-use hyper::StatusCode;
+use axum::{extract::State, Json, http::StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use rusqlite::{self, params, Connection};

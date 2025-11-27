@@ -34,8 +34,8 @@ pub struct Omok {
         self.winner.clone()
     }
 
-    pub fn is_board(&self) -> BadukBoard {
-        self.board.clone()
+    pub fn is_board(&self) -> &BadukBoard {
+        &self.board
     }
 
     pub fn switch_turn(&mut self) {

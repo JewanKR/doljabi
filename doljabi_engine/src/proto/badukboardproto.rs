@@ -42,11 +42,16 @@ pub struct DrawOfferRequest {}
 pub struct ResignRequest {}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PassTurnRequest {}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GameStartRequest {}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ClientToServerRequest {
     #[prost(string, tag = "1")]
     pub session_key: ::prost::alloc::string::String,
-    #[prost(oneof = "client_to_server_request::Payload", tags = "100, 101, 102, 103")]
+    #[prost(
+        oneof = "client_to_server_request::Payload",
+        tags = "100, 101, 102, 103, 104"
+    )]
     pub payload: ::core::option::Option<client_to_server_request::Payload>,
 }
 /// Nested message and enum types in `ClientToServerRequest`.
@@ -61,6 +66,8 @@ pub mod client_to_server_request {
         DrawOffer(super::DrawOfferRequest),
         #[prost(message, tag = "103")]
         PassTurn(super::PassTurnRequest),
+        #[prost(message, tag = "104")]
+        Gamestart(super::GameStartRequest),
     }
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -83,10 +90,36 @@ pub struct PassTurnResponse {
     pub game_state: ::core::option::Option<GameState>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UserInfo {
+    #[prost(string, tag = "1")]
+    pub user_name: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "2")]
+    pub rating: u32,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GameStartResponse {
+    #[prost(message, optional, tag = "1")]
+    pub game_start: ::core::option::Option<GameState>,
+    #[prost(message, optional, tag = "2")]
+    pub users_info: ::core::option::Option<UserInfo>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UsersInfo {
+    #[prost(message, optional, tag = "1")]
+    pub black: ::core::option::Option<UserInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub white: ::core::option::Option<UserInfo>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ServerToClientResponse {
     #[prost(bool, tag = "1")]
     pub response_type: bool,
-    #[prost(oneof = "server_to_client_response::Payload", tags = "100, 101, 102, 103")]
+    #[prost(enumeration = "Color", optional, tag = "2")]
+    pub the_winner: ::core::option::Option<i32>,
+    #[prost(
+        oneof = "server_to_client_response::Payload",
+        tags = "100, 101, 102, 103, 104, 105"
+    )]
     pub payload: ::core::option::Option<server_to_client_response::Payload>,
 }
 /// Nested message and enum types in `ServerToClientResponse`.
@@ -101,6 +134,10 @@ pub mod server_to_client_response {
         DrawOffer(super::DrawOfferResponse),
         #[prost(message, tag = "103")]
         PassTurn(super::PassTurnResponse),
+        #[prost(message, tag = "104")]
+        GameStart(super::GameStartResponse),
+        #[prost(message, tag = "105")]
+        UsersInfo(super::UsersInfo),
     }
 }
 /// * 바둑판 턴 정보

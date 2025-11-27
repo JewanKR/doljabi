@@ -42,6 +42,8 @@ message ResignRequest {}
 
 message PassTurnRequest {}
 
+message GameStartRequest {}
+
 message ClientToServerRequest {
     string session_key = 1;
     oneof payload {
@@ -49,6 +51,7 @@ message ClientToServerRequest {
         ResignRequest resign = 101;
         DrawOfferRequest draw_offer = 102;
         PassTurnRequest pass_turn = 103;
+        GameStartRequest gamestart = 104;
     }
 }
 
@@ -67,12 +70,31 @@ message PassTurnResponse {
     GameState game_state = 1;
 }
 
+message UserInfo {
+    string user_name = 1;
+    uint32 rating = 2;
+}
+
+message GameStartResponse {
+    GameState game_start = 1;
+    UserInfo users_info = 2;
+}
+
+message UsersInfo {
+    optional UserInfo black = 1;
+    optional UserInfo white = 2;
+}
+
 message ServerToClientResponse {
     bool response_type = 1;
+    optional Color the_winner = 2;
     oneof payload {
         ChaksuResponse coordinate = 100;
         ResignResponse resign = 101;
         DrawOfferResponse draw_offer = 102;
         PassTurnResponse pass_turn = 103;
+        GameStartResponse game_start = 104;
+        UsersInfo users_info = 105;
     }
 }
+
