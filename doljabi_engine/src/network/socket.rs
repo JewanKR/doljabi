@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use axum::{extract::{Path, State, ws::{self, WebSocketUpgrade}}, response::IntoResponse, http::StatusCode};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -14,20 +14,10 @@ pub enum EnterRoomErrorCode {
     IncorrectSessionKey,
 }
 
-pub struct RoomCommunicationDataForm {
-    pub user_id: u64,
-    pub client_to_server_request: Option<ClientToServerRequest>,
-} impl RoomCommunicationDataForm {
-    pub fn new(user_id: u64, client_to_server_request: Option<ClientToServerRequest>) -> Self { Self {
-        user_id: user_id, client_to_server_request: client_to_server_request
-    }}
-
-    pub fn to_request(self) -> ClientToServerRequest {
-        match self.client_to_server_request {
-            Some(a) => a,
-            None => ClientToServerRequest { session_key: "".to_string(), payload: None }
-        }
-    }
+pub enum RoomCommunicationDataForm {
+    Request((u64, ClientToServerRequest)),
+    UserEnter(u64),
+    UserDisconnect(u64),
 }
 
 #[utoipa::path(
@@ -48,13 +38,21 @@ pub async fn enter_room(
     Path((enter_code, session_key)): Path<(u16, String)>,
     State((room_manager, session_store)): State<(RoomManager, SessionStore)>
 ) -> impl IntoResponse {
-    let _user_id = {
+    let is_user_id = {
         session_store.read().await.get(&session_key.to_string()).cloned()
     };
 
-    let user_id = match _user_id {
-        Some(user_id) => user_id,
-        None => {return StatusCode::BAD_REQUEST.into_response();}
+    let user_id = match is_user_id {
+        Some(user_id) => {
+            #[cfg(debug_assertions)]
+            println!("{} 유저 접속 성공", user_id);
+            user_id
+        },
+        None => {
+            #[cfg(debug_assertions)]
+            println!("session store에 유저가 없음");
+            return StatusCode::BAD_REQUEST.into_response();
+        }
     };
 
     let communication_channel = {
@@ -81,27 +79,31 @@ async fn handle_websocket(
     let (mut ws_tx, mut ws_rx) = socket.split();
 
     // 방 접속 실패 시 종료
-    if let Err(_) = mpsc_tx.send(RoomCommunicationDataForm::new(user_id, None)).await {return ;}
+    if let Err(_) = mpsc_tx.send(RoomCommunicationDataForm::UserEnter(user_id)).await {return ;}
+
+    let send_disconnect = mpsc_tx.clone();
 
     let send_task = tokio::spawn(async move {
-        while let Some(message) = ws_rx.next().await {
+        while let Ok(Some(message)) = tokio::time::timeout(Duration::from_secs(10),ws_rx.next()).await {
             match message {
                 Ok(Message::Binary(data)) => {
                     if let Ok(request) = ClientToServerRequest::decode(&data[..]) {
-                        let _ = mpsc_tx.send(RoomCommunicationDataForm::new(user_id, Some(request))).await;
+                        let _ = mpsc_tx.send(RoomCommunicationDataForm::Request((user_id, request))).await;
                     }
                 }
 
                 Ok(Message::Close(_)) => {
+                    #[cfg(debug_assertions)]
+                    println!("websocket 종료 신호 수신");
                     break;
                 }
 
                 Err(_) => {
                     #[cfg(debug_assertions)]
                     eprintln!("web socket: 데이터 전송 에러");
-
                     break;
                 }
+
                 _ => {}
             }
         }
@@ -120,6 +122,8 @@ async fn handle_websocket(
         _ = send_task => {},
         _ = recv_task => {},
     }
+
+    let _ = send_disconnect.send(RoomCommunicationDataForm::UserDisconnect(user_id)).await;
 }
 
 

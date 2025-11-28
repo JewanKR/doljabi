@@ -1,5 +1,5 @@
 use tokio::sync::mpsc;
-use crate::{game::{badukboard::{BadukBoardGameConfig, Color, Players}, omok::Omok}, network::{room_manager::{GameLogic, convert_game2proto_color}, socket::RoomCommunicationDataForm}, proto::badukboardproto::{ClientToServerRequest, GameStartResponse, GameState, ServerToClientResponse, server_to_client_response}};
+use crate::{game::{badukboard::{BadukBoardGameConfig, Color, Players}, omok::Omok}, network::{room_manager::{GameLogic, convert_game2proto_color}}, proto::badukboardproto::{ClientToServerRequest, GameStartResponse, ServerToClientResponse, server_to_client_response}};
 
 pub struct OmokRoom {
     game: Omok,
@@ -13,7 +13,19 @@ pub struct OmokRoom {
         players: Players::new(),
         poweroff: poweroff,
     }}
+    /*
+    pub fn run(&mut self) -> bool {
+        if self.players().full_players() {
+            self.set_players_time(&self.game_config.clone());
+            
+            let black_timeout
 
+            true
+        } else {
+            false
+        }
+    }
+    */
     pub fn game(&self) -> &Omok {
         &self.game
     }
@@ -104,7 +116,7 @@ pub struct OmokRoom {
         }
     }
 
-    fn users_info_response(&self) -> ServerToClientResponse {
+    fn _users_info_response(&self) -> ServerToClientResponse {
         use crate::proto::badukboardproto::{UsersInfo, {server_to_client_response::Payload}};
 
         ServerToClientResponse { 
@@ -123,50 +135,59 @@ impl GameLogic for OmokRoom {
         self.players().check_emtpy_room()
     }
 
-    fn input_data(&mut self, input_data: RoomCommunicationDataForm) -> Option<ServerToClientResponse> {
-        
-        let data = match input_data.client_to_server_request {
-            Some(requset) => {
-                use crate::proto::badukboardproto::client_to_server_request::Payload;
-                if let Some(Payload::Gamestart(_)) = &requset.payload {
-                    if self.players().full_players() {
-                        use crate::proto::badukboardproto::GameState;
-                        return Some(ServerToClientResponse{
-                            response_type: true,
-                            the_winner: None,
-                            payload: Some(server_to_client_response::Payload::GameStart( GameStartResponse{
-                                game_start: Some(GameState{
-                                    board: Some(self.baduk_board_state()),
-                                    black_time: Some(self.black_player_time_info()),
-                                    white_time: Some(self.white_player_time_info()),
-                                    turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
-                                }),
-                                users_info: None,
-                            }))
-                        });
+    fn push_user(&mut self, user_id: u64) -> bool {
+        self.players_mut().push_user(user_id)
+    }
+
+    fn pop_user(&mut self, user_id: u64) -> bool {
+        self.players_mut().pop_user(user_id)
+    }
+
+    fn input_data(&mut self, input_data: (u64, ClientToServerRequest)) -> ServerToClientResponse {
+        use crate::proto::badukboardproto::client_to_server_request::Payload;
+
+        let (user_id, requset) = input_data;
+
+        match requset.payload {
+            Some(Payload::Gamestart(_)) => {
+                if self.players().full_players() {
+                    self.set_players_time(&self.game_config.clone());
+
+                    use crate::proto::badukboardproto::GameState;
+                    ServerToClientResponse{
+                        response_type: true,
+                        the_winner: None,
+                        payload: Some(server_to_client_response::Payload::GameStart(GameStartResponse{
+                            game_start: Some(GameState{
+                                board: Some(self.baduk_board_state()),
+                                black_time: Some(self.black_player_time_info()),
+                                white_time: Some(self.white_player_time_info()),
+                                turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
+                            }),
+                            users_info: None,
+                        }))
+                    }
+                } else {
+                    ServerToClientResponse{
+                        response_type: false,
+                        the_winner: None,
+                        payload: None
                     }
                 }
-
-                if Some(input_data.user_id) == self.turn_user_id() {
-                    requset
-                } else {
-                    return None;
-                }
-            },
-            None => {
-                if self.players.push_user(input_data.user_id.clone()) {
-                    return Some(self.users_info_response());
-                } else {
-                    return None;
-                }
             }
-        };
-
-        use crate::proto::badukboardproto::client_to_server_request::Payload;
-        match data.payload {
+            
             Some(Payload::Coordinate(chaksu_request)) => {
                 use crate::proto::badukboardproto::{ChaksuResponse, GameState};
                 let turn =  self.game.is_board().is_turn();
+
+                // 착수를 시도하는 사람의 턴인지 확인
+                if self.players().check_id_to_color(user_id) != turn {
+                    return ServerToClientResponse{
+                        response_type: false,
+                        the_winner: None,
+                        payload: None,
+                    };
+                }
 
                 // 착수 시도
                 let success = match self.game.chaksu(chaksu_request.coordinate as u16, true) {
@@ -196,12 +217,11 @@ impl GameLogic for OmokRoom {
                     None => None
                 };
 
-                let payload_enum = server_to_client_response::Payload::Coordinate(chaksu_response);
-                Some(ServerToClientResponse {
+                ServerToClientResponse {
                     response_type: true,
                     the_winner: the_winner,
-                    payload: Some(payload_enum),
-                })
+                    payload: Some(server_to_client_response::Payload::Coordinate(chaksu_response)),
+                }
             },
             Some(Payload::Resign(_resign_request)) => {
                 use crate::proto::badukboardproto::ResignResponse;
@@ -217,32 +237,40 @@ impl GameLogic for OmokRoom {
 
                 let resign_response = ResignResponse {};
                 
-                Some(ServerToClientResponse {
+                ServerToClientResponse {
                     response_type: true,
                     the_winner: Some(convert_game2proto_color(winner) as i32),
                     payload: Some(server_to_client_response::Payload::Resign(resign_response)),
-                })
+                }
             },
             Some(Payload::DrawOffer(_draw_request)) => {
                 use crate::proto::badukboardproto::DrawOfferResponse;
 
-                // TODO: 무승부 요청 로직 수행
-                let accepted = false; // 예시값
+                let offer_player = self.players().check_id_to_color(user_id);
 
-                let _draw_response = DrawOfferResponse {
-                    accepted: accepted,
-                };
+                // 둘 다 무승부 요청을 하면 비김
+                if self.players().check_draw() {self.game.set_winner(Color::Free);}
 
-                Some(ServerToClientResponse {
+                let draw_offer_response = DrawOfferResponse { user_name: format!("{} player", offer_player.to_string()) };
+
+                ServerToClientResponse {
                     response_type: false,
                     the_winner: None,
-                    payload: None,
-                    //payload: Some(server_to_client_response::Payload::DrawOffer(draw_response)),
-                })
+                    payload: Some(server_to_client_response::Payload::DrawOffer(draw_offer_response)),
+                }
             },
             Some(Payload::PassTurn(_pass_request)) => {
                 use crate::proto::badukboardproto::{PassTurnResponse, GameState};
                 let turn = self.game.is_board().is_turn();
+
+                // 턴 넘김을 시도하는 사람의 턴인지 확인
+                if self.players().check_id_to_color(user_id) != turn {
+                    return ServerToClientResponse{
+                        response_type: false,
+                        the_winner: None,
+                        payload: None,
+                    };
+                }
 
                 // turn 변경
                 self.players.switch_turn(turn);
@@ -258,19 +286,19 @@ impl GameLogic for OmokRoom {
                     }),
                 };
 
-                Some(ServerToClientResponse {
+                ServerToClientResponse {
                     response_type: true,
                     the_winner: None,
                     payload: Some(server_to_client_response::Payload::PassTurn(pass_response)),
-                })
+                }
             },
             _ => {
                 // 알 수 없는 요청 처리
-                Some(ServerToClientResponse {
+                ServerToClientResponse {
                     response_type: false,
                     the_winner: None,
                     payload: None,
-                })
+                }
             }
         }
     }

@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SessionManager } from '../../../api/axios-instance';
+import { saveRoomConfig } from '../game-room/enter-room-config';
 
 export default function OmokJoinRoom() {
   const navigate = useNavigate();
@@ -22,13 +23,17 @@ export default function OmokJoinRoom() {
       return;
     }
 
-    navigate('/omok/game-room', {
-      state: {
-        enter_code: parseInt(codeToJoin, 10), // game-room 페이지에서 기대하는 형식으로 변환
-        session_key: sessionKey,
-        isHost: false
-      }
-    });
+    // 방 입장 설정 저장
+    const roomConfig = {
+      enter_code: parseInt(codeToJoin, 10),
+      session_key: sessionKey,
+      isHost: false
+    };
+
+    saveRoomConfig(roomConfig);
+
+    // 게임룸으로 이동
+    navigate('/omok/game-room');
   };
 
   const handleDirectCodeJoin = () => {

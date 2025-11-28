@@ -1,5 +1,5 @@
 use tokio::sync::mpsc;
-use crate::{game::{baduk::Baduk, badukboard::{BadukBoardGameConfig, Players}}, network::{room_manager::GameLogic, socket::RoomCommunicationDataForm}, proto::badukboardproto::ServerToClientResponse};
+use crate::{game::{baduk::Baduk, badukboard::{BadukBoardGameConfig, Players}}, network::{room_manager::GameLogic, socket::RoomCommunicationDataForm}, proto::badukboardproto::{ClientToServerRequest, ServerToClientResponse}};
 
 pub struct BadukRoom {
     game: Baduk,
@@ -83,20 +83,24 @@ impl GameLogic for BadukRoom {
         self.players().check_emtpy_room()
     }
 
-    fn input_data(&mut self, input_data: RoomCommunicationDataForm) -> Option<ServerToClientResponse> {
+    fn push_user(&mut self, user_id: u64) -> bool {
+        self.players_mut().push_user(user_id)
+    }
+
+    fn pop_user(&mut self, user_id: u64) -> bool {
+        self.players_mut().pop_user(user_id)
+    }
+
+    fn input_data(&mut self, input_data: (u64, ClientToServerRequest)) -> ServerToClientResponse {
         let _data = match input_data {
             _ => input_data
         };
         
-        // 알 수 없는 요청 처리
-        /*
-        ServerToClientResponse {
+        ServerToClientResponse{
             response_type: false,
             the_winner: None,
-            payload: None,
+            payload: None
         }
-        */
-        None
     }
 
 }

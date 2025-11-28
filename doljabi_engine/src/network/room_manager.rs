@@ -1,7 +1,7 @@
 use std::{collections::{HashMap, HashSet, VecDeque}, sync::Arc, time::Duration};
 use axum::{Json, extract::State, response::IntoResponse, http::StatusCode};
 use serde::{self, Deserialize, Serialize};
-use tokio::sync::{Mutex, broadcast, mpsc, oneshot};
+use tokio::sync::{Mutex, broadcast, mpsc};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use crate::{game::badukboard::BadukBoardGameConfig, network::{baduk_room::BadukRoom, omok_room::OmokRoom, socket::RoomCommunicationDataForm}, proto::badukboardproto::{ClientToServerRequest, ServerToClientResponse}};
@@ -107,8 +107,13 @@ pub struct CreateRoomResponseForm {
 }
 
 pub trait GameLogic: Send + Sync {
-    fn input_data(&mut self, data: RoomCommunicationDataForm) -> Option<ServerToClientResponse>;
+    fn input_data(&mut self, data: (u64, ClientToServerRequest)) -> ServerToClientResponse;
     fn check_emtpy_room(&self) -> bool;
+
+    fn push_user(&mut self, user_id: u64) -> bool;
+    fn pop_user(&mut self, user_id: u64) -> bool;
+
+
 }
 
 pub async fn run_game_node<G: GameLogic>(
@@ -128,12 +133,46 @@ pub async fn run_game_node<G: GameLogic>(
         Some(data) = mpsc_rx.recv() => {
             #[cfg(debug_assertions)]
             println!("데이터 수신!");
-            let response: ServerToClientResponse = match game.input_data(data) {
-                Some(response) => response,
-                None => {continue;}
+            let response: ServerToClientResponse = match data {
+                RoomCommunicationDataForm::Request(input_data) => {
+                    game.input_data(input_data)
+                },
+                RoomCommunicationDataForm::UserEnter(user_id) => {
+                    use crate::proto::badukboardproto::{server_to_client_response, UsersInfo};
+                    if game.push_user(user_id) {
+                        ServerToClientResponse {
+                            response_type: true,
+                            the_winner: None,
+                            payload: Some(server_to_client_response::Payload::UsersInfo(UsersInfo{
+                                black: None,
+                                white: None,
+                            })),
+                        }
+                    } else {
+                        ServerToClientResponse {
+                            response_type: false,
+                            the_winner: None,
+                            payload: None,
+                        }
+                    }
+                },
+                RoomCommunicationDataForm::UserDisconnect(user_id) => {
+                    // TODO: 게임 시작 전 > 방 나가기
+                    // TODO: 게임 시작 후 > 타이머 동작, 타임 아웃이면 해당 유저 항복 처리
+
+                    ServerToClientResponse {
+                        response_type: false,
+                        the_winner: None,
+                        payload: None,
+                    }
+                }
+    
             };
+
             let _ = broadcast_tx.send(Arc::new(response));
         }
+
+        // TODO: 게임 데이터 불러와서 게임 타이머 동작 시키기
 
         _ = poweroff_rx.recv() => {
             #[cfg(debug_assertions)]
@@ -188,11 +227,11 @@ pub async fn create_room_request (
     match payload {
         CreateRoomRequestForm::Baduk(config) => {
             let game = BadukRoom::new(config, poweroff_tx);
-            run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx, poweroff_rx);
+            let _ = run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx, poweroff_rx);
         }
         CreateRoomRequestForm::Omok(config) => {
             let game = OmokRoom::new(config, poweroff_tx);
-            run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx, poweroff_rx);
+            let _ = run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx, poweroff_rx);
         }
     };
 

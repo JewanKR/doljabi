@@ -79,10 +79,10 @@ pub struct ChaksuResponse {
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ResignResponse {}
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DrawOfferResponse {
-    #[prost(bool, tag = "1")]
-    pub accepted: bool,
+    #[prost(string, tag = "1")]
+    pub user_name: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PassTurnResponse {

@@ -34,6 +34,10 @@ pub struct Omok {
         self.winner.clone()
     }
 
+    pub fn set_winner(&mut self, color: Color) {
+        self.winner = Some(color);
+    }
+
     pub fn is_board(&self) -> &BadukBoard {
         &self.board
     }

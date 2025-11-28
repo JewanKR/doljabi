@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   ClientToServerRequest,
   ServerToClientResponse,
@@ -7,6 +7,7 @@ import {
   Color
 } from '../../../ts-proto/badukboard';
 import { SessionManager } from '../../../api/axios-instance';
+import { loadRoomConfig, getEnterCode, getSessionKey, getGameConfig, getIsHost, clearRoomConfig } from './enter-room-config';
 
 interface Player {
   nickname: string;
@@ -19,23 +20,22 @@ interface Player {
 
 export default function OmokGameRoom() {
   const navigate = useNavigate();
-  const location = useLocation();
 
-  // location.state 또는 localStorage에서 방 데이터 가져오기
-  const roomData = location.state || (() => {
-    const stored = localStorage.getItem('omok_room_data');
-    return stored ? JSON.parse(stored) : null;
-  })();
+  // 방 설정 불러오기
+  const roomConfig = loadRoomConfig();
+  const enterCode = getEnterCode();
+  const sessionKey = getSessionKey();
+  const gameConfig = getGameConfig();
+  const isHost = getIsHost();
 
-  const { enter_code: enterCode } = roomData || {};
   const roomCode = enterCode ? String(enterCode) : 'OMOK-2024';
 
   // 컴포넌트 마운트 시 방 데이터 로깅
   useEffect(() => {
-    if (roomData) {
-      console.log('게임룸 데이터:', roomData);
+    if (roomConfig) {
+      console.log('게임룸 설정:', roomConfig);
     }
-  }, [roomData]);
+  }, [roomConfig]);
   
   const [boardSize] = useState(15);
   const [board, setBoard] = useState<(null | 'black' | 'white')[][]>(
@@ -221,12 +221,13 @@ export default function OmokGameRoom() {
 
   // WebSocket 연결 및 Protobuf 통신
   useEffect(() => {
-    const state = location.state as { enter_code?: number; session_key?: string; game_config?: any } | null;
-    let { enter_code, session_key } = state || {};
+    // 방 설정에서 데이터 가져오기
+    let enter_code = getEnterCode();
+    let session_key = getSessionKey();
 
-    // 세션키가 없으면 SessionManager에서 가져오기
+    // 세션키가 없으면 SessionManager에서 가져오기 (fallback)
     if (!session_key) {
-      session_key = SessionManager.getSessionKey() || undefined;
+      session_key = SessionManager.getSessionKey() || null;
     }
 
     if (!enter_code || !session_key) {
@@ -350,7 +351,7 @@ export default function OmokGameRoom() {
         ws.close();
       }
     };
-  }, [location.state]);
+  }, [roomConfig]);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -427,6 +428,7 @@ export default function OmokGameRoom() {
   const handleResign = () => {
     if (!gameStarted) return;
     if (confirm('정말 기권하시겠습니까?')) {
+      clearRoomConfig(); // 방 설정 정리
       navigate('/');
     }
   };
