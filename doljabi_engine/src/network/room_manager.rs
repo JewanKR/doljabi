@@ -1,7 +1,7 @@
 use std::{collections::{HashMap, HashSet, VecDeque}, sync::Arc, time::Duration};
 use axum::{Json, extract::State, response::IntoResponse, http::StatusCode};
 use serde::{self, Deserialize, Serialize};
-use tokio::sync::{Mutex, broadcast, mpsc};
+use tokio::{sync::{Mutex, broadcast, mpsc}, task::JoinHandle};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use crate::{game::badukboard::BadukBoardGameConfig, network::{baduk_room::BadukRoom, omok_room::OmokRoom, socket::RoomCommunicationDataForm}, proto::badukboardproto::{ClientToServerRequest, ServerToClientResponse}};
@@ -19,7 +19,7 @@ pub fn convert_game2proto_color(color: crate::game::badukboard::Color) -> crate:
 }
 
 pub enum GameRoomResponse {
-    ChangeTrun,
+    ChangeTurn,
     GameOver,
     GameStart,
     None,
@@ -133,6 +133,7 @@ pub async fn run_game_node<G: GameLogic>(
 
     mut mpsc_rx: mpsc::Receiver<RoomCommunicationDataForm>,
     broadcast_tx: broadcast::Sender<Arc<ServerToClientResponse>>,
+    mpsc_tx: mpsc::Sender<RoomCommunicationDataForm>
 ) {
     // 타임 아웃 설정
     let empty_room_timeout = tokio::time::sleep(Duration::from_secs(30));
@@ -143,6 +144,9 @@ pub async fn run_game_node<G: GameLogic>(
     let game_timer = tokio::time::sleep(Duration::from_secs(u64::MAX));
     tokio::pin!(game_timer);
     let mut timer_active = false;
+
+    // 연결이 끊긴 플레이어 처리
+    let mut disconnected_users = HashMap::<u64, JoinHandle<()>>::new();
 
     loop { tokio::select! {
         Some(data) = mpsc_rx.recv() => {
@@ -164,7 +168,7 @@ pub async fn run_game_node<G: GameLogic>(
                         GameRoomResponse::GameOver => {
                             break;
                         },
-                        GameRoomResponse::ChangeTrun => {
+                        GameRoomResponse::ChangeTurn => {
                             // 턴 변경 시 타이머 재설정
                             if running && timer_active {
                                 let duration = game.set_timer();
@@ -177,6 +181,10 @@ pub async fn run_game_node<G: GameLogic>(
                 },
                 
                 RoomCommunicationDataForm::UserEnter(user_id) => {
+                    if let Some(handle) = disconnected_users.remove(&user_id) {
+                        handle.abort();
+                    }
+
                     if game.push_user(user_id) {
                         ServerToClientResponse {
                             response_type: true,
@@ -199,18 +207,26 @@ pub async fn run_game_node<G: GameLogic>(
                 },
 
                 RoomCommunicationDataForm::UserDisconnect(user_id) => {
+                    use crate::proto::badukboardproto::{client_to_server_request::Payload, ResignRequest};
                     if running {
-                        // TODO: 게임 시작 후 > 타이머 동작, 타임 아웃이면 해당 유저 항복 처리
-                        ServerToClientResponse {
-                            response_type: true,
-                            turn: crate::proto::badukboardproto::Color::Free as i32,
-                            the_winner: None,
-                            game_state: None,
-                            users_info: Some(game.users_info()),
-                            payload: None,
-                        }
+                        // 게임 시작 후 > 60초 타이머 시작
+                        let tx_clone = mpsc_tx.clone();
+                        let disconnected_user_task = tokio::spawn(async move{
+                            tokio::time::sleep(Duration::from_secs(60)).await;
+                            let _ = tx_clone.send(
+                                RoomCommunicationDataForm::Request((
+                                    user_id,
+                                    ClientToServerRequest{
+                                        session_key: "".to_string(),
+                                        payload: Some(Payload::Resign(ResignRequest{})),
+                                    }
+                                )
+                            )).await;
+                        });
+                        disconnected_users.insert(user_id, disconnected_user_task);
+                        continue;
                     } else {
-                        // TODO: 게임 시작 전 > 방 나가기
+                        // 게임 시작 전 > 방 나가기
                         game.pop_user(user_id);
                         if game.check_empty_room() {break;}
                         ServerToClientResponse {
@@ -281,6 +297,8 @@ pub async fn create_room_request (
     let (mpsc_tx, mpsc_rx) = mpsc::channel::<RoomCommunicationDataForm>(16);
     let (broadcast_tx, _) = broadcast::channel::<Arc<ServerToClientResponse>>(16);
 
+    let tx_clone = mpsc_tx.clone();
+
     let (enter_code_u16, enter_code) = {
         let mut manager= room_manager.lock().await;
         let enter_code = match manager.get_enter_code() {
@@ -296,11 +314,11 @@ pub async fn create_room_request (
     match payload {
         CreateRoomRequestForm::Baduk(config) => {
             let game = BadukRoom::new(config);
-            tokio::spawn(run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx));
+            tokio::spawn(run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx, tx_clone));
         }
         CreateRoomRequestForm::Omok(config) => {
             let game = OmokRoom::new(config);
-            tokio::spawn(run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx));
+            tokio::spawn(run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx, tx_clone));
         }
     };
 

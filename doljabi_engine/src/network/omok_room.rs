@@ -179,7 +179,7 @@ impl GameLogic for OmokRoom {
     fn input_data(&mut self, input_data: (u64, ClientToServerRequest)) -> (GameRoomResponse, ServerToClientResponse) {
         use crate::proto::badukboardproto::client_to_server_request::Payload;
 
-        let (user_id, requset) = input_data;
+        let (user_id, request) = input_data;
 
         let mut response = (GameRoomResponse::None, ServerToClientResponse{
             response_type: false,
@@ -191,7 +191,7 @@ impl GameLogic for OmokRoom {
     });
 
         // 게임 시작 요청 처리
-        if let Some(Payload::Gamestart(_)) = &requset.payload {
+        if let Some(Payload::Gamestart(_)) = &request.payload {
             // 플레이어가 모두 접속 중인지 확인
             if self.players.full_players() {
                 self.running = true;
@@ -212,7 +212,7 @@ impl GameLogic for OmokRoom {
             }
         }
 
-        if self.running { match requset.payload {
+        if self.running { match request.payload {
             Some(Payload::Coordinate(chaksu_request)) => {
                 use crate::proto::badukboardproto::ChaksuResponse;
                 let turn =  self.game.is_board().is_turn();
@@ -226,7 +226,7 @@ impl GameLogic for OmokRoom {
                 // 착수 시도
                 let success = match self.game.chaksu(chaksu_request.coordinate as u16, true) {
                     Ok(_) => {
-                        game_room_status = GameRoomResponse::ChangeTrun;
+                        game_room_status = GameRoomResponse::ChangeTurn;
                         true
                     }
                     Err(_) => {false}
@@ -254,15 +254,7 @@ impl GameLogic for OmokRoom {
             Some(Payload::Resign(_resign_request)) => {
                 use crate::proto::badukboardproto::ResignResponse;
 
-                let user_color = self.game.is_board().is_turn();
-
-                let winner = match user_color {
-                    Color::Black => {Color::White}
-                    Color::White => {Color::Black}
-                    Color::Free => {Color::Free}
-                    _ => {Color::ColorError}
-                };
-
+                let winner = self.players.check_id_to_color(user_id).reverse();
                 self.game.set_winner(winner);
                 
                 response = (GameRoomResponse::GameOver, ServerToClientResponse {
@@ -314,7 +306,7 @@ impl GameLogic for OmokRoom {
                 // turn 변경
                 self.game.switch_turn();
 
-                response = (GameRoomResponse::ChangeTrun, ServerToClientResponse {
+                response = (GameRoomResponse::ChangeTurn, ServerToClientResponse {
                     response_type: true,
                     turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
                     the_winner: None,
