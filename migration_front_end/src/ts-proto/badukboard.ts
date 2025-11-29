@@ -2,7 +2,7 @@
 // versions:
 //   protoc-gen-ts_proto  v2.8.3
 //   protoc               v6.32.1
-// source: api-doc/badukboard.proto
+// source: badukboard.proto
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
@@ -74,7 +74,6 @@ export interface GameState {
   board: BadukBoardState | undefined;
   blackTime?: PlayerTimeInfo | undefined;
   whiteTime?: PlayerTimeInfo | undefined;
-  turn: Color;
 }
 
 export interface ChaksuRequest {
@@ -104,18 +103,16 @@ export interface ClientToServerRequest {
 
 export interface ChaksuResponse {
   success: boolean;
-  gameState: GameState | undefined;
 }
 
 export interface ResignResponse {
 }
 
 export interface DrawOfferResponse {
-  accepted: boolean;
+  userName: string;
 }
 
 export interface PassTurnResponse {
-  gameState: GameState | undefined;
 }
 
 export interface UserInfo {
@@ -124,8 +121,6 @@ export interface UserInfo {
 }
 
 export interface GameStartResponse {
-  gameStart: GameState | undefined;
-  usersInfo: UserInfo | undefined;
 }
 
 export interface UsersInfo {
@@ -135,13 +130,15 @@ export interface UsersInfo {
 
 export interface ServerToClientResponse {
   responseType: boolean;
+  turn: Color;
   theWinner?: Color | undefined;
+  gameState?: GameState | undefined;
+  usersInfo?: UsersInfo | undefined;
   coordinate?: ChaksuResponse | undefined;
   resign?: ResignResponse | undefined;
   drawOffer?: DrawOfferResponse | undefined;
   passTurn?: PassTurnResponse | undefined;
   gameStart?: GameStartResponse | undefined;
-  usersInfo?: UsersInfo | undefined;
 }
 
 function createBaseBadukBoardState(): BadukBoardState {
@@ -353,7 +350,7 @@ export const PlayerTimeInfo: MessageFns<PlayerTimeInfo> = {
 };
 
 function createBaseGameState(): GameState {
-  return { board: undefined, blackTime: undefined, whiteTime: undefined, turn: 0 };
+  return { board: undefined, blackTime: undefined, whiteTime: undefined };
 }
 
 export const GameState: MessageFns<GameState> = {
@@ -366,9 +363,6 @@ export const GameState: MessageFns<GameState> = {
     }
     if (message.whiteTime !== undefined) {
       PlayerTimeInfo.encode(message.whiteTime, writer.uint32(26).fork()).join();
-    }
-    if (message.turn !== 0) {
-      writer.uint32(32).int32(message.turn);
     }
     return writer;
   },
@@ -404,14 +398,6 @@ export const GameState: MessageFns<GameState> = {
           message.whiteTime = PlayerTimeInfo.decode(reader, reader.uint32());
           continue;
         }
-        case 4: {
-          if (tag !== 32) {
-            break;
-          }
-
-          message.turn = reader.int32() as any;
-          continue;
-        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -426,7 +412,6 @@ export const GameState: MessageFns<GameState> = {
       board: isSet(object.board) ? BadukBoardState.fromJSON(object.board) : undefined,
       blackTime: isSet(object.blackTime) ? PlayerTimeInfo.fromJSON(object.blackTime) : undefined,
       whiteTime: isSet(object.whiteTime) ? PlayerTimeInfo.fromJSON(object.whiteTime) : undefined,
-      turn: isSet(object.turn) ? colorFromJSON(object.turn) : 0,
     };
   },
 
@@ -440,9 +425,6 @@ export const GameState: MessageFns<GameState> = {
     }
     if (message.whiteTime !== undefined) {
       obj.whiteTime = PlayerTimeInfo.toJSON(message.whiteTime);
-    }
-    if (message.turn !== 0) {
-      obj.turn = colorToJSON(message.turn);
     }
     return obj;
   },
@@ -461,7 +443,6 @@ export const GameState: MessageFns<GameState> = {
     message.whiteTime = (object.whiteTime !== undefined && object.whiteTime !== null)
       ? PlayerTimeInfo.fromPartial(object.whiteTime)
       : undefined;
-    message.turn = object.turn ?? 0;
     return message;
   },
 };
@@ -854,16 +835,13 @@ export const ClientToServerRequest: MessageFns<ClientToServerRequest> = {
 };
 
 function createBaseChaksuResponse(): ChaksuResponse {
-  return { success: false, gameState: undefined };
+  return { success: false };
 }
 
 export const ChaksuResponse: MessageFns<ChaksuResponse> = {
   encode(message: ChaksuResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.success !== false) {
       writer.uint32(8).bool(message.success);
-    }
-    if (message.gameState !== undefined) {
-      GameState.encode(message.gameState, writer.uint32(18).fork()).join();
     }
     return writer;
   },
@@ -883,14 +861,6 @@ export const ChaksuResponse: MessageFns<ChaksuResponse> = {
           message.success = reader.bool();
           continue;
         }
-        case 2: {
-          if (tag !== 18) {
-            break;
-          }
-
-          message.gameState = GameState.decode(reader, reader.uint32());
-          continue;
-        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -901,19 +871,13 @@ export const ChaksuResponse: MessageFns<ChaksuResponse> = {
   },
 
   fromJSON(object: any): ChaksuResponse {
-    return {
-      success: isSet(object.success) ? globalThis.Boolean(object.success) : false,
-      gameState: isSet(object.gameState) ? GameState.fromJSON(object.gameState) : undefined,
-    };
+    return { success: isSet(object.success) ? globalThis.Boolean(object.success) : false };
   },
 
   toJSON(message: ChaksuResponse): unknown {
     const obj: any = {};
     if (message.success !== false) {
       obj.success = message.success;
-    }
-    if (message.gameState !== undefined) {
-      obj.gameState = GameState.toJSON(message.gameState);
     }
     return obj;
   },
@@ -924,9 +888,6 @@ export const ChaksuResponse: MessageFns<ChaksuResponse> = {
   fromPartial<I extends Exact<DeepPartial<ChaksuResponse>, I>>(object: I): ChaksuResponse {
     const message = createBaseChaksuResponse();
     message.success = object.success ?? false;
-    message.gameState = (object.gameState !== undefined && object.gameState !== null)
-      ? GameState.fromPartial(object.gameState)
-      : undefined;
     return message;
   },
 };
@@ -975,13 +936,13 @@ export const ResignResponse: MessageFns<ResignResponse> = {
 };
 
 function createBaseDrawOfferResponse(): DrawOfferResponse {
-  return { accepted: false };
+  return { userName: "" };
 }
 
 export const DrawOfferResponse: MessageFns<DrawOfferResponse> = {
   encode(message: DrawOfferResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.accepted !== false) {
-      writer.uint32(8).bool(message.accepted);
+    if (message.userName !== "") {
+      writer.uint32(10).string(message.userName);
     }
     return writer;
   },
@@ -994,11 +955,11 @@ export const DrawOfferResponse: MessageFns<DrawOfferResponse> = {
       const tag = reader.uint32();
       switch (tag >>> 3) {
         case 1: {
-          if (tag !== 8) {
+          if (tag !== 10) {
             break;
           }
 
-          message.accepted = reader.bool();
+          message.userName = reader.string();
           continue;
         }
       }
@@ -1011,13 +972,13 @@ export const DrawOfferResponse: MessageFns<DrawOfferResponse> = {
   },
 
   fromJSON(object: any): DrawOfferResponse {
-    return { accepted: isSet(object.accepted) ? globalThis.Boolean(object.accepted) : false };
+    return { userName: isSet(object.userName) ? globalThis.String(object.userName) : "" };
   },
 
   toJSON(message: DrawOfferResponse): unknown {
     const obj: any = {};
-    if (message.accepted !== false) {
-      obj.accepted = message.accepted;
+    if (message.userName !== "") {
+      obj.userName = message.userName;
     }
     return obj;
   },
@@ -1027,20 +988,17 @@ export const DrawOfferResponse: MessageFns<DrawOfferResponse> = {
   },
   fromPartial<I extends Exact<DeepPartial<DrawOfferResponse>, I>>(object: I): DrawOfferResponse {
     const message = createBaseDrawOfferResponse();
-    message.accepted = object.accepted ?? false;
+    message.userName = object.userName ?? "";
     return message;
   },
 };
 
 function createBasePassTurnResponse(): PassTurnResponse {
-  return { gameState: undefined };
+  return {};
 }
 
 export const PassTurnResponse: MessageFns<PassTurnResponse> = {
-  encode(message: PassTurnResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.gameState !== undefined) {
-      GameState.encode(message.gameState, writer.uint32(10).fork()).join();
-    }
+  encode(_: PassTurnResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     return writer;
   },
 
@@ -1051,14 +1009,6 @@ export const PassTurnResponse: MessageFns<PassTurnResponse> = {
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
-
-          message.gameState = GameState.decode(reader, reader.uint32());
-          continue;
-        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1068,26 +1018,20 @@ export const PassTurnResponse: MessageFns<PassTurnResponse> = {
     return message;
   },
 
-  fromJSON(object: any): PassTurnResponse {
-    return { gameState: isSet(object.gameState) ? GameState.fromJSON(object.gameState) : undefined };
+  fromJSON(_: any): PassTurnResponse {
+    return {};
   },
 
-  toJSON(message: PassTurnResponse): unknown {
+  toJSON(_: PassTurnResponse): unknown {
     const obj: any = {};
-    if (message.gameState !== undefined) {
-      obj.gameState = GameState.toJSON(message.gameState);
-    }
     return obj;
   },
 
   create<I extends Exact<DeepPartial<PassTurnResponse>, I>>(base?: I): PassTurnResponse {
     return PassTurnResponse.fromPartial(base ?? ({} as any));
   },
-  fromPartial<I extends Exact<DeepPartial<PassTurnResponse>, I>>(object: I): PassTurnResponse {
+  fromPartial<I extends Exact<DeepPartial<PassTurnResponse>, I>>(_: I): PassTurnResponse {
     const message = createBasePassTurnResponse();
-    message.gameState = (object.gameState !== undefined && object.gameState !== null)
-      ? GameState.fromPartial(object.gameState)
-      : undefined;
     return message;
   },
 };
@@ -1169,17 +1113,11 @@ export const UserInfo: MessageFns<UserInfo> = {
 };
 
 function createBaseGameStartResponse(): GameStartResponse {
-  return { gameStart: undefined, usersInfo: undefined };
+  return {};
 }
 
 export const GameStartResponse: MessageFns<GameStartResponse> = {
-  encode(message: GameStartResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.gameStart !== undefined) {
-      GameState.encode(message.gameStart, writer.uint32(10).fork()).join();
-    }
-    if (message.usersInfo !== undefined) {
-      UserInfo.encode(message.usersInfo, writer.uint32(18).fork()).join();
-    }
+  encode(_: GameStartResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     return writer;
   },
 
@@ -1190,22 +1128,6 @@ export const GameStartResponse: MessageFns<GameStartResponse> = {
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
-
-          message.gameStart = GameState.decode(reader, reader.uint32());
-          continue;
-        }
-        case 2: {
-          if (tag !== 18) {
-            break;
-          }
-
-          message.usersInfo = UserInfo.decode(reader, reader.uint32());
-          continue;
-        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1215,35 +1137,20 @@ export const GameStartResponse: MessageFns<GameStartResponse> = {
     return message;
   },
 
-  fromJSON(object: any): GameStartResponse {
-    return {
-      gameStart: isSet(object.gameStart) ? GameState.fromJSON(object.gameStart) : undefined,
-      usersInfo: isSet(object.usersInfo) ? UserInfo.fromJSON(object.usersInfo) : undefined,
-    };
+  fromJSON(_: any): GameStartResponse {
+    return {};
   },
 
-  toJSON(message: GameStartResponse): unknown {
+  toJSON(_: GameStartResponse): unknown {
     const obj: any = {};
-    if (message.gameStart !== undefined) {
-      obj.gameStart = GameState.toJSON(message.gameStart);
-    }
-    if (message.usersInfo !== undefined) {
-      obj.usersInfo = UserInfo.toJSON(message.usersInfo);
-    }
     return obj;
   },
 
   create<I extends Exact<DeepPartial<GameStartResponse>, I>>(base?: I): GameStartResponse {
     return GameStartResponse.fromPartial(base ?? ({} as any));
   },
-  fromPartial<I extends Exact<DeepPartial<GameStartResponse>, I>>(object: I): GameStartResponse {
+  fromPartial<I extends Exact<DeepPartial<GameStartResponse>, I>>(_: I): GameStartResponse {
     const message = createBaseGameStartResponse();
-    message.gameStart = (object.gameStart !== undefined && object.gameStart !== null)
-      ? GameState.fromPartial(object.gameStart)
-      : undefined;
-    message.usersInfo = (object.usersInfo !== undefined && object.usersInfo !== null)
-      ? UserInfo.fromPartial(object.usersInfo)
-      : undefined;
     return message;
   },
 };
@@ -1331,13 +1238,15 @@ export const UsersInfo: MessageFns<UsersInfo> = {
 function createBaseServerToClientResponse(): ServerToClientResponse {
   return {
     responseType: false,
+    turn: 0,
     theWinner: undefined,
+    gameState: undefined,
+    usersInfo: undefined,
     coordinate: undefined,
     resign: undefined,
     drawOffer: undefined,
     passTurn: undefined,
     gameStart: undefined,
-    usersInfo: undefined,
   };
 }
 
@@ -1346,8 +1255,17 @@ export const ServerToClientResponse: MessageFns<ServerToClientResponse> = {
     if (message.responseType !== false) {
       writer.uint32(8).bool(message.responseType);
     }
+    if (message.turn !== 0) {
+      writer.uint32(16).int32(message.turn);
+    }
     if (message.theWinner !== undefined) {
-      writer.uint32(16).int32(message.theWinner);
+      writer.uint32(24).int32(message.theWinner);
+    }
+    if (message.gameState !== undefined) {
+      GameState.encode(message.gameState, writer.uint32(34).fork()).join();
+    }
+    if (message.usersInfo !== undefined) {
+      UsersInfo.encode(message.usersInfo, writer.uint32(42).fork()).join();
     }
     if (message.coordinate !== undefined) {
       ChaksuResponse.encode(message.coordinate, writer.uint32(802).fork()).join();
@@ -1363,9 +1281,6 @@ export const ServerToClientResponse: MessageFns<ServerToClientResponse> = {
     }
     if (message.gameStart !== undefined) {
       GameStartResponse.encode(message.gameStart, writer.uint32(834).fork()).join();
-    }
-    if (message.usersInfo !== undefined) {
-      UsersInfo.encode(message.usersInfo, writer.uint32(842).fork()).join();
     }
     return writer;
   },
@@ -1390,7 +1305,31 @@ export const ServerToClientResponse: MessageFns<ServerToClientResponse> = {
             break;
           }
 
+          message.turn = reader.int32() as any;
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
           message.theWinner = reader.int32() as any;
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.gameState = GameState.decode(reader, reader.uint32());
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.usersInfo = UsersInfo.decode(reader, reader.uint32());
           continue;
         }
         case 100: {
@@ -1433,14 +1372,6 @@ export const ServerToClientResponse: MessageFns<ServerToClientResponse> = {
           message.gameStart = GameStartResponse.decode(reader, reader.uint32());
           continue;
         }
-        case 105: {
-          if (tag !== 842) {
-            break;
-          }
-
-          message.usersInfo = UsersInfo.decode(reader, reader.uint32());
-          continue;
-        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1453,13 +1384,15 @@ export const ServerToClientResponse: MessageFns<ServerToClientResponse> = {
   fromJSON(object: any): ServerToClientResponse {
     return {
       responseType: isSet(object.responseType) ? globalThis.Boolean(object.responseType) : false,
+      turn: isSet(object.turn) ? colorFromJSON(object.turn) : 0,
       theWinner: isSet(object.theWinner) ? colorFromJSON(object.theWinner) : undefined,
+      gameState: isSet(object.gameState) ? GameState.fromJSON(object.gameState) : undefined,
+      usersInfo: isSet(object.usersInfo) ? UsersInfo.fromJSON(object.usersInfo) : undefined,
       coordinate: isSet(object.coordinate) ? ChaksuResponse.fromJSON(object.coordinate) : undefined,
       resign: isSet(object.resign) ? ResignResponse.fromJSON(object.resign) : undefined,
       drawOffer: isSet(object.drawOffer) ? DrawOfferResponse.fromJSON(object.drawOffer) : undefined,
       passTurn: isSet(object.passTurn) ? PassTurnResponse.fromJSON(object.passTurn) : undefined,
       gameStart: isSet(object.gameStart) ? GameStartResponse.fromJSON(object.gameStart) : undefined,
-      usersInfo: isSet(object.usersInfo) ? UsersInfo.fromJSON(object.usersInfo) : undefined,
     };
   },
 
@@ -1468,8 +1401,17 @@ export const ServerToClientResponse: MessageFns<ServerToClientResponse> = {
     if (message.responseType !== false) {
       obj.responseType = message.responseType;
     }
+    if (message.turn !== 0) {
+      obj.turn = colorToJSON(message.turn);
+    }
     if (message.theWinner !== undefined) {
       obj.theWinner = colorToJSON(message.theWinner);
+    }
+    if (message.gameState !== undefined) {
+      obj.gameState = GameState.toJSON(message.gameState);
+    }
+    if (message.usersInfo !== undefined) {
+      obj.usersInfo = UsersInfo.toJSON(message.usersInfo);
     }
     if (message.coordinate !== undefined) {
       obj.coordinate = ChaksuResponse.toJSON(message.coordinate);
@@ -1486,9 +1428,6 @@ export const ServerToClientResponse: MessageFns<ServerToClientResponse> = {
     if (message.gameStart !== undefined) {
       obj.gameStart = GameStartResponse.toJSON(message.gameStart);
     }
-    if (message.usersInfo !== undefined) {
-      obj.usersInfo = UsersInfo.toJSON(message.usersInfo);
-    }
     return obj;
   },
 
@@ -1498,7 +1437,14 @@ export const ServerToClientResponse: MessageFns<ServerToClientResponse> = {
   fromPartial<I extends Exact<DeepPartial<ServerToClientResponse>, I>>(object: I): ServerToClientResponse {
     const message = createBaseServerToClientResponse();
     message.responseType = object.responseType ?? false;
+    message.turn = object.turn ?? 0;
     message.theWinner = object.theWinner ?? undefined;
+    message.gameState = (object.gameState !== undefined && object.gameState !== null)
+      ? GameState.fromPartial(object.gameState)
+      : undefined;
+    message.usersInfo = (object.usersInfo !== undefined && object.usersInfo !== null)
+      ? UsersInfo.fromPartial(object.usersInfo)
+      : undefined;
     message.coordinate = (object.coordinate !== undefined && object.coordinate !== null)
       ? ChaksuResponse.fromPartial(object.coordinate)
       : undefined;
@@ -1513,9 +1459,6 @@ export const ServerToClientResponse: MessageFns<ServerToClientResponse> = {
       : undefined;
     message.gameStart = (object.gameStart !== undefined && object.gameStart !== null)
       ? GameStartResponse.fromPartial(object.gameStart)
-      : undefined;
-    message.usersInfo = (object.usersInfo !== undefined && object.usersInfo !== null)
-      ? UsersInfo.fromPartial(object.usersInfo)
       : undefined;
     return message;
   },

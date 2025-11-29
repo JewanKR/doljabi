@@ -328,6 +328,7 @@ pub async fn login(
 
             // 🔍 디버깅: 응답 JSON을 문자열로 찍기
             let json_str = serde_json::to_string(&resp).unwrap();
+            #[cfg(debug_assertions)]
             println!("[DEBUG] login response JSON = {}", json_str);
 
             (StatusCode::OK, Json(resp))
@@ -341,6 +342,7 @@ pub async fn login(
                 session_key: None,
             };
             let json_str = serde_json::to_string(&resp).unwrap();
+            #[cfg(debug_assertions)]
             println!("[DEBUG] login response JSON = {}", json_str);
 
             (StatusCode::BAD_REQUEST, Json(resp))
@@ -353,6 +355,7 @@ pub async fn login(
                 session_key: None,
             };
             let json_str = serde_json::to_string(&resp).unwrap();
+            #[cfg(debug_assertions)]
             println!("[DEBUG] login response JSON = {}", json_str);
 
             (StatusCode::INTERNAL_SERVER_ERROR, Json(resp))
@@ -376,6 +379,7 @@ pub async fn session_check(
     let user_id_opt = get_user_id_by_session(&session_store, &form.session_key).await;
 
     // 🔍 디버깅: 세션키 → user_id 매핑 출력
+    #[cfg(debug_assertions)]
     match user_id_opt {
         Some(uid) => println!(
             "[DEBUG] session_check: key(prefix) = {}, user_id = {}",
@@ -386,7 +390,7 @@ pub async fn session_check(
             "[DEBUG] session_check: key(prefix) = {}, NOT FOUND",
             &form.session_key[..16.min(form.session_key.len())],
         ),
-    }
+    };
 
     (
         StatusCode::OK,

@@ -251,7 +251,7 @@ pub async fn run_game_node<G: GameLogic>(
         }
 
         _ = &mut empty_room_timeout, if game.check_empty_room() => {
-            #[cfg(debug_assertions)]
+            //#[cfg(debug_assertions)]
             println!("{} 빈 방 삭제", enter_code.as_u16());
             break;
         }
@@ -296,11 +296,11 @@ pub async fn create_room_request (
     match payload {
         CreateRoomRequestForm::Baduk(config) => {
             let game = BadukRoom::new(config);
-            let _ = run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx);
+            tokio::spawn(run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx));
         }
         CreateRoomRequestForm::Omok(config) => {
             let game = OmokRoom::new(config);
-            let _ = run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx);
+            tokio::spawn(run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx));
         }
     };
 
