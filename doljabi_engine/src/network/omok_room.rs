@@ -1,57 +1,28 @@
-use tokio::sync::mpsc;
-use crate::{game::{badukboard::{BadukBoardGameConfig, Color, Players}, omok::Omok}, network::{room_manager::{GameLogic, convert_game2proto_color}}, proto::badukboardproto::{ClientToServerRequest, GameStartResponse, ServerToClientResponse, server_to_client_response}};
+use crate::{game::{badukboard::{BadukBoardGameConfig, Color, Players}, omok::Omok}, network::room_manager::{GameRoomResponse, GameLogic, convert_game2proto_color}, proto::badukboardproto::{ClientToServerRequest, GameStartResponse, ServerToClientResponse, server_to_client_response}};
 
 pub struct OmokRoom {
+    running: bool,
     game: Omok,
     game_config: BadukBoardGameConfig,
     players: Players,
-    poweroff: mpsc::Sender<()>
 } impl OmokRoom {
-    pub fn new(game_config: BadukBoardGameConfig, poweroff: mpsc::Sender<()>) -> Self { Self {
+    pub fn new(game_config: BadukBoardGameConfig) -> Self { Self {
+        running: false,
         game: Omok::new(),
         game_config: game_config,
         players: Players::new(),
-        poweroff: poweroff,
     }}
-    /*
-    pub fn run(&mut self) -> bool {
-        if self.players().full_players() {
-            self.set_players_time(&self.game_config.clone());
-            
-            let black_timeout
-
-            true
-        } else {
-            false
-        }
-    }
-    */
-    pub fn game(&self) -> &Omok {
-        &self.game
-    }
-
-    pub fn players_mut(&mut self) -> &mut Players {
-        &mut self.players
-    }
-
-    pub fn players(&self) -> &Players {
-        &self.players
-    }
-
-    pub fn send_poweroff(&mut self) {
-        let _ = self.poweroff.try_send(());
-    }
 
     pub fn turn_user_id(&self) -> Option<u64> {
-        let color = self.game.is_board().is_turn();
+        let color = self.game.board.is_turn();
         self.players.user_id(color)
     }
 
     pub fn set_players_time(&mut self, config: &BadukBoardGameConfig) -> bool {
-        if !self.players().full_players() {
+        if !self.players.full_players() {
             return false;
         }
-        self.players_mut().set_players(&config);
+        self.players.set_players(&config);
 
         true
     }
@@ -98,131 +69,188 @@ pub struct OmokRoom {
         }
     }
 
-    pub fn omok_status(&self) -> ServerToClientResponse {
-        use crate::proto::badukboardproto::{PassTurnResponse, GameState};
-        let pass_response = PassTurnResponse {
-            game_state: Some(GameState {
-                board: Some(self.baduk_board_state()),
-                black_time: Some(self.black_player_time_info()),
-                white_time: Some(self.white_player_time_info()),
-                turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
-            }),
-        };
-
-        ServerToClientResponse {
-            response_type: true,
-            the_winner: None,
-            payload: Some(server_to_client_response::Payload::PassTurn(pass_response)),
-        }
-    }
-
-    fn _users_info_response(&self) -> ServerToClientResponse {
-        use crate::proto::badukboardproto::{UsersInfo, {server_to_client_response::Payload}};
-
-        ServerToClientResponse { 
-            response_type: true,
-            the_winner: None,
-            payload: Some(Payload::UsersInfo(UsersInfo{
-                black: None, 
-                white: None,
-            })),
+    pub fn omok_status(&self) -> crate::proto::badukboardproto::GameState {
+        crate::proto::badukboardproto::GameState {
+            board: Some(self.baduk_board_state()),
+            black_time: Some(self.black_player_time_info()),
+            white_time: Some(self.white_player_time_info()),
         }
     }
 }
 
 impl GameLogic for OmokRoom { 
-    fn check_emtpy_room(&self) -> bool {
-        self.players().check_emtpy_room()
+    fn check_empty_room(&self) -> bool {
+        self.players.check_empty_room()
     }
 
     fn push_user(&mut self, user_id: u64) -> bool {
-        self.players_mut().push_user(user_id)
+        self.players.push_user(user_id)
     }
 
     fn pop_user(&mut self, user_id: u64) -> bool {
-        self.players_mut().pop_user(user_id)
+        self.players.pop_user(user_id)
     }
 
-    fn input_data(&mut self, input_data: (u64, ClientToServerRequest)) -> ServerToClientResponse {
+    fn users_info(&self) -> crate::proto::badukboardproto::UsersInfo {
+        use crate::proto::badukboardproto::{UsersInfo, UserInfo};
+        UsersInfo {
+            black: self.players.black_player.as_ref().map(|_| UserInfo {
+                user_name: "black player".to_string(),
+                rating: 0
+            }),
+            white: self.players.white_player.as_ref().map(|_| UserInfo {
+                user_name: "white player".to_string(),
+                rating: 0
+            })
+        }
+    }
+
+    fn set_timer(&mut self) -> tokio::time::Duration {
+        use tokio::time::Duration;
+        let turn_player = self.players.turn_player(self.game.board.is_turn());
+
+        match turn_player {
+            Some(p) => {
+                if p.main_time() > 0 {
+                    Duration::from_millis(p.main_time())
+                } else if p.remain_time() > 0 {
+                    Duration::from_millis(p.overtime())
+                } else {
+                    self.game.set_winner(self.game.board.is_turn().reverse());
+                    Duration::from_secs(u64::MAX)
+                }
+            }
+            None => Duration::from_secs(u64::MAX)
+        }
+    }
+
+    fn timer_interrupt(&mut self) -> (GameRoomResponse, ServerToClientResponse) {
+        let turn_player = self.players.turn_player_mut(self.game.board.is_turn());
+
+        match turn_player {
+            Some(p) => {
+                if p.main_time() > 0 {
+                    p.sub_main_time();
+                    self.set_timer();
+                    (GameRoomResponse::None, ServerToClientResponse{
+                        response_type: true,
+                        turn: convert_game2proto_color(self.game.board.is_turn()) as i32,
+                        the_winner: None,
+                        game_state: Some(self.omok_status()),
+                        users_info: None,
+                        payload: None,
+                    })
+                } else if p.remain_time() > 0 {
+                    p.sub_remain_overtime();
+                    self.set_timer();
+                    (GameRoomResponse::None, ServerToClientResponse{
+                        response_type: true,
+                        turn: convert_game2proto_color(self.game.board.is_turn()) as i32,
+                        the_winner: None,
+                        game_state: Some(self.omok_status()),
+                        users_info: None,
+                        payload: None,
+                    })
+                } else {
+                    self.game.set_winner(self.game.board.is_turn().reverse());
+                    (GameRoomResponse::GameOver, ServerToClientResponse{
+                        response_type: true,
+                        turn: convert_game2proto_color(self.game.board.is_turn()) as i32,
+                        the_winner: self.game.winner().map(|w| convert_game2proto_color(w.clone()) as i32),
+                        game_state: Some(self.omok_status()),
+                        users_info: None,
+                        payload: None,
+                    })
+                }
+            }
+            None => {
+                (GameRoomResponse::None, ServerToClientResponse{
+                    response_type: false,
+                    turn: crate::proto::badukboardproto::Color::Free as i32,
+                    game_state: None,
+                    users_info: None,
+                    the_winner: None,
+                    payload: None,
+                })
+            }
+        }
+    }
+
+    fn input_data(&mut self, input_data: (u64, ClientToServerRequest)) -> (GameRoomResponse, ServerToClientResponse) {
         use crate::proto::badukboardproto::client_to_server_request::Payload;
 
         let (user_id, requset) = input_data;
 
-        match requset.payload {
-            Some(Payload::Gamestart(_)) => {
-                if self.players().full_players() {
-                    self.set_players_time(&self.game_config.clone());
+        let mut response = (GameRoomResponse::None, ServerToClientResponse{
+            response_type: false,
+            turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
+            the_winner: None,
+            game_state: None,
+            users_info: None,
+            payload: None,
+    });
 
-                    use crate::proto::badukboardproto::GameState;
-                    ServerToClientResponse{
-                        response_type: true,
-                        the_winner: None,
-                        payload: Some(server_to_client_response::Payload::GameStart(GameStartResponse{
-                            game_start: Some(GameState{
-                                board: Some(self.baduk_board_state()),
-                                black_time: Some(self.black_player_time_info()),
-                                white_time: Some(self.white_player_time_info()),
-                                turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
-                            }),
-                            users_info: None,
-                        }))
-                    }
-                } else {
-                    ServerToClientResponse{
-                        response_type: false,
-                        the_winner: None,
-                        payload: None
-                    }
-                }
+        // 게임 시작 요청 처리
+        if let Some(Payload::Gamestart(_)) = &requset.payload {
+            // 플레이어가 모두 접속 중인지 확인
+            if self.players.full_players() {
+                self.running = true;
+                self.set_players_time(&self.game_config.clone());
+
+                use crate::proto::badukboardproto::{UsersInfo, UserInfo};
+                response = (GameRoomResponse::GameStart, ServerToClientResponse{
+                    response_type: true,
+                    turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
+                    the_winner: None,
+                    game_state: Some(self.omok_status()),
+                    users_info: Some(UsersInfo{
+                        black: Some(UserInfo{user_name: "black player".to_string(), rating: 0}),
+                        white: Some(UserInfo{user_name: "white player".to_string(), rating: 0})
+                    }),
+                    payload: Some(server_to_client_response::Payload::GameStart(GameStartResponse{}))
+                })
             }
-            
+        }
+
+        if self.running { match requset.payload {
             Some(Payload::Coordinate(chaksu_request)) => {
-                use crate::proto::badukboardproto::{ChaksuResponse, GameState};
+                use crate::proto::badukboardproto::ChaksuResponse;
                 let turn =  self.game.is_board().is_turn();
+                let mut game_room_status = GameRoomResponse::None;
 
                 // 착수를 시도하는 사람의 턴인지 확인
-                if self.players().check_id_to_color(user_id) != turn {
-                    return ServerToClientResponse{
-                        response_type: false,
-                        the_winner: None,
-                        payload: None,
-                    };
+                if self.players.check_id_to_color(user_id) != turn {
+                    return response;
                 }
 
                 // 착수 시도
                 let success = match self.game.chaksu(chaksu_request.coordinate as u16, true) {
                     Ok(_) => {
-                        self.players.switch_turn(turn);
+                        game_room_status = GameRoomResponse::ChangeTrun;
                         true
                     }
                     Err(_) => {false}
                 };
 
-                // 응답 데이터
-                let chaksu_response = ChaksuResponse {
-                    success: success,
-                    game_state: Some(GameState {
-                        board: Some(self.baduk_board_state()),
-                        black_time: Some(self.black_player_time_info()),
-                        white_time: Some(self.white_player_time_info()),
-                        turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
-                    }),
-                };
-
-                let the_winner = match self.game().winner() {
+                let the_winner = match self.game.winner() {
                     Some(color) => {
-                        let _ = self.poweroff.try_send(());
+                        game_room_status = GameRoomResponse::GameOver;
                         Some(convert_game2proto_color(color) as i32)
-                    }
+                    },
                     None => None
                 };
 
-                ServerToClientResponse {
+                response = (game_room_status ,ServerToClientResponse {
                     response_type: true,
+                    turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
                     the_winner: the_winner,
-                    payload: Some(server_to_client_response::Payload::Coordinate(chaksu_response)),
-                }
+                    game_state: Some(self.omok_status()),
+                    users_info: None,
+                    payload: Some(server_to_client_response::Payload::Coordinate(ChaksuResponse { success: success })),
+                });
             },
+
+            // 기권 처리
             Some(Payload::Resign(_resign_request)) => {
                 use crate::proto::badukboardproto::ResignResponse;
 
@@ -235,71 +263,71 @@ impl GameLogic for OmokRoom {
                     _ => {Color::ColorError}
                 };
 
-                let resign_response = ResignResponse {};
+                self.game.set_winner(winner);
                 
-                ServerToClientResponse {
+                response = (GameRoomResponse::GameOver, ServerToClientResponse {
                     response_type: true,
+                    turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
                     the_winner: Some(convert_game2proto_color(winner) as i32),
-                    payload: Some(server_to_client_response::Payload::Resign(resign_response)),
-                }
+                    game_state: Some(self.omok_status()),
+                    users_info: None,
+                    payload: Some(server_to_client_response::Payload::Resign(ResignResponse{})),
+                });
             },
+
+            // 무승부 신청
             Some(Payload::DrawOffer(_draw_request)) => {
                 use crate::proto::badukboardproto::DrawOfferResponse;
-
-                let offer_player = self.players().check_id_to_color(user_id);
+                let mut winner = None;
+                let offer_player = self.players.check_id_to_color(user_id);
+                let mut game_room_status = GameRoomResponse::None;
 
                 // 둘 다 무승부 요청을 하면 비김
-                if self.players().check_draw() {self.game.set_winner(Color::Free);}
+                if self.players.check_draw() {
+                    game_room_status = GameRoomResponse::GameOver;
+                    self.game.set_winner(Color::Free);
+                    winner = Some(convert_game2proto_color(Color::Free) as i32);
+                }
 
                 let draw_offer_response = DrawOfferResponse { user_name: format!("{} player", offer_player.to_string()) };
 
-                ServerToClientResponse {
-                    response_type: false,
-                    the_winner: None,
+                response = (game_room_status, ServerToClientResponse {
+                    response_type: true,
+                    turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
+                    the_winner: winner,
+                    game_state: Some(self.omok_status()),
+                    users_info: None,
                     payload: Some(server_to_client_response::Payload::DrawOffer(draw_offer_response)),
-                }
+                });
             },
+
+            // 턴 넘김
             Some(Payload::PassTurn(_pass_request)) => {
-                use crate::proto::badukboardproto::{PassTurnResponse, GameState};
+                use crate::proto::badukboardproto::PassTurnResponse;
                 let turn = self.game.is_board().is_turn();
 
                 // 턴 넘김을 시도하는 사람의 턴인지 확인
-                if self.players().check_id_to_color(user_id) != turn {
-                    return ServerToClientResponse{
-                        response_type: false,
-                        the_winner: None,
-                        payload: None,
-                    };
+                if self.players.check_id_to_color(user_id) != turn {
+                    return response;
                 }
 
                 // turn 변경
-                self.players.switch_turn(turn);
                 self.game.switch_turn();
 
-                // 응답 데이터
-                let pass_response = PassTurnResponse {
-                    game_state: Some(GameState {
-                        board: Some(self.baduk_board_state()),
-                        black_time: Some(self.black_player_time_info()),
-                        white_time: Some(self.white_player_time_info()),
-                        turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
-                    }),
-                };
-
-                ServerToClientResponse {
+                response = (GameRoomResponse::ChangeTrun, ServerToClientResponse {
                     response_type: true,
+                    turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
                     the_winner: None,
-                    payload: Some(server_to_client_response::Payload::PassTurn(pass_response)),
-                }
+                    game_state: Some(self.omok_status()),
+                    users_info: None,
+                    payload: Some(server_to_client_response::Payload::PassTurn(PassTurnResponse{})),
+                });
             },
-            _ => {
-                // 알 수 없는 요청 처리
-                ServerToClientResponse {
-                    response_type: false,
-                    the_winner: None,
-                    payload: None,
-                }
-            }
-        }
+
+            // 알 수 없는 요청 처리
+            _ => {}
+        }}
+
+        response
     }
 }

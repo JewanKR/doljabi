@@ -20,9 +20,9 @@ pub enum Direction {
 
 #[derive(Clone, Debug, Builder)]
 pub struct Omok {
-    board: BadukBoard,
+    pub(crate) board: BadukBoard,
     // 게임 사항 None 이면 진행중
-    winner: Option<Color>,
+    pub(crate) winner: Option<Color>,
 
 } impl Omok {
     pub fn new() -> Self {Self {
@@ -222,7 +222,7 @@ pub struct Omok {
 
     /// 착수 시도 실패 시 Err 출력
     pub fn chaksu(&mut self, coordinate: u16, main_check: bool) -> Result<(),BadukBoardError> {
-        let color = self.board.is_turn();
+        let color = self.board.is_turn().clone();
 
         // 색상 저장 및 좌표가 비었는지 확인
         if !self.board.is_free(coordinate) {

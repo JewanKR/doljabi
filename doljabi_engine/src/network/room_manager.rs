@@ -18,6 +18,13 @@ pub fn convert_game2proto_color(color: crate::game::badukboard::Color) -> crate:
     }
 }
 
+pub enum GameRoomResponse {
+    ChangeTrun,
+    GameOver,
+    GameStart,
+    None,
+}
+
 #[derive(Eq, Hash, PartialEq)]
 pub struct EnterCode { code : u16 }
 impl EnterCode {
@@ -107,13 +114,16 @@ pub struct CreateRoomResponseForm {
 }
 
 pub trait GameLogic: Send + Sync {
-    fn input_data(&mut self, data: (u64, ClientToServerRequest)) -> ServerToClientResponse;
-    fn check_emtpy_room(&self) -> bool;
+    fn input_data(&mut self, data: (u64, ClientToServerRequest)) -> (GameRoomResponse, ServerToClientResponse);
+    fn check_empty_room(&self) -> bool;
 
     fn push_user(&mut self, user_id: u64) -> bool;
     fn pop_user(&mut self, user_id: u64) -> bool;
 
+    fn users_info(&self) -> crate::proto::badukboardproto::UsersInfo;
 
+    fn set_timer(&mut self) -> tokio::time::Duration;
+    fn timer_interrupt(&mut self) -> (GameRoomResponse, ServerToClientResponse);
 }
 
 pub async fn run_game_node<G: GameLogic>(
@@ -123,11 +133,16 @@ pub async fn run_game_node<G: GameLogic>(
 
     mut mpsc_rx: mpsc::Receiver<RoomCommunicationDataForm>,
     broadcast_tx: broadcast::Sender<Arc<ServerToClientResponse>>,
-    mut poweroff_rx: mpsc::Receiver<()>
 ) {
     // 타임 아웃 설정
-    let mut empty_room_timeout = tokio::time::interval(Duration::from_secs(30));
-    let _ = empty_room_timeout.tick();
+    let empty_room_timeout = tokio::time::sleep(Duration::from_secs(30));
+    tokio::pin!(empty_room_timeout);
+    let mut running = false;
+
+    // 게임 타이머 설정 (초기값은 무한대)
+    let game_timer = tokio::time::sleep(Duration::from_secs(u64::MAX));
+    tokio::pin!(game_timer);
+    let mut timer_active = false;
 
     loop { tokio::select! {
         Some(data) = mpsc_rx.recv() => {
@@ -135,52 +150,107 @@ pub async fn run_game_node<G: GameLogic>(
             println!("데이터 수신!");
             let response: ServerToClientResponse = match data {
                 RoomCommunicationDataForm::Request(input_data) => {
-                    game.input_data(input_data)
+                    let (room_response, response) = game.input_data(input_data);
+
+                    match room_response {
+                        GameRoomResponse::None => {},
+                        GameRoomResponse::GameStart => {
+                            running = true;
+                            // 게임 시작 시 타이머 설정
+                            let duration = game.set_timer();
+                            game_timer.as_mut().reset(tokio::time::Instant::now() + duration);
+                            timer_active = true;
+                        },
+                        GameRoomResponse::GameOver => {
+                            break;
+                        },
+                        GameRoomResponse::ChangeTrun => {
+                            // 턴 변경 시 타이머 재설정
+                            if running && timer_active {
+                                let duration = game.set_timer();
+                                game_timer.as_mut().reset(tokio::time::Instant::now() + duration);
+                            }
+                        },
+                    }
+
+                    response
                 },
+                
                 RoomCommunicationDataForm::UserEnter(user_id) => {
-                    use crate::proto::badukboardproto::{server_to_client_response, UsersInfo};
                     if game.push_user(user_id) {
                         ServerToClientResponse {
                             response_type: true,
+                            turn: crate::proto::badukboardproto::Color::Free as i32,
                             the_winner: None,
-                            payload: Some(server_to_client_response::Payload::UsersInfo(UsersInfo{
-                                black: None,
-                                white: None,
-                            })),
+                            game_state: None,
+                            users_info: Some(game.users_info()),
+                            payload: None,
                         }
                     } else {
                         ServerToClientResponse {
                             response_type: false,
+                            turn: crate::proto::badukboardproto::Color::Free as i32,
                             the_winner: None,
+                            game_state: None,
+                            users_info: None,
                             payload: None,
                         }
                     }
                 },
-                RoomCommunicationDataForm::UserDisconnect(user_id) => {
-                    // TODO: 게임 시작 전 > 방 나가기
-                    // TODO: 게임 시작 후 > 타이머 동작, 타임 아웃이면 해당 유저 항복 처리
 
-                    ServerToClientResponse {
-                        response_type: false,
-                        the_winner: None,
-                        payload: None,
+                RoomCommunicationDataForm::UserDisconnect(user_id) => {
+                    if running {
+                        // TODO: 게임 시작 후 > 타이머 동작, 타임 아웃이면 해당 유저 항복 처리
+                        ServerToClientResponse {
+                            response_type: true,
+                            turn: crate::proto::badukboardproto::Color::Free as i32,
+                            the_winner: None,
+                            game_state: None,
+                            users_info: Some(game.users_info()),
+                            payload: None,
+                        }
+                    } else {
+                        // TODO: 게임 시작 전 > 방 나가기
+                        game.pop_user(user_id);
+                        if game.check_empty_room() {break;}
+                        ServerToClientResponse {
+                            response_type: true,
+                            turn: crate::proto::badukboardproto::Color::Free as i32,
+                            the_winner: None,
+                            game_state: None,
+                            users_info: Some(game.users_info()),
+                            payload: None,
+                        }
                     }
                 }
-    
             };
 
             let _ = broadcast_tx.send(Arc::new(response));
         }
 
-        // TODO: 게임 데이터 불러와서 게임 타이머 동작 시키기
-
-        _ = poweroff_rx.recv() => {
-            #[cfg(debug_assertions)]
-            println!("{} 방 종료 신호 수신", enter_code.as_u16());
-            break;
+        _ = &mut game_timer, if running && timer_active => {
+            // 타이머 만료 처리
+            let (room_response, response) = game.timer_interrupt();
+            
+            match room_response {
+                GameRoomResponse::None => {
+                    // 타이머가 계속 동작해야 하는 경우 (시간 감소만)
+                    let duration = game.set_timer();
+                    game_timer.as_mut().reset(tokio::time::Instant::now() + duration);
+                    let _ = broadcast_tx.send(Arc::new(response));
+                },
+                GameRoomResponse::GameOver => {
+                    // 시간 초과로 게임 종료
+                    let _ = broadcast_tx.send(Arc::new(response));
+                    break;
+                },
+                _ => {
+                    let _ = broadcast_tx.send(Arc::new(response));
+                }
+            }
         }
 
-        _ = empty_room_timeout.tick(), if game.check_emtpy_room() => {
+        _ = &mut empty_room_timeout, if game.check_empty_room() => {
             #[cfg(debug_assertions)]
             println!("{} 빈 방 삭제", enter_code.as_u16());
             break;
@@ -208,7 +278,6 @@ pub async fn create_room_request (
     State(room_manager): State<RoomManager>,
     Json(payload): Json<CreateRoomRequestForm>,
 ) -> impl IntoResponse {
-    let (poweroff_tx, poweroff_rx) = mpsc::channel::<()>(1);
     let (mpsc_tx, mpsc_rx) = mpsc::channel::<RoomCommunicationDataForm>(16);
     let (broadcast_tx, _) = broadcast::channel::<Arc<ServerToClientResponse>>(16);
 
@@ -226,12 +295,12 @@ pub async fn create_room_request (
 
     match payload {
         CreateRoomRequestForm::Baduk(config) => {
-            let game = BadukRoom::new(config, poweroff_tx);
-            let _ = run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx, poweroff_rx);
+            let game = BadukRoom::new(config);
+            let _ = run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx);
         }
         CreateRoomRequestForm::Omok(config) => {
-            let game = OmokRoom::new(config, poweroff_tx);
-            let _ = run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx, poweroff_rx);
+            let game = OmokRoom::new(config);
+            let _ = run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx);
         }
     };
 

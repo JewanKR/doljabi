@@ -28,8 +28,6 @@ pub struct GameState {
     pub black_time: ::core::option::Option<PlayerTimeInfo>,
     #[prost(message, optional, tag = "3")]
     pub white_time: ::core::option::Option<PlayerTimeInfo>,
-    #[prost(enumeration = "Color", tag = "4")]
-    pub turn: i32,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ChaksuRequest {
@@ -70,12 +68,10 @@ pub mod client_to_server_request {
         Gamestart(super::GameStartRequest),
     }
 }
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ChaksuResponse {
     #[prost(bool, tag = "1")]
     pub success: bool,
-    #[prost(message, optional, tag = "2")]
-    pub game_state: ::core::option::Option<GameState>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ResignResponse {}
@@ -84,11 +80,8 @@ pub struct DrawOfferResponse {
     #[prost(string, tag = "1")]
     pub user_name: ::prost::alloc::string::String,
 }
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct PassTurnResponse {
-    #[prost(message, optional, tag = "1")]
-    pub game_state: ::core::option::Option<GameState>,
-}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct PassTurnResponse {}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UserInfo {
     #[prost(string, tag = "1")]
@@ -96,13 +89,8 @@ pub struct UserInfo {
     #[prost(uint32, tag = "2")]
     pub rating: u32,
 }
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct GameStartResponse {
-    #[prost(message, optional, tag = "1")]
-    pub game_start: ::core::option::Option<GameState>,
-    #[prost(message, optional, tag = "2")]
-    pub users_info: ::core::option::Option<UserInfo>,
-}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GameStartResponse {}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UsersInfo {
     #[prost(message, optional, tag = "1")]
@@ -114,11 +102,17 @@ pub struct UsersInfo {
 pub struct ServerToClientResponse {
     #[prost(bool, tag = "1")]
     pub response_type: bool,
-    #[prost(enumeration = "Color", optional, tag = "2")]
+    #[prost(enumeration = "Color", tag = "2")]
+    pub turn: i32,
+    #[prost(enumeration = "Color", optional, tag = "3")]
     pub the_winner: ::core::option::Option<i32>,
+    #[prost(message, optional, tag = "4")]
+    pub game_state: ::core::option::Option<GameState>,
+    #[prost(message, optional, tag = "5")]
+    pub users_info: ::core::option::Option<UsersInfo>,
     #[prost(
         oneof = "server_to_client_response::Payload",
-        tags = "100, 101, 102, 103, 104, 105"
+        tags = "100, 101, 102, 103, 104"
     )]
     pub payload: ::core::option::Option<server_to_client_response::Payload>,
 }
@@ -136,8 +130,6 @@ pub mod server_to_client_response {
         PassTurn(super::PassTurnResponse),
         #[prost(message, tag = "104")]
         GameStart(super::GameStartResponse),
-        #[prost(message, tag = "105")]
-        UsersInfo(super::UsersInfo),
     }
 }
 /// * 바둑판 턴 정보

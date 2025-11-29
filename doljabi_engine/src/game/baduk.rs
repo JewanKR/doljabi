@@ -4,16 +4,18 @@ use crate::game::badukboard::*;
 
 #[derive(Clone, Debug, Builder)]
 pub struct Baduk {
-    board: BadukBoard,
+    pub(crate) board: BadukBoard,
+    pub(crate) winner: Option<Color>,
 
-    black_caught_stone: u16,
-    white_caught_stone: u16,
+    pub(crate)black_caught_stone: u16,
+    pub(crate)white_caught_stone: u16,
 }
 
 impl Baduk {
     pub fn new() -> Self {
         Self {
             board: BadukBoard::new(board_size(BoardType::Baduk)),
+            winner: None,
 
             black_caught_stone: 0,
             white_caught_stone: 0,
@@ -22,6 +24,14 @@ impl Baduk {
 
     pub fn is_board(&self) -> &BadukBoard {
         &self.board
+    }
+
+    pub fn winner(&self) -> Option<Color> {
+        self.winner.clone()
+    }
+    
+    pub fn set_winner(&mut self, color: Color) {
+        self.winner = Some(color);
     }
 
     fn adjacent_coordinates(&self, coordinate: u16) -> Vec<u16> {
