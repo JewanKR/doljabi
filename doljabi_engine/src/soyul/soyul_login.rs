@@ -1,5 +1,6 @@
 use axum::{extract::State, Json, http::StatusCode};
 use serde::{Deserialize, Serialize};
+#[cfg(debug_assertions)]
 use serde_json;
 use rusqlite::{self, params, Connection};
 use argon2::{
@@ -45,8 +46,6 @@ fn verify_argon2(input: &str, hashed: &str) -> std::result::Result<bool, passwor
 //
 #[derive(Serialize, ToSchema, Debug)]
 pub struct UserProfile {
-    pub id: u64,
-    pub login_id: String,
     pub username: Option<String>, // NULL 가능성 있으니까 Option
     pub rating: i32,
     // 나중에 필드 더 추가 가능 (예: created_at, bio 등)
@@ -58,17 +57,15 @@ fn get_user_profile_by_id(
     user_id: u64,
 ) -> rusqlite::Result<Option<UserProfile>> {
     let mut stmt = conn.prepare(
-        "SELECT id, login_id, username, rating
+        "SELECT username, rating
          FROM users
          WHERE id = ?1",
     )?;
 
     let result = stmt.query_row([user_id as i64], |row| {
         Ok(UserProfile {
-            id: row.get::<_, i64>(0)? as u64,
-            login_id: row.get(1)?,
-            username: row.get(2)?,
-            rating: row.get(3)?,
+            username: row.get(0)?,
+            rating: row.get(1)?,
         })
     });
 
@@ -171,19 +168,6 @@ pub struct LoginResponse {
 #[derive(Deserialize, ToSchema)]
 pub struct SessionCheckForm {
     pub session_key: String,
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct SessionCheckResponse {
-    pub exists: bool,
-    pub user_id: Option<u64>,
-}
-
-// 🔹 유저 프로필 조회용 요청/응답
-#[derive(Deserialize, ToSchema)]
-pub struct UserProfileRequest {
-    /// 조회할 유저의 고유 ID
-    pub user_id: u64,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -327,6 +311,7 @@ pub async fn login(
             };
 
             // 🔍 디버깅: 응답 JSON을 문자열로 찍기
+            #[cfg(debug_assertions)]
             let json_str = serde_json::to_string(&resp).unwrap();
             #[cfg(debug_assertions)]
             println!("[DEBUG] login response JSON = {}", json_str);
@@ -341,6 +326,7 @@ pub async fn login(
                 message: "아이디 또는 비밀번호가 올바르지 않습니다.".into(),
                 session_key: None,
             };
+            #[cfg(debug_assertions)]
             let json_str = serde_json::to_string(&resp).unwrap();
             #[cfg(debug_assertions)]
             println!("[DEBUG] login response JSON = {}", json_str);
@@ -354,6 +340,7 @@ pub async fn login(
                 message: "로그인 처리 중 오류가 발생했습니다.".into(),
                 session_key: None,
             };
+            #[cfg(debug_assertions)]
             let json_str = serde_json::to_string(&resp).unwrap();
             #[cfg(debug_assertions)]
             println!("[DEBUG] login response JSON = {}", json_str);
@@ -369,13 +356,14 @@ pub async fn login(
     tag = "auth",
     request_body = SessionCheckForm,
     responses(
-        (status = 200, description = "세션 존재 여부 확인", body = SessionCheckResponse),
+        (status = 200, description = "세션 존재 여부 확인"),
+        (status = 400, description = "세션 키가 올바르지 않음"),
     )
 )]
 pub async fn session_check(
     State(session_store): State<SessionStore>,
     Json(form): Json<SessionCheckForm>,
-) -> (StatusCode, Json<SessionCheckResponse>) {
+) -> StatusCode {
     let user_id_opt = get_user_id_by_session(&session_store, &form.session_key).await;
 
     // 🔍 디버깅: 세션키 → user_id 매핑 출력
@@ -392,20 +380,18 @@ pub async fn session_check(
         ),
     };
 
-    (
-        StatusCode::OK,
-        Json(SessionCheckResponse {
-            exists: user_id_opt.is_some(),
-            user_id: user_id_opt,
-        }),
-    )
+    if user_id_opt.is_some() {
+        StatusCode::OK
+    } else {
+        StatusCode::BAD_REQUEST
+    }
 }
 
 #[utoipa::path(
     post,
     path = "/api/user/profile",
     tag = "user",
-    request_body = UserProfileRequest,
+    request_body = SessionCheckForm,
     responses(
         (status = 200, description = "유저 정보 조회 성공", body = UserProfileResponse),
         (status = 404, description = "해당 유저 없음", body = UserProfileResponse),
@@ -413,8 +399,22 @@ pub async fn session_check(
     )
 )]
 pub async fn get_user_profile_handler(
-    Json(req): Json<UserProfileRequest>,
+    State(session_store): State<SessionStore>,
+    Json(form): Json<SessionCheckForm>,
 ) -> (StatusCode, Json<UserProfileResponse>) {
+    let user_id_opt = get_user_id_by_session(&session_store, &form.session_key).await;
+
+    if user_id_opt.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(UserProfileResponse {
+                success: false,
+                message: "세션 키가 올바르지 않습니다.".into(),
+                user: None,
+            }),
+        );
+    }
+
     let conn = match Connection::open("mydb.db") {
         Ok(conn) => conn,
         Err(e) => {
@@ -430,7 +430,7 @@ pub async fn get_user_profile_handler(
         }
     };
 
-    match get_user_profile_by_id(&conn, req.user_id) {
+    match get_user_profile_by_id(&conn, user_id_opt.unwrap()) {
         Ok(Some(profile)) => {
             println!("✅ 유저 정보 조회 성공: {:?}", profile);
             (
@@ -443,7 +443,7 @@ pub async fn get_user_profile_handler(
             )
         }
         Ok(None) => {
-            println!("❌ 유저 정보 없음: user_id = {}", req.user_id);
+            eprintln!("❌ 유저 정보 없음");
             (
                 StatusCode::NOT_FOUND,
                 Json(UserProfileResponse {
