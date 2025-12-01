@@ -4,4 +4,4 @@ private/
 .cursor
 
 *.db
-target
+target/
