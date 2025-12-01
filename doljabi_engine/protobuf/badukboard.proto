@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package badukboardproto;
+
+/* 바둑, 오목 비트보드를 그대로 직렬화한 상태 */
+message BadukBoardState {
+    repeated fixed64 black = 1;
+    repeated fixed64 white = 2;
+}
+
+/** 플레이어 시간 정보 */
+message PlayerTimeInfo {
+    uint64 main_time = 1;
+    uint64 fischer_time = 2;
+    uint32 remaining_overtime = 3;
+    uint64 overtime = 4;
+}
+
+/** 바둑판 턴 정보 */
+enum Color {
+    COLOR_BLACK = 0;
+    COLOR_WHITE = 1;
+    COLOR_FREE = 2;
+    COLOR_ERROR = 3;
+}
+
+/** 보드 시간 턴 정보 */
+message GameState {
+    BadukBoardState board = 1;
+    optional PlayerTimeInfo black_time = 2;
+    optional PlayerTimeInfo white_time = 3;
+}
+
+message ChaksuRequest {
+    uint32 coordinate = 1;
+}
+
+message DrawOfferRequest {}
+
+message ResignRequest {}
+
+message PassTurnRequest {}
+
+message GameStartRequest {}
+
+message ClientToServerRequest {
+    string session_key = 1;
+    oneof payload {
+        ChaksuRequest coordinate = 100;
+        ResignRequest resign = 101;
+        DrawOfferRequest draw_offer = 102;
+        PassTurnRequest pass_turn = 103;
+        GameStartRequest gamestart = 104;
+    }
+}
+
+message ChaksuResponse {
+    bool success = 1;
+}
+
+message ResignResponse {}
+
+message DrawOfferResponse {
+    string user_name = 1;
+}
+
+message PassTurnResponse {}
+
+message UserInfo {
+    string user_name = 1;
+    uint32 rating = 2;
+}
+
+message GameStartResponse {}
+
+message UsersInfo {
+    optional UserInfo black = 1;
+    optional UserInfo white = 2;
+}
+
+message ServerToClientResponse {
+    bool response_type = 1;
+    Color turn = 2;
+    optional Color the_winner = 3;
+    optional GameState game_state = 4;
+    optional UsersInfo users_info = 5;
+    oneof payload {
+        ChaksuResponse coordinate = 100;
+        ResignResponse resign = 101;
+        DrawOfferResponse draw_offer = 102;
+        PassTurnResponse pass_turn = 103;
+        GameStartResponse game_start = 104;
+    }
+}
+

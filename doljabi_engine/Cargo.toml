@@ -12,7 +12,7 @@ tokio-tungstenite = "*"
 futures-util = "0.3"
 axum = { version = "0.8", features = ["ws"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["fs"] }
+tower-http = { version = "0.6", features = ["fs", "cors"] }
 hyper = { version = "1.7", features = ["full"] }
 
 # 직렬화/역직렬화
@@ -20,7 +20,9 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 utoipa = { version = "5", features = ["axum_extras"]}
 utoipa-axum = "0.2"
-utoipa-swagger-ui = { version = "9", features = ["axum"] }
+base64 = "0.22"
+# utoipa-swagger-ui = { version = "9", features = ["axum"] }
+prost = "0.14"
 
 # 오류 처리
 tracing = "0.1"

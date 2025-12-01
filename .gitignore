@@ -1,6 +1,7 @@
 # 개인 파일
 private/
 .vscode
+.cursor
 
 *.db
 target/

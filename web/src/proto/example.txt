@@ -1,0 +1,109 @@
+/**
+ * Protocol Buffer 사용 예제 - 방법 1: 컴파일된 모듈 사용
+ * 
+ * 사용하기 전에 먼저 다음 명령어를 실행하세요:
+ * npm run generate:proto
+ */
+
+// 방법 1: 컴파일된 모듈 사용 (권장)
+// npm run generate:proto 실행 후 주석 해제
+
+import { badukboardproto } from "./badukboard";
+
+
+// 클라이언트에서 서버로 요청 생성 및 인코딩 예제
+
+export function createClientToServerRequest(sessionKey: string, coordinate: number): Uint8Array {
+  // npm run generate:proto 실행 후 아래 주석 해제
+  
+  const request = badukboardproto.ClientToServerRequest.create({
+    sessionKey: sessionKey,
+    coordinate: badukboardproto.ChaksuRequest.create({
+      coordinate: coordinate
+    })
+  });
+  return badukboardproto.ClientToServerRequest.encode(request).finish();
+  
+  
+  throw new Error('먼저 npm run generate:proto를 실행하고 import를 활성화하세요');
+}
+
+/**
+ * 서버에서 받은 응답 디코딩 예제
+ */
+export function decodeServerResponse(buffer: Uint8Array): any {
+  // npm run generate:proto 실행 후 아래 주석 해제
+  
+  const response = badukboardproto.ServerToClientResponse.decode(buffer);
+  return badukboardproto.ServerToClientResponse.toObject(response, {
+    longs: String,
+    enums: String,
+    bytes: String,
+  });
+  
+  
+  throw new Error('먼저 npm run generate:proto를 실행하고 import를 활성화하세요');
+}
+
+
+//WebSocket으로 요청 전송 예제
+ 
+export function sendRequestViaWebSocket(
+  websocket: WebSocket,
+  sessionKey: string,
+  requestType: 'coordinate' | 'resign' | 'drawOffer' | 'passTurn',
+  coordinate?: number
+) {
+  if (websocket.readyState !== WebSocket.OPEN) {
+    throw new Error("WebSocket이 연결되지 않았습니다.");
+  }
+
+  // npm run generate:proto 실행 후 아래 주석 해제
+  
+  let payload: any = {};
+
+  switch (requestType) {
+    case 'coordinate':
+      if (coordinate === undefined) {
+        throw new Error('coordinate가 필요합니다');
+      }
+      payload.coordinate = badukboardproto.ChaksuRequest.create({
+        coordinate: coordinate
+      });
+      break;
+    case 'resign':
+      payload.resign = badukboardproto.ResignRequest.create({});
+      break;
+    case 'drawOffer':
+      payload.drawOffer = badukboardproto.DrawOfferRequest.create({});
+      break;
+    case 'passTurn':
+      payload.passTurn = badukboardproto.PassTurnRequest.create({});
+      break;
+  }
+
+  const request = badukboardproto.ClientToServerRequest.create({
+    sessionKey: sessionKey,
+    ...payload
+  });
+
+  const buffer = badukboardproto.ClientToServerRequest.encode(request).finish();
+  websocket.send(buffer);
+  
+  
+  throw new Error('먼저 npm run generate:proto를 실행하고 import를 활성화하세요');
+}
+
+
+// WebSocket 메시지 수신 처리 예제
+
+export function handleWebSocketMessage(websocket: WebSocket, onMessage: (response: any) => void) {
+  websocket.onmessage = (event) => {
+    if (event.data instanceof ArrayBuffer || event.data instanceof Uint8Array) {
+      const buffer = new Uint8Array(event.data);
+      const response = decodeServerResponse(buffer);
+      onMessage(response);
+    }
+  };
+}
+
