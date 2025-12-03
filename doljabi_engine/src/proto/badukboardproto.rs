@@ -2,9 +2,9 @@
 /// 바둑, 오목 비트보드를 그대로 직렬화한 상태
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BadukBoardState {
-    #[prost(fixed64, repeated, tag = "1")]
+    #[prost(fixed64, repeated, packed = "false", tag = "1")]
     pub black: ::prost::alloc::vec::Vec<u64>,
-    #[prost(fixed64, repeated, tag = "2")]
+    #[prost(fixed64, repeated, packed = "false", tag = "2")]
     pub white: ::prost::alloc::vec::Vec<u64>,
 }
 /// * 플레이어 시간 정보

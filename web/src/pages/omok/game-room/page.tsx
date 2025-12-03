@@ -1,4 +1,5 @@
-﻿import { useNavigate, useLocation } from 'react-router-dom';
+﻿import { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ClientToServerRequest,
   ServerToClientResponse,
@@ -193,12 +194,6 @@ export default function OmokGameRoom() {
         }
       }));
     }
-
-    // 턴 정보 업데이트
-    const turnColor = colorEnumToString(gameState.turn);
-    if (turnColor) {
-      setCurrentTurn(turnColor);
-    }
   };
 
   // 타이머 관리 (게임 시작 후에만 작동)
@@ -250,7 +245,8 @@ export default function OmokGameRoom() {
     }
 
     // WebSocket 연결 (바이너리 프로토콜)
-    const wsUrl = `ws://localhost:27000/api/room/${enterCode}/session/${sessionKey}`;
+    const host = window.location.hostname;
+    const wsUrl = `wss://${host}/ws/room/${enterCode}/session/${sessionKey}`;
     console.log('🔌 WebSocket 연결 시도:', wsUrl);
     const ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';
@@ -364,10 +360,10 @@ export default function OmokGameRoom() {
         }
 
         // 게임 시작 응답에서 usersInfo 처리 (현재는 서버에서 보내지 않지만 준비)
-        if (response.gameStart?.usersInfo) {
+        if (response.usersInfo) {
           // TODO: 서버에서 gameStart.usersInfo를 보내는 경우 처리
           // 현재는 서버에서 usersInfo를 보내지 않지만, 받을 수 있는 구조는 준비됨
-          console.log('게임 시작 시 플레이어 정보:', response.gameStart.usersInfo);
+          console.log('게임 시작 시 플레이어 정보:', response.usersInfo);
         }
         
         // 착수 응답 처리 (coordinate 응답)
