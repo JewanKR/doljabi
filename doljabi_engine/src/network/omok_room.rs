@@ -119,6 +119,7 @@ impl GameLogic for OmokRoom {
                     self.game.set_winner(self.game.board.is_turn().reverse());
                     Duration::from_secs(u64::MAX)
                 }
+
             }
             None => Duration::from_secs(u64::MAX)
         }
@@ -218,8 +219,17 @@ impl GameLogic for OmokRoom {
                 let turn =  self.game.is_board().is_turn();
                 let mut game_room_status = GameRoomResponse::None;
 
+                #[cfg(debug_assertions)]
+                println!("🎯 착수 요청: user_id={}, coordinate={}, 현재 턴={:?}", user_id, chaksu_request.coordinate, turn);
+
                 // 착수를 시도하는 사람의 턴인지 확인
-                if self.players.check_id_to_color(user_id) != turn {
+                let player_color = self.players.check_id_to_color(user_id);
+                #[cfg(debug_assertions)]
+                println!("   플레이어 색상: {:?}, 현재 턴: {:?}", player_color, turn);
+                
+                if player_color != turn {
+                    #[cfg(debug_assertions)]
+                    println!("❌ 차례가 아닙니다!");
                     return response;
                 }
 
@@ -227,9 +237,25 @@ impl GameLogic for OmokRoom {
                 let success = match self.game.chaksu(chaksu_request.coordinate as u16, true) {
                     Ok(_) => {
                         game_room_status = GameRoomResponse::ChangeTurn;
+                        #[cfg(debug_assertions)]
+                        println!("✅ 착수 성공! 턴 변경됨");
                         true
                     }
-                    Err(_) => {false}
+                    Err(e) => {
+                        #[cfg(debug_assertions)]
+                        match e {
+                            crate::game::badukboard::BadukBoardError::BannedChaksu => {
+                                println!("⛔ 착수 실패: 금수!");
+                            }
+                            crate::game::badukboard::BadukBoardError::OverLap => {
+                                println!("❌ 착수 실패: 이미 돌이 있음");
+                            }
+                            _ => {
+                                println!("❌ 착수 실패: {:?}", e);
+                            }
+                        }
+                        false
+                    }
                 };
 
                 let the_winner = match self.game.winner() {
@@ -323,3 +349,4 @@ impl GameLogic for OmokRoom {
         response
     }
 }
+

@@ -2,18 +2,17 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCreateRoomRequest } from '../../../api/endpoints/default/default';
 import { SessionManager } from '../../../api/axios-instance';
-import { saveRoomConfig } from '../game-room/enter-room-config';
 import type { BadukBoardGameConfig } from '../../../api/model';
 
-export default function OmokCreateRoom() {
+export default function BadukCreateRoom() {
   const navigate = useNavigate();
   const createRoomMutation = useCreateRoomRequest();
 
   const [gameConfig, setGameConfig] = useState<BadukBoardGameConfig>({
-    main_time: 600,
-    fischer_time: 10,
-    overtime: 30,
-    remaining_overtime: 3
+    main_time: 1800,      // 30분
+    fischer_time: 30,     // 30초
+    overtime: 60,         // 60초
+    remaining_overtime: 3 // 3회
   });
 
   const handleSliderChange = (field: keyof BadukBoardGameConfig, value: number) => {
@@ -21,41 +20,43 @@ export default function OmokCreateRoom() {
   };
 
   const handleCreateRoom = async () => {
+    console.log('🎯 바둑 방 생성 시작...');
+    
     try {
       const sessionKey = SessionManager.getSessionKey();
-      
+      console.log('🔑 세션키:', sessionKey ? '있음' : '없음');
+
       if (!sessionKey) {
+        console.error('❌ 로그인 필요');
         alert('로그인이 필요합니다.');
         navigate('/login');
         return;
       }
 
       const requestData = {
-        game_type: 'omok' as const,
+        game_type: 'baduk' as const,
         game_config: gameConfig
       };
+      console.log('📤 방 생성 요청:', requestData);
 
       const response = await createRoomMutation.mutateAsync({
         data: requestData
       });
+      console.log('✅ 방 생성 API 응답:', response);
 
-      // 방 생성 설정 저장
-      const roomConfig = {
+      // 방 정보 저장
+      localStorage.setItem('baduk_room_data', JSON.stringify({
         enter_code: response.enter_code,
         session_key: sessionKey,
         game_config: gameConfig,
         isHost: true
-      };
+      }));
 
-      saveRoomConfig(roomConfig);
-
-      console.log('방 생성 성공:', response);
-
-      // 방 생성 성공 시 게임방으로 이동
-      navigate('/omok/game-room');
-    } catch (error) {
-      console.error('방 생성 실패:', error);
-      alert('방 생성에 실패했습니다.');
+      console.log('🚀 게임방으로 이동:', response.enter_code);
+      navigate('/baduk/game-room');
+    } catch (error: any) {
+      console.error('❌ 방 생성 실패:', error);
+      alert('방 생성에 실패했습니다: ' + (error.response?.data?.message || error.message));
     }
   };
 
@@ -76,18 +77,18 @@ export default function OmokCreateRoom() {
     <div className="min-h-screen text-white p-8" style={{ backgroundColor: '#0b0c10' }}>
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2" style={{ color: '#e8eaf0' }}>오목 방 만들기</h1>
+          <h1 className="text-3xl font-bold mb-2" style={{ color: '#e8eaf0' }}>바둑 방 만들기</h1>
           <p style={{ color: '#9aa1ad' }}>게임 설정을 조정하고 방을 생성하세요</p>
         </div>
 
         {/* 게임 설정 */}
         <div className="rounded-xl p-6 border mb-6"
-             style={{ 
-               backgroundColor: 'rgba(22,22,28,0.6)', 
-               borderColor: '#2a2a33'
-             }}>
+          style={{
+            backgroundColor: 'rgba(22,22,28,0.6)',
+            borderColor: '#2a2a33'
+          }}>
           <h3 className="text-xl font-bold mb-6" style={{ color: '#e8eaf0' }}>게임 설정</h3>
-          
+
           <div className="grid grid-cols-2 gap-8">
             {/* 기본 시간 설정 */}
             <div>
@@ -189,30 +190,22 @@ export default function OmokCreateRoom() {
 
         {/* 방 만들기 버튼 */}
         <div className="flex justify-center gap-4">
-          <button 
+          <button
             onClick={() => navigate(-1)}
             className="px-8 py-4 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap border"
-            style={{ 
+            style={{
               backgroundColor: '#141822',
               borderColor: '#2a2a33',
               color: '#e8eaf0'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#ef4444';
-              e.currentTarget.style.color = '#ef4444';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = '#2a2a33';
-              e.currentTarget.style.color = '#e8eaf0';
             }}>
             취소
           </button>
 
-          <button 
+          <button
             onClick={handleCreateRoom}
             disabled={createRoomMutation.isPending}
             className="px-8 py-4 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap text-white text-lg"
-            style={{ 
+            style={{
               background: createRoomMutation.isPending ? '#2a2a33' : 'linear-gradient(180deg, #1f6feb, #1b4fd8)',
               boxShadow: createRoomMutation.isPending ? 'none' : '0 2px 8px rgba(0,0,0,0.3)',
               opacity: createRoomMutation.isPending ? 0.5 : 1,
@@ -225,7 +218,7 @@ export default function OmokCreateRoom() {
         {/* 에러 메시지 */}
         {createRoomMutation.isError && (
           <div className="mt-4 p-4 rounded-lg text-center"
-               style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
+            style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
             방 생성에 실패했습니다. 다시 시도해주세요.
           </div>
         )}

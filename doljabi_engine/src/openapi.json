@@ -179,14 +179,10 @@
         },
         "responses": {
           "200": {
-            "description": "세션 존재 여부 확인",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionCheckResponse"
-                }
-              }
-            }
+            "description": "세션 존재 여부 확인"
+          },
+          "400": {
+            "description": "세션 키가 올바르지 않음"
           }
         }
       }
@@ -251,7 +247,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UserProfileRequest"
+                "$ref": "#/components/schemas/SessionCheckForm"
               }
             }
           },
@@ -442,25 +438,6 @@
           }
         }
       },
-      "SessionCheckResponse": {
-        "type": "object",
-        "required": [
-          "exists"
-        ],
-        "properties": {
-          "exists": {
-            "type": "boolean"
-          },
-          "user_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "minimum": 0
-          }
-        }
-      },
       "SignupForm": {
         "type": "object",
         "required": [
@@ -486,19 +463,9 @@
       "UserProfile": {
         "type": "object",
         "required": [
-          "id",
-          "login_id",
           "rating"
         ],
         "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
-          },
-          "login_id": {
-            "type": "string"
-          },
           "rating": {
             "type": "integer",
             "format": "int32"
@@ -508,20 +475,6 @@
               "string",
               "null"
             ]
-          }
-        }
-      },
-      "UserProfileRequest": {
-        "type": "object",
-        "required": [
-          "user_id"
-        ],
-        "properties": {
-          "user_id": {
-            "type": "integer",
-            "format": "int64",
-            "description": "조회할 유저의 고유 ID",
-            "minimum": 0
           }
         }
       },

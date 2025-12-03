@@ -1,195 +1,117 @@
+
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-  ClientToServerRequest,
-  ServerToClientResponse,
-  GameState,
-  Color
-} from '../../../ts-proto/badukboard';
-import { SessionManager } from '../../../api/axios-instance';
-import { loadRoomConfig, getEnterCode, getSessionKey, getGameConfig, getIsHost, clearRoomConfig } from './enter-room-config';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface Player {
   nickname: string;
-  rating: number | string;
+  rating: number;
   color: 'black' | 'white';
-  mainTime: number;
-  byoyomiTime: number;
+  mainTime: number; // 초 단위
+  byoyomiTime: number; // 초 단위
   byoyomiCount: number;
 }
 
-export default function OmokGameRoom() {
+export default function GameRoom() {
   const navigate = useNavigate();
-
-  // 방 설정 불러오기
-  const roomConfig = loadRoomConfig();
-  const enterCode = getEnterCode();
-  const sessionKey = getSessionKey();
-  const gameConfig = getGameConfig();
-  const isHost = getIsHost();
-
-  const roomCode = enterCode ? String(enterCode) : 'OMOK-2024';
-
-  // 컴포넌트 마운트 시 방 데이터 로깅
-  useEffect(() => {
-    if (roomConfig) {
-      console.log('게임룸 설정:', roomConfig);
-    }
-  }, [roomConfig]);
+  const location = useLocation();
+  const { roomCode = 'BADUK-2024', gameSettings, players: initialPlayers, isHost, hasOpponent: initialHasOpponent } = location.state || {};
   
-  const [boardSize] = useState(15);
+  const [boardSize] = useState(19);
   const [board, setBoard] = useState<(null | 'black' | 'white')[][]>(
-    Array(15)
+    Array(19)
       .fill(null)
-      .map(() => Array(15).fill(null))
+      .map(() => Array(19).fill(null))
   );
 
-  const [gameStarted, setGameStarted] = useState(false);
   const [currentTurn, setCurrentTurn] = useState<'black' | 'white'>('black');
   const [selectedPosition, setSelectedPosition] = useState<{ row: number; col: number } | null>(null);
-  const [myColor] = useState<'black' | 'white'>('black');
+  const [myColor] = useState<'black' | 'white'>('black'); // 내 돌 색상
+  const [gameStarted, setGameStarted] = useState(false);
+  const [hasOpponent, setHasOpponent] = useState(initialHasOpponent || false);
 
-  const [players, setPlayers] = useState<{ black: Player; white: Player }>({
-    black: {
-      nickname: '---',
-      rating: '---' as any,
-      color: 'black',
-      mainTime: 1800,
-      byoyomiTime: 30,
-      byoyomiCount: 3,
-    },
-    white: {
-      nickname: '---',
-      rating: '---' as any,
-      color: 'white',
-      mainTime: 1800,
-      byoyomiTime: 30,
-      byoyomiCount: 3,
-    },
+  const [players, setPlayers] = useState<{ black: Player; white: Player }>(() => {
+    if (initialPlayers && gameSettings) {
+      return {
+        black: {
+          nickname: initialPlayers[0]?.nickname || '플레이어1',
+          rating: initialPlayers[0]?.rating || 1850,
+          color: 'black',
+          mainTime: gameSettings.useMainTime ? gameSettings.mainTime : 0,
+          byoyomiTime: gameSettings.useByoyomiTime ? gameSettings.byoyomiTime : 0,
+          byoyomiCount: gameSettings.useByoyomiCount ? gameSettings.byoyomiCount : 0,
+        },
+        white: {
+          nickname: initialPlayers[1]?.nickname || '플레이어2',
+          rating: initialPlayers[1]?.rating || 1720,
+          color: 'white',
+          mainTime: gameSettings.useMainTime ? gameSettings.mainTime : 0,
+          byoyomiTime: gameSettings.useByoyomiTime ? gameSettings.byoyomiTime : 0,
+          byoyomiCount: gameSettings.useByoyomiCount ? gameSettings.byoyomiCount : 0,
+        }
+      };
+    }
+    return {
+      black: {
+        nickname: '플레이어1',
+        rating: 1850,
+        color: 'black',
+        mainTime: 1800,
+        byoyomiTime: 30,
+        byoyomiCount: 3,
+      },
+      white: {
+        nickname: '플레이어2',
+        rating: 1720,
+        color: 'white',
+        mainTime: 1800,
+        byoyomiTime: 30,
+        byoyomiCount: 3,
+      },
+    };
   });
 
-  const [initialTime] = useState({ black: 1800, white: 1800 });
+  const [initialTime] = useState(() => ({
+    black: players.black.mainTime,
+    white: players.white.mainTime
+  }));
   const [isInByoyomi, setIsInByoyomi] = useState({ black: false, white: false });
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 비트보드를 2D 배열로 변환하는 유틸리티 함수 (15x15 오목판용)
-  const bitboardToBoardArray = (
-    blackBitboard: number[] | null | undefined,
-    whiteBitboard: number[] | null | undefined,
-    boardSize: number = 15
-  ): (null | 'black' | 'white')[][] => {
-    const board: (null | 'black' | 'white')[][] = Array(boardSize)
-      .fill(null)
-      .map(() => Array(boardSize).fill(null));
-
-    // 비트보드를 숫자로 변환
-    const parseU64 = (value: number): bigint => {
-      return BigInt(value);
-    };
-
-    // black 비트보드 처리
-    if (blackBitboard && Array.isArray(blackBitboard)) {
-      blackBitboard.forEach((u64, arrayIndex) => {
-        const bits = parseU64(u64);
-        for (let bitIndex = 0; bitIndex < 64; bitIndex++) {
-          if ((bits & (1n << BigInt(bitIndex))) !== 0n) {
-            const coordinate = arrayIndex * 64 + bitIndex;
-            if (coordinate < boardSize * boardSize) {
-              const row = Math.floor(coordinate / boardSize);
-              const col = coordinate % boardSize;
-              if (row >= 0 && row < boardSize && col >= 0 && col < boardSize) {
-                board[row][col] = 'black';
-              }
-            }
+  // 상대방 입장 시뮬레이션 (방장이 혼자 있을 때)
+  useEffect(() => {
+    if (isHost && !hasOpponent) {
+      const timer = setTimeout(() => {
+        setHasOpponent(true);
+        setPlayers(prev => ({
+          ...prev,
+          white: {
+            ...prev.white,
+            nickname: '상대방플레이어',
+            rating: 1680
           }
-        }
-      });
+        }));
+      }, 8000); // 8초 후 상대방 입장
+
+      return () => clearTimeout(timer);
     }
+  }, [isHost, hasOpponent]);
 
-    // white 비트보드 처리
-    if (whiteBitboard && Array.isArray(whiteBitboard)) {
-      whiteBitboard.forEach((u64, arrayIndex) => {
-        const bits = parseU64(u64);
-        for (let bitIndex = 0; bitIndex < 64; bitIndex++) {
-          if ((bits & (1n << BigInt(bitIndex))) !== 0n) {
-            const coordinate = arrayIndex * 64 + bitIndex;
-            if (coordinate < boardSize * boardSize) {
-              const row = Math.floor(coordinate / boardSize);
-              const col = coordinate % boardSize;
-              if (row >= 0 && row < boardSize && col >= 0 && col < boardSize) {
-                board[row][col] = 'white';
-              }
-            }
-          }
-        }
-      });
+  // 게임 시작 로직 (상대방이 있을 때만)
+  useEffect(() => {
+    if (hasOpponent && !gameStarted) {
+      const timer = setTimeout(() => {
+        setGameStarted(true);
+      }, 3000); // 상대방 입장 후 3초 뒤 게임 시작
+
+      return () => clearTimeout(timer);
     }
+  }, [hasOpponent, gameStarted]);
 
-    return board;
-  };
-
-  // Color enum을 'black' | 'white'로 변환하는 헬퍼 함수
-  const colorEnumToString = (color: Color): 'black' | 'white' | null => {
-    switch (color) {
-      case Color.COLOR_BLACK:
-        return 'black';
-      case Color.COLOR_WHITE:
-        return 'white';
-      default:
-        return null;
-    }
-  };
-
-  // GameState를 일관되게 처리하는 공통 함수
-  const handleGameState = (gameState: GameState | undefined) => {
-    if (!gameState) return;
-
-    // 보드 상태 업데이트
-    if (gameState.board) {
-      const newBoard = bitboardToBoardArray(
-        gameState.board.black,
-        gameState.board.white,
-        boardSize
-      );
-      setBoard(newBoard);
-    }
-
-    // 시간 정보 업데이트
-    if (gameState.blackTime) {
-      setPlayers(prev => ({
-        ...prev,
-        black: {
-          ...prev.black,
-          mainTime: gameState.blackTime!.mainTime,
-          byoyomiTime: gameState.blackTime!.overtime,
-          byoyomiCount: gameState.blackTime!.remainingOvertime
-        }
-      }));
-    }
-
-    if (gameState.whiteTime) {
-      setPlayers(prev => ({
-        ...prev,
-        white: {
-          ...prev.white,
-          mainTime: gameState.whiteTime!.mainTime,
-          byoyomiTime: gameState.whiteTime!.overtime,
-          byoyomiCount: gameState.whiteTime!.remainingOvertime
-        }
-      }));
-    }
-
-    // 턴 정보 업데이트
-    const turnColor = colorEnumToString(gameState.turn);
-    if (turnColor) {
-      setCurrentTurn(turnColor);
-    }
-  };
-
-  // 타이머 관리 (게임 시작 후에만 작동)
+  // 타이머 관리
   useEffect(() => {
     if (!gameStarted) return;
 
+    // 클라이언트 타이머 시작
     timerRef.current = setInterval(() => {
       setPlayers(prev => {
         const newPlayers = { ...prev };
@@ -204,7 +126,7 @@ export default function OmokGameRoom() {
           current.byoyomiTime -= 1;
           if (current.byoyomiTime === 0 && current.byoyomiCount > 0) {
             current.byoyomiCount -= 1;
-            current.byoyomiTime = 30;
+            current.byoyomiTime = gameSettings?.useByoyomiTime ? gameSettings.byoyomiTime : 30; // 초읽기 시간 리셋
           }
         }
 
@@ -217,141 +139,7 @@ export default function OmokGameRoom() {
         clearInterval(timerRef.current);
       }
     };
-  }, [currentTurn, gameStarted]);
-
-  // WebSocket 연결 및 Protobuf 통신
-  useEffect(() => {
-    // 방 설정에서 데이터 가져오기
-    let enter_code = getEnterCode();
-    let session_key = getSessionKey();
-
-    // 세션키가 없으면 SessionManager에서 가져오기 (fallback)
-    if (!session_key) {
-      session_key = SessionManager.getSessionKey() || null;
-    }
-
-    if (!enter_code || !session_key) {
-      console.error('방 정보가 없습니다. enter_code:', enter_code, 'session_key:', session_key);
-      return;
-    }
-
-    // WebSocket 연결 (바이너리 프로토콜)
-    const wsUrl = `ws://localhost:27000/api/room/${enter_code}/session/${session_key}`;
-    const ws = new WebSocket(wsUrl);
-    ws.binaryType = 'arraybuffer';
-    
-    ws.onopen = () => {
-      console.log('WebSocket 연결됨');
-      
-      // 게임 시작 요청 전송 (protobuf 인코딩)
-      const gameStartRequest: ClientToServerRequest = {
-        sessionKey: session_key,
-        gamestart: {}
-      };
-      const encoded = ClientToServerRequest.encode(gameStartRequest).finish();
-      ws.send(encoded);
-    };
-    
-    ws.onmessage = (event) => {
-      try {
-        // 서버 메시지 수신 (protobuf 디코딩)
-        const buffer = new Uint8Array(event.data);
-        const response = ServerToClientResponse.decode(buffer);
-        console.log('서버 응답:', response);
-        
-        // 게임 시작 응답 처리
-        if (response.gameStart) {
-          const gameStartResponse = response.gameStart;
-          if (gameStartResponse.gameStart) {
-            // 게임 시작 성공
-            setGameStarted(true);
-            handleGameState(gameStartResponse.gameStart);
-            console.log('게임 시작 성공');
-          } else {
-            // 게임 시작 실패 (gameStart는 있지만 gameStart.gameStart가 없음)
-            console.warn('게임 시작 실패: gameStart 응답이 있지만 gameState가 없습니다.');
-          }
-        }
-        /* else if (response.responseType === false) {
-          // 게임 시작 실패 (responseType이 false이고 gameStart가 undefined)
-          alert('게임 시작에 실패했습니다. 플레이어가 부족합니다.');
-          console.warn('게임 시작 실패: 플레이어가 부족합니다.');
-        }
-        */
-
-        // 플레이어 정보 업데이트 (usersInfo 응답 처리)
-        // TODO: 서버에서 usersInfo를 보내는 로직이 구현되면 활성화
-        // 현재는 서버에서 usersInfo를 보내지 않지만, 받을 수 있는 구조는 준비됨
-        if (response.usersInfo) {
-          console.log('플레이어 정보:', response.usersInfo);
-          
-          // black 플레이어 정보 업데이트
-          if (response.usersInfo.black) {
-            setPlayers(prev => ({
-              ...prev,
-              black: {
-                ...prev.black,
-                nickname: response.usersInfo!.black!.userName || 'black',
-                rating: response.usersInfo!.black!.rating || ('---' as any),
-              }
-            }));
-          }
-          
-          // white 플레이어 정보 업데이트
-          if (response.usersInfo.white) {
-            setPlayers(prev => ({
-              ...prev,
-              white: {
-                ...prev.white,
-                nickname: response.usersInfo!.white!.userName || 'white',
-                rating: response.usersInfo!.white!.rating || ('---' as any),
-              }
-            }));
-          }
-        }
-
-        // 게임 시작 응답에서 usersInfo 처리 (현재는 서버에서 보내지 않지만 준비)
-        if (response.gameStart?.usersInfo) {
-          // TODO: 서버에서 gameStart.usersInfo를 보내는 경우 처리
-          // 현재는 서버에서 usersInfo를 보내지 않지만, 받을 수 있는 구조는 준비됨
-          console.log('게임 시작 시 플레이어 정보:', response.gameStart.usersInfo);
-        }
-        
-        // 착수 응답 처리 (coordinate 응답)
-        if (response.coordinate?.gameState) {
-          handleGameState(response.coordinate.gameState);
-        }
-        
-        // 수 넘김 응답 처리 (passTurn 응답)
-        if (response.passTurn?.gameState) {
-          handleGameState(response.passTurn.gameState);
-        }
-        
-        // 승자 확인
-        if (response.theWinner !== undefined) {
-          console.log('게임 종료, 승자:', response.theWinner);
-          // TODO: 게임 종료 처리
-        }
-      } catch (error) {
-        console.error('메시지 디코딩 오류:', error);
-      }
-    };
-    
-    ws.onerror = (error) => {
-      console.error('WebSocket 오류:', error);
-    };
-    
-    ws.onclose = () => {
-      console.log('WebSocket 연결 종료');
-    };
-    
-    // Cleanup
-    return () => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close();
-      }
-    };
-  }, [roomConfig]);
+  }, [currentTurn, gameStarted, gameSettings]);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -361,24 +149,23 @@ export default function OmokGameRoom() {
   };
 
   const getTimePercentage = (currentTime: number, initialTime: number) => {
+    if (initialTime === 0) return 100;
     return Math.max(0, Math.min(100, (currentTime / initialTime) * 100));
   };
 
   const getTimeBarColor = (percentage: number) => {
-    if (percentage > 50) return '#10b981';
-    if (percentage > 20) return '#f59e0b';
-    return '#ef4444';
+    if (percentage > 50) return '#10b981'; // 녹색
+    if (percentage > 20) return '#f59e0b'; // 주황색
+    return '#ef4444'; // 빨간색
   };
 
   const handleCellClick = (row: number, col: number) => {
-    if (!gameStarted) return;
-    if (board[row][col] === null) {
-      setSelectedPosition({ row, col });
-    }
+    if (!gameStarted || board[row][col] !== null) return;
+    setSelectedPosition({ row, col });
   };
 
   const handlePlaceStone = () => {
-    if (!gameStarted || currentTurn !== myColor) return;
+    if (currentTurn !== myColor || !gameStarted) return;
 
     if (!selectedPosition) {
       alert('착수할 위치를 선택해주세요.');
@@ -392,8 +179,10 @@ export default function OmokGameRoom() {
       return;
     }
 
-    const coordinate = row * 15 + col;
+    // 좌표를 0~360 정수형으로 변환
+    const coordinate = row * 19 + col;
 
+    // 서버로 전송할 데이터
     const moveData = {
       sessionKey: 'example-session-key',
       roomNumber: roomCode,
@@ -403,6 +192,7 @@ export default function OmokGameRoom() {
 
     console.log('서버로 전송:', JSON.stringify(moveData));
 
+    // 로컬 보드 업데이트
     const newBoard = board.map(r => [...r]);
     newBoard[row][col] = currentTurn;
     setBoard(newBoard);
@@ -412,7 +202,7 @@ export default function OmokGameRoom() {
   };
 
   const handlePass = () => {
-    if (!gameStarted || currentTurn !== myColor) return;
+    if (currentTurn !== myColor || !gameStarted) return;
 
     const moveData = {
       sessionKey: 'example-session-key',
@@ -426,25 +216,25 @@ export default function OmokGameRoom() {
   };
 
   const handleResign = () => {
-    if (!gameStarted) return;
     if (confirm('정말 기권하시겠습니까?')) {
-      clearRoomConfig(); // 방 설정 정리
       navigate('/');
     }
   };
 
   const handleDrawRequest = () => {
-    if (!gameStarted || currentTurn !== myColor) return;
+    if (currentTurn !== myColor || !gameStarted) return;
     alert('무승부 신청이 상대방에게 전송되었습니다.');
   };
 
   const handleStartGame = () => {
-    // 게임 시작은 서버 응답을 통해 처리됨
-    // 이 함수는 더 이상 사용되지 않지만 UI 호환성을 위해 유지
-    console.log('게임 시작 요청은 WebSocket을 통해 자동으로 전송됩니다.');
+    if (hasOpponent) {
+      setGameStarted(true);
+    }
   };
 
-  const isMyTurn = currentTurn === myColor;
+  const isMyTurn = currentTurn === myColor && gameStarted;
+
+  // 내 정보와 상대방 정보 구분
   const myPlayer = players[myColor];
   const opponentColor = myColor === 'black' ? 'white' : 'black';
   const opponentPlayer = players[opponentColor];
@@ -475,7 +265,7 @@ export default function OmokGameRoom() {
         </div>
 
         <div className="text-lg font-semibold" style={{ color: '#e8eaf0' }}>
-          오목 대국
+          바둑 대국
         </div>
 
         <div className="text-lg font-bold" style={{ color: '#8ab4f8' }}>
@@ -487,14 +277,14 @@ export default function OmokGameRoom() {
       <div className="flex items-start justify-center min-h-[calc(100vh-72px)] p-6 gap-4">
         {/* 왼쪽: 플레이어 정보 */}
         <div className="w-64 flex flex-col h-[calc(100vh-120px)]">
-          {/* 내 정보 */}
+          {/* 내 정보 - 상단 50% */}
           <div
-            className={`flex-1 rounded-xl p-4 border mb-2 ${gameStarted && currentTurn === myColor ? 'ring-2 ring-blue-500' : ''}`}
+            className={`flex-1 rounded-xl p-4 border mb-2 ${currentTurn === myColor && gameStarted ? 'ring-2 ring-blue-500' : ''}`}
             style={{
               backgroundColor: 'rgba(22,22,28,0.6)',
-              borderColor: gameStarted && currentTurn === myColor ? '#1f6feb' : '#2a2a33',
+              borderColor: currentTurn === myColor && gameStarted ? '#1f6feb' : '#2a2a33',
               boxShadow:
-                gameStarted && currentTurn === myColor
+                currentTurn === myColor && gameStarted
                   ? '0 0 20px rgba(31, 111, 235, 0.3)'
                   : '0 4px 16px rgba(0,0,0,0.3)',
             }}
@@ -525,15 +315,14 @@ export default function OmokGameRoom() {
                       fill="#f59e0b"
                     />
                   </svg>
-                  <span style={{ color: '#9aa1ad' }}>
-                    {typeof myPlayer.rating === 'number' ? myPlayer.rating : myPlayer.rating}
-                  </span>
+                  <span style={{ color: '#9aa1ad' }}>{myPlayer.rating}</span>
                 </div>
               </div>
             </div>
 
             {gameStarted && (
               <>
+                {/* 시간 진행 바 */}
                 <div className="mb-3">
                   <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#141822' }}>
                     <div
@@ -579,14 +368,14 @@ export default function OmokGameRoom() {
             )}
           </div>
 
-          {/* 상대방 정보 */}
+          {/* 상대방 정보 - 하단 50% */}
           <div
-            className={`flex-1 rounded-xl p-4 border ${gameStarted && currentTurn === opponentColor ? 'ring-2 ring-blue-500' : ''}`}
+            className={`flex-1 rounded-xl p-4 border ${currentTurn === opponentColor && gameStarted ? 'ring-2 ring-blue-500' : ''}`}
             style={{
               backgroundColor: 'rgba(22,22,28,0.6)',
-              borderColor: gameStarted && currentTurn === opponentColor ? '#1f6feb' : '#2a2a33',
+              borderColor: currentTurn === opponentColor && gameStarted ? '#1f6feb' : '#2a2a33',
               boxShadow:
-                gameStarted && currentTurn === opponentColor
+                currentTurn === opponentColor && gameStarted
                   ? '0 0 20px rgba(31, 111, 235, 0.3)'
                   : '0 4px 16px rgba(0,0,0,0.3)',
             }}
@@ -608,24 +397,25 @@ export default function OmokGameRoom() {
               </div>
               <div className="flex-1">
                 <div className="font-bold" style={{ color: '#e8eaf0' }}>
-                  {opponentPlayer.nickname}
+                  {hasOpponent ? opponentPlayer.nickname : '대기 중...'}
                 </div>
-                <div className="text-sm flex items-center space-x-1">
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M6 1L7 4L10 4.5L7.5 6.5L8 9.5L6 8L4 9.5L4.5 6.5L2 4.5L5 4L6 1Z"
-                      fill="#f59e0b"
-                    />
-                  </svg>
-                  <span style={{ color: '#9aa1ad' }}>
-                    {typeof opponentPlayer.rating === 'number' ? opponentPlayer.rating : opponentPlayer.rating}
-                  </span>
-                </div>
+                {hasOpponent && (
+                  <div className="text-sm flex items-center space-x-1">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path
+                        d="M6 1L7 4L10 4.5L7.5 6.5L8 9.5L6 8L4 9.5L4.5 6.5L2 4.5L5 4L6 1Z"
+                        fill="#f59e0b"
+                      />
+                    </svg>
+                    <span style={{ color: '#9aa1ad' }}>{opponentPlayer.rating}</span>
+                  </div>
+                )}
               </div>
             </div>
 
-            {gameStarted && (
+            {gameStarted && hasOpponent && (
               <>
+                {/* 시간 진행 바 */}
                 <div className="mb-3">
                   <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#141822' }}>
                     <div
@@ -672,7 +462,7 @@ export default function OmokGameRoom() {
           </div>
         </div>
 
-        {/* 중앙: 오목판 */}
+        {/* 중앙: 바둑판 */}
         <div className="flex-1 max-w-4xl">
           <div
             className="rounded-2xl p-6 border"
@@ -682,11 +472,34 @@ export default function OmokGameRoom() {
               boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
             }}
           >
+            {!hasOpponent && (
+              <div className="text-center mb-6 p-4 rounded-lg" style={{ backgroundColor: '#141822' }}>
+                <div className="text-xl font-bold mb-2" style={{ color: '#8ab4f8' }}>
+                  상대방을 기다리는 중...
+                </div>
+                <div className="text-sm" style={{ color: '#9aa1ad' }}>
+                  다른 플레이어가 입장할 때까지 기다려주세요
+                </div>
+              </div>
+            )}
+
+            {hasOpponent && !gameStarted && (
+              <div className="text-center mb-6 p-4 rounded-lg" style={{ backgroundColor: '#141822' }}>
+                <div className="text-xl font-bold mb-2" style={{ color: '#8ab4f8' }}>
+                  게임 시작 준비 중...
+                </div>
+                <div className="text-sm" style={{ color: '#9aa1ad' }}>
+                  곧 게임이 시작됩니다
+                </div>
+              </div>
+            )}
+
             <div
               className="aspect-square rounded-xl p-8 relative"
               style={{
                 background: 'linear-gradient(135deg, #d4a574 0%, #c89968 100%)',
                 boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.2)',
+                opacity: gameStarted ? 1 : 0.7,
               }}
             >
               {/* 그리드 */}
@@ -713,6 +526,7 @@ export default function OmokGameRoom() {
                 )}
               </div>
 
+              {/* 외곽 테두리 선 */}
               <div className="absolute inset-8 pointer-events-none" style={{ border: '1px solid rgba(0,0,0,0.3)' }} />
 
               {/* 교차점 및 돌 */}
@@ -731,8 +545,8 @@ export default function OmokGameRoom() {
                         style={{
                           top: topPosition,
                           left: leftPosition,
-                          width: '6%',
-                          height: '6%',
+                          width: '5%',
+                          height: '5%',
                           transform: 'translate(-50%, -50%)',
                           backgroundColor:
                             selectedPosition?.row === rowIndex && selectedPosition?.col === colIndex
@@ -745,14 +559,15 @@ export default function OmokGameRoom() {
                       >
                         {/* 화점 표시 */}
                         {!cell &&
-                          rowIndex === 7 && colIndex === 7 && (
+                          (rowIndex === 3 || rowIndex === 9 || rowIndex === 15) &&
+                          (colIndex === 3 || colIndex === 9 || colIndex === 15) && (
                             <div
                               className="w-2 h-2 rounded-full"
                               style={{ backgroundColor: 'rgba(0,0,0,0.5)', pointerEvents: 'none' }}
                             />
                           )}
 
-                        {/* 오목돌 */}
+                        {/* 바둑돌 */}
                         {cell && (
                           <div
                             className="rounded-full flex items-center justify-center"
@@ -785,22 +600,23 @@ export default function OmokGameRoom() {
 
         {/* 오른쪽: 컨트롤 */}
         <div className="w-64 space-y-4">
-          {!gameStarted ? (
+          {!hasOpponent ? (
+            /* 상대방 대기 중 상태 */
             <>
-              {/* 대기 중 메시지 */}
+              {/* 대기 메시지 */}
               <div
-                className="rounded-xl p-6 border text-center"
+                className="rounded-xl p-4 border text-center"
                 style={{
                   backgroundColor: 'rgba(22,22,28,0.6)',
                   borderColor: '#2a2a33',
                   boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
                 }}
               >
-                <div className="text-lg font-semibold mb-2" style={{ color: '#8ab4f8' }}>
-                  대국 대기 중
+                <div className="text-lg font-bold mb-2" style={{ color: '#e8eaf0' }}>
+                  상대방 대기 중
                 </div>
                 <div className="text-sm" style={{ color: '#9aa1ad' }}>
-                  대국 시작 버튼을 눌러주세요
+                  다른 플레이어가 입장할 때까지 기다려주세요
                 </div>
               </div>
 
@@ -813,50 +629,109 @@ export default function OmokGameRoom() {
                   boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
                 }}
               >
-                <div className="text-sm mb-3 font-semibold" style={{ color: '#8ab4f8' }}>
+                <div className="text-sm mb-2" style={{ color: '#9aa1ad' }}>
                   게임 설정
                 </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between p-2 rounded" style={{ backgroundColor: '#141822' }}>
-                    <div className="flex items-center space-x-2">
-                      <i className="ri-time-line" style={{ color: '#9aa1ad' }}></i>
-                      <span className="text-sm" style={{ color: '#9aa1ad' }}>메인 시간</span>
+                <div className="space-y-2 text-sm">
+                  {gameSettings?.useMainTime && (
+                    <div className="flex justify-between">
+                      <span style={{ color: '#9aa1ad' }}>메인 시간:</span>
+                      <span style={{ color: '#e8eaf0' }}>{Math.floor(gameSettings.mainTime / 60)}분</span>
                     </div>
-                    <span className="font-mono text-sm font-semibold" style={{ color: '#e8eaf0' }}>
-                      {formatTime(initialTime.black)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded" style={{ backgroundColor: '#141822' }}>
-                    <div className="flex items-center space-x-2">
-                      <i className="ri-add-circle-line" style={{ color: '#9aa1ad' }}></i>
-                      <span className="text-sm" style={{ color: '#9aa1ad' }}>추가 시간</span>
+                  )}
+                  {gameSettings?.useAdditionalTime && (
+                    <div className="flex justify-between">
+                      <span style={{ color: '#9aa1ad' }}>추가 시간:</span>
+                      <span style={{ color: '#e8eaf0' }}>{gameSettings.additionalTime}초</span>
                     </div>
-                    <span className="font-mono text-sm font-semibold" style={{ color: '#e8eaf0' }}>
-                      5초
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded" style={{ backgroundColor: '#141822' }}>
-                    <div className="flex items-center space-x-2">
-                      <i className="ri-timer-line" style={{ color: '#9aa1ad' }}></i>
-                      <span className="text-sm" style={{ color: '#9aa1ad' }}>초읽기 시간</span>
+                  )}
+                  {gameSettings?.useByoyomiTime && (
+                    <div className="flex justify-between">
+                      <span style={{ color: '#9aa1ad' }}>초읽기:</span>
+                      <span style={{ color: '#e8eaf0' }}>{gameSettings.byoyomiTime}초</span>
                     </div>
-                    <span className="font-mono text-sm font-semibold" style={{ color: '#e8eaf0' }}>
-                      30초
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded" style={{ backgroundColor: '#141822' }}>
-                    <div className="flex items-center space-x-2">
-                      <i className="ri-repeat-line" style={{ color: '#9aa1ad' }}></i>
-                      <span className="text-sm" style={{ color: '#9aa1ad' }}>초읽기 횟수</span>
+                  )}
+                  {gameSettings?.useByoyomiCount && (
+                    <div className="flex justify-between">
+                      <span style={{ color: '#9aa1ad' }}>횟수:</span>
+                      <span style={{ color: '#e8eaf0' }}>{gameSettings.byoyomiCount}회</span>
                     </div>
-                    <span className="font-mono text-sm font-semibold" style={{ color: '#e8eaf0' }}>
-                      3회
-                    </span>
-                  </div>
+                  )}
                 </div>
               </div>
 
-              {/* 대국 시작 버튼 */}
+              {/* 대기 버튼 */}
+              <button
+                disabled
+                className="w-full py-4 rounded-lg font-semibold whitespace-nowrap text-white text-lg opacity-50 cursor-not-allowed"
+                style={{
+                  background: '#2a2a33',
+                }}
+              >
+                상대방 입장 대기 중
+              </button>
+            </>
+          ) : !gameStarted ? (
+            /* 게임 시작 대기 상태 */
+            <>
+              {/* 게임 시작 준비 메시지 */}
+              <div
+                className="rounded-xl p-4 border text-center"
+                style={{
+                  backgroundColor: 'rgba(22,22,28,0.6)',
+                  borderColor: '#2a2a33',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+                }}
+              >
+                <div className="text-lg font-bold mb-2" style={{ color: '#e8eaf0' }}>
+                  게임 시작 준비
+                </div>
+                <div className="text-sm" style={{ color: '#9aa1ad' }}>
+                  상대방이 입장했습니다. 게임을 시작하세요!
+                </div>
+              </div>
+
+              {/* 게임 설정 정보 */}
+              <div
+                className="rounded-xl p-4 border"
+                style={{
+                  backgroundColor: 'rgba(22,22,28,0.6)',
+                  borderColor: '#2a2a33',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+                }}
+              >
+                <div className="text-sm mb-2" style={{ color: '#9aa1ad' }}>
+                  게임 설정
+                </div>
+                <div className="space-y-2 text-sm">
+                  {gameSettings?.useMainTime && (
+                    <div className="flex justify-between">
+                      <span style={{ color: '#9aa1ad' }}>메인 시간:</span>
+                      <span style={{ color: '#e8eaf0' }}>{Math.floor(gameSettings.mainTime / 60)}분</span>
+                    </div>
+                  )}
+                  {gameSettings?.useAdditionalTime && (
+                    <div className="flex justify-between">
+                      <span style={{ color: '#9aa1ad' }}>추가 시간:</span>
+                      <span style={{ color: '#e8eaf0' }}>{gameSettings.additionalTime}초</span>
+                    </div>
+                  )}
+                  {gameSettings?.useByoyomiTime && (
+                    <div className="flex justify-between">
+                      <span style={{ color: '#9aa1ad' }}>초읽기:</span>
+                      <span style={{ color: '#e8eaf0' }}>{gameSettings.byoyomiTime}초</span>
+                    </div>
+                  )}
+                  {gameSettings?.useByoyomiCount && (
+                    <div className="flex justify-between">
+                      <span style={{ color: '#9aa1ad' }}>횟수:</span>
+                      <span style={{ color: '#e8eaf0' }}>{gameSettings.byoyomiCount}회</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 대국 시작하기 버튼 */}
               <button
                 onClick={handleStartGame}
                 className="w-full py-4 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap text-white text-lg"
@@ -869,6 +744,7 @@ export default function OmokGameRoom() {
               </button>
             </>
           ) : (
+            /* 대국 중 상태 */
             <>
               {/* 착수 정보 */}
               <div
@@ -886,7 +762,7 @@ export default function OmokGameRoom() {
                   className="text-2xl font-mono font-bold text-center p-3 rounded"
                   style={{ backgroundColor: '#141822', color: '#8ab4f8' }}
                 >
-                  {selectedPosition ? `${selectedPosition.row * 15 + selectedPosition.col}` : '미선택'}
+                  {selectedPosition ? `${selectedPosition.row * 19 + selectedPosition.col}` : '미선택'}
                 </div>
               </div>
 

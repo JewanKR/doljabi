@@ -21,10 +21,14 @@ export default function OmokCreateRoom() {
   };
 
   const handleCreateRoom = async () => {
+    console.log('🎯 방 생성 시작...');
+    
     try {
       const sessionKey = SessionManager.getSessionKey();
+      console.log('🔑 세션키:', sessionKey ? '있음' : '없음');
 
       if (!sessionKey) {
+        console.error('❌ 로그인 필요');
         alert('로그인이 필요합니다.');
         navigate('/login');
         return;
@@ -34,10 +38,12 @@ export default function OmokCreateRoom() {
         game_type: 'omok' as const,
         game_config: gameConfig
       };
+      console.log('📤 방 생성 요청:', requestData);
 
       const response = await createRoomMutation.mutateAsync({
         data: requestData
       });
+      console.log('✅ 방 생성 API 응답:', response);
 
       // 방 생성 응답 저장
       const roomConfig = {
@@ -49,14 +55,16 @@ export default function OmokCreateRoom() {
 
       // enter-room-config.ts를 이용해 저장
       saveRoomConfig(roomConfig);
+      console.log('💾 방 설정 저장 완료:', roomConfig);
 
-      console.log('방 생성 성공:', response);
+      console.log('🚀 게임방으로 이동:', response.enter_code);
 
-      // 방 생성 성공 시 게임방으로 이동
+      // 방 생성 성공 시 바로 게임방으로 이동
       navigate('/omok/game-room');
-    } catch (error) {
-      console.error('방 생성 실패:', error);
-      alert('방 생성에 실패했습니다.');
+    } catch (error: any) {
+      console.error('❌ 방 생성 실패:', error);
+      console.error('❌ 에러 상세:', error.response?.data || error.message);
+      alert('방 생성에 실패했습니다: ' + (error.response?.data?.message || error.message));
     }
   };
 
