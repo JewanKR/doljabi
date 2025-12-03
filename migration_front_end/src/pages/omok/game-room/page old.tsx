@@ -1,7 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { WebSocketHandler } from './websocket-handler';
-import { loadRoomConfig } from './enter-room-config';
+import {
+  ClientToServerRequest,
+  ServerToClientResponse,
+  GameState,
+  Color
+} from '../../../ts-proto/badukboard';
+import { SessionManager } from '../../../api/axios-instance';
 
 interface Player {
   nickname: string;
@@ -66,7 +71,120 @@ export default function OmokGameRoom() {
   const [initialTime] = useState({ black: 1800, white: 1800 });
   const [isInByoyomi, setIsInByoyomi] = useState({ black: false, white: false });
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const handlerRef = useRef<WebSocketHandler | null>(null);
+
+  // 비트보드를 2D 배열로 변환하는 유틸리티 함수 (15x15 오목판용)
+  const bitboardToBoardArray = (
+    blackBitboard: number[] | null | undefined,
+    whiteBitboard: number[] | null | undefined,
+    boardSize: number = 15
+  ): (null | 'black' | 'white')[][] => {
+    const board: (null | 'black' | 'white')[][] = Array(boardSize)
+      .fill(null)
+      .map(() => Array(boardSize).fill(null));
+
+    // 비트보드를 숫자로 변환
+    const parseU64 = (value: number): bigint => {
+      return BigInt(value);
+    };
+
+    // black 비트보드 처리
+    if (blackBitboard && Array.isArray(blackBitboard)) {
+      blackBitboard.forEach((u64, arrayIndex) => {
+        const bits = parseU64(u64);
+        for (let bitIndex = 0; bitIndex < 64; bitIndex++) {
+          if ((bits & (1n << BigInt(bitIndex))) !== 0n) {
+            const coordinate = arrayIndex * 64 + bitIndex;
+            if (coordinate < boardSize * boardSize) {
+              const row = Math.floor(coordinate / boardSize);
+              const col = coordinate % boardSize;
+              if (row >= 0 && row < boardSize && col >= 0 && col < boardSize) {
+                board[row][col] = 'black';
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // white 비트보드 처리
+    if (whiteBitboard && Array.isArray(whiteBitboard)) {
+      whiteBitboard.forEach((u64, arrayIndex) => {
+        const bits = parseU64(u64);
+        for (let bitIndex = 0; bitIndex < 64; bitIndex++) {
+          if ((bits & (1n << BigInt(bitIndex))) !== 0n) {
+            const coordinate = arrayIndex * 64 + bitIndex;
+            if (coordinate < boardSize * boardSize) {
+              const row = Math.floor(coordinate / boardSize);
+              const col = coordinate % boardSize;
+              if (row >= 0 && row < boardSize && col >= 0 && col < boardSize) {
+                board[row][col] = 'white';
+              }
+            }
+          }
+        }
+      });
+    }
+
+    return board;
+  };
+
+  // Color enum을 'black' | 'white'로 변환하는 헬퍼 함수
+  const colorEnumToString = (color: Color): 'black' | 'white' | null => {
+    switch (color) {
+      case Color.COLOR_BLACK:
+        return 'black';
+      case Color.COLOR_WHITE:
+        return 'white';
+      default:
+        return null;
+    }
+  };
+
+  // GameState를 일관되게 처리하는 공통 함수
+  const handleGameState = (gameState: GameState | undefined) => {
+    if (!gameState) return;
+
+    // 보드 상태 업데이트
+    if (gameState.board) {
+      const newBoard = bitboardToBoardArray(
+        gameState.board.black,
+        gameState.board.white,
+        boardSize
+      );
+      setBoard(newBoard);
+    }
+
+    // 시간 정보 업데이트
+    if (gameState.blackTime) {
+      setPlayers(prev => ({
+        ...prev,
+        black: {
+          ...prev.black,
+          mainTime: gameState.blackTime!.mainTime,
+          byoyomiTime: gameState.blackTime!.overtime,
+          byoyomiCount: gameState.blackTime!.remainingOvertime
+        }
+      }));
+    }
+
+    if (gameState.whiteTime) {
+      setPlayers(prev => ({
+        ...prev,
+        white: {
+          ...prev.white,
+          mainTime: gameState.whiteTime!.mainTime,
+          byoyomiTime: gameState.whiteTime!.overtime,
+          byoyomiCount: gameState.whiteTime!.remainingOvertime
+        }
+      }));
+    }
+
+    // 턴 정보 업데이트
+    const turnColor = colorEnumToString(gameState.turn);
+    if (turnColor) {
+      setCurrentTurn(turnColor);
+    }
+  };
 
   // 타이머 관리 (게임 시작 후에만 작동)
   useEffect(() => {
@@ -79,11 +197,14 @@ export default function OmokGameRoom() {
 
         if (current.mainTime > 0) {
           current.mainTime -= 1;
+          if (current.mainTime === 0) {
+            setIsInByoyomi(prev => ({ ...prev, [currentTurn]: true }));
+          }
         } else if (current.byoyomiTime > 0) {
           current.byoyomiTime -= 1;
           if (current.byoyomiTime === 0 && current.byoyomiCount > 0) {
             current.byoyomiCount -= 1;
-            current.byoyomiTime = 30; // Reset byoyomi time
+            current.byoyomiTime = 30;
           }
         }
 
@@ -100,93 +221,136 @@ export default function OmokGameRoom() {
 
   // WebSocket 연결 및 Protobuf 통신
   useEffect(() => {
-    const config = loadRoomConfig();
+    const state = location.state as { enter_code?: number; session_key?: string; game_config?: any } | null;
+    let { enter_code, session_key } = state || {};
 
-    if (!config || !config.enter_code || !config.session_key) {
-      console.error('방 정보가 없습니다.');
-      navigate('/');
+    // 세션키가 없으면 SessionManager에서 가져오기
+    if (!session_key) {
+      session_key = SessionManager.getSessionKey() || undefined;
+    }
+
+    if (!enter_code || !session_key) {
+      console.error('방 정보가 없습니다. enter_code:', enter_code, 'session_key:', session_key);
       return;
     }
 
-    const { enter_code, session_key } = config;
+    // WebSocket 연결 (바이너리 프로토콜)
     const wsUrl = `ws://localhost:27000/api/room/${enter_code}/session/${session_key}`;
-    const handler = new WebSocketHandler(wsUrl);
-    handlerRef.current = handler;
+    const ws = new WebSocket(wsUrl);
+    ws.binaryType = 'arraybuffer';
 
-    handler.connect();
+    ws.onopen = () => {
+      console.log('WebSocket 연결됨');
 
-    // Subscribe to updates
-    handler.onGameStateChange((newBoard, turn, blackTime, whiteTime) => {
-      setBoard(newBoard);
-      setCurrentTurn(turn);
+      // 게임 시작 요청 전송 (protobuf 인코딩)
+      const gameStartRequest: ClientToServerRequest = {
+        sessionKey: session_key,
+        gamestart: {}
+      };
+      const encoded = ClientToServerRequest.encode(gameStartRequest).finish();
+      ws.send(encoded);
+    };
 
-      // Update black player's time
-      if (blackTime) {
-        setPlayers(prev => ({
-          ...prev,
-          black: {
-            ...prev.black,
-            mainTime: blackTime.mainTime,
-            byoyomiTime: blackTime.overtime,
-            byoyomiCount: blackTime.remainingOvertime
+    ws.onmessage = (event) => {
+      try {
+        // 서버 메시지 수신 (protobuf 디코딩)
+        const buffer = new Uint8Array(event.data);
+        const response = ServerToClientResponse.decode(buffer);
+        console.log('서버 응답:', response);
+
+        // 게임 시작 응답 처리
+        if (response.gameStart) {
+          const gameStartResponse = response.gameStart;
+          if (gameStartResponse.gameStart) {
+            // 게임 시작 성공
+            setGameStarted(true);
+            handleGameState(gameStartResponse.gameStart);
+            console.log('게임 시작 성공');
+          } else {
+            // 게임 시작 실패 (gameStart는 있지만 gameStart.gameStart가 없음)
+            console.warn('게임 시작 실패: gameStart 응답이 있지만 gameState가 없습니다.');
           }
-        }));
-      }
+        }
+        /* else if (response.responseType === false) {
+          // 게임 시작 실패 (responseType이 false이고 gameStart가 undefined)
+          alert('게임 시작에 실패했습니다. 플레이어가 부족합니다.');
+          console.warn('게임 시작 실패: 플레이어가 부족합니다.');
+        }
+        */
 
-      // Update white player's time
-      if (whiteTime) {
-        setPlayers(prev => ({
-          ...prev,
-          white: {
-            ...prev.white,
-            mainTime: whiteTime.mainTime,
-            byoyomiTime: whiteTime.overtime,
-            byoyomiCount: whiteTime.remainingOvertime
+        // 플레이어 정보 업데이트 (usersInfo 응답 처리)
+        // TODO: 서버에서 usersInfo를 보내는 로직이 구현되면 활성화
+        // 현재는 서버에서 usersInfo를 보내지 않지만, 받을 수 있는 구조는 준비됨
+        if (response.usersInfo) {
+          console.log('플레이어 정보:', response.usersInfo);
+
+          // black 플레이어 정보 업데이트
+          if (response.usersInfo.black) {
+            setPlayers(prev => ({
+              ...prev,
+              black: {
+                ...prev.black,
+                nickname: response.usersInfo!.black!.userName || 'black',
+                rating: response.usersInfo!.black!.rating || ('---' as any),
+              }
+            }));
           }
-        }));
-      }
-    });
 
-    handler.onGameStart(() => {
-      setGameStarted(true);
-      console.log('게임 시작 성공');
-    });
-
-    handler.onPlayerInfoUpdate((usersInfo) => {
-      console.log('플레이어 정보:', usersInfo);
-      if (usersInfo.black) {
-        setPlayers(prev => ({
-          ...prev,
-          black: {
-            ...prev.black,
-            nickname: usersInfo.black!.userName || 'black',
-            rating: usersInfo.black!.rating || ('---' as any),
+          // white 플레이어 정보 업데이트
+          if (response.usersInfo.white) {
+            setPlayers(prev => ({
+              ...prev,
+              white: {
+                ...prev.white,
+                nickname: response.usersInfo!.white!.userName || 'white',
+                rating: response.usersInfo!.white!.rating || ('---' as any),
+              }
+            }));
           }
-        }));
-      }
-      if (usersInfo.white) {
-        setPlayers(prev => ({
-          ...prev,
-          white: {
-            ...prev.white,
-            nickname: usersInfo.white!.userName || 'white',
-            rating: usersInfo.white!.rating || ('---' as any),
-          }
-        }));
-      }
-    });
+        }
 
-    handler.onGameEnd((winnerColor) => {
-      console.log('게임 종료, 승자:', winnerColor);
-      // TODO: 게임 종료 처리
-    });
+        // 게임 시작 응답에서 usersInfo 처리 (현재는 서버에서 보내지 않지만 준비)
+        if (response.gameStart?.usersInfo) {
+          // TODO: 서버에서 gameStart.usersInfo를 보내는 경우 처리
+          // 현재는 서버에서 usersInfo를 보내지 않지만, 받을 수 있는 구조는 준비됨
+          console.log('게임 시작 시 플레이어 정보:', response.gameStart.usersInfo);
+        }
+
+        // 착수 응답 처리 (coordinate 응답)
+        if (response.coordinate?.gameState) {
+          handleGameState(response.coordinate.gameState);
+        }
+
+        // 수 넘김 응답 처리 (passTurn 응답)
+        if (response.passTurn?.gameState) {
+          handleGameState(response.passTurn.gameState);
+        }
+
+        // 승자 확인
+        if (response.theWinner !== undefined) {
+          console.log('게임 종료, 승자:', response.theWinner);
+          // TODO: 게임 종료 처리
+        }
+      } catch (error) {
+        console.error('메시지 디코딩 오류:', error);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket 오류:', error);
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket 연결 종료');
+    };
 
     // Cleanup
     return () => {
-      handler.disconnect();
-      handlerRef.current = null;
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
     };
-  }, []);
+  }, [location.state]);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -196,12 +360,7 @@ export default function OmokGameRoom() {
   };
 
   const getTimePercentage = (currentTime: number, initialTime: number) => {
-    // Use the initial mainTime from players state for percentage calculation
-    // Note: initialTime state might not be updated if we want dynamic initial time, but for now it's fixed.
-    // Or we can use the max time if we knew it.
-    // Let's use the initialTime state which is 1800.
-    const maxTime = initialTime;
-    return Math.max(0, Math.min(100, (currentTime / maxTime) * 100));
+    return Math.max(0, Math.min(100, (currentTime / initialTime) * 100));
   };
 
   const getTimeBarColor = (percentage: number) => {
@@ -233,23 +392,36 @@ export default function OmokGameRoom() {
     }
 
     const coordinate = row * 15 + col;
-    const config = loadRoomConfig();
 
-    if (handlerRef.current && config && config.session_key) {
-      handlerRef.current.sendPlaceStone(config.session_key, coordinate);
-      console.log('착수 요청 전송:', row, col);
-    }
+    const moveData = {
+      sessionKey: 'example-session-key',
+      roomNumber: roomCode,
+      move: 'place',
+      coordinate,
+    };
 
+    console.log('서버로 전송:', JSON.stringify(moveData));
+
+    const newBoard = board.map(r => [...r]);
+    newBoard[row][col] = currentTurn;
+    setBoard(newBoard);
+
+    setCurrentTurn(prev => (prev === 'black' ? 'white' : 'black'));
     setSelectedPosition(null);
   };
 
   const handlePass = () => {
     if (!gameStarted || currentTurn !== myColor) return;
-    const config = loadRoomConfig();
-    if (handlerRef.current && config && config.session_key) {
-      handlerRef.current.sendPass(config.session_key);
-      console.log('수 넘김 요청 전송');
-    }
+
+    const moveData = {
+      sessionKey: 'example-session-key',
+      roomNumber: roomCode,
+      move: 'pass',
+      coordinate: -1,
+    };
+
+    console.log('서버로 전송:', JSON.stringify(moveData));
+    setCurrentTurn(prev => (prev === 'black' ? 'white' : 'black'));
   };
 
   const handleResign = () => {
@@ -265,11 +437,9 @@ export default function OmokGameRoom() {
   };
 
   const handleStartGame = () => {
-    const config = loadRoomConfig();
-    if (config && config.session_key && handlerRef.current) {
-      handlerRef.current.sendGameStart(config.session_key);
-      console.log('게임 시작 요청 전송됨');
-    }
+    // 게임 시작은 서버 응답을 통해 처리됨
+    // 이 함수는 더 이상 사용되지 않지만 UI 호환성을 위해 유지
+    console.log('게임 시작 요청은 WebSocket을 통해 자동으로 전송됩니다.');
   };
 
   const isMyTurn = currentTurn === myColor;

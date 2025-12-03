@@ -4,7 +4,6 @@ export interface RoomConfig {
   enter_code: number;
   session_key: string;
   game_config?: any;
-  isHost?: boolean;
 }
 
 const ROOM_CONFIG_KEY = 'omok_room_config';
@@ -66,12 +65,4 @@ export function getSessionKey(): string | null {
 export function getGameConfig(): any {
   const config = loadRoomConfig();
   return config?.game_config;
-}
-
-/**
- * 호스트 여부만 가져옵니다.
- */
-export function getIsHost(): boolean {
-  const config = loadRoomConfig();
-  return config?.isHost || false;
 }

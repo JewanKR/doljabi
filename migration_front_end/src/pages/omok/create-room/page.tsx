@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCreateRoomRequest } from '../../../api/endpoints/default/default';
 import { SessionManager } from '../../../api/axios-instance';
 import type { BadukBoardGameConfig } from '../../../api/model';
+import { saveRoomConfig, loadRoomConfig } from '../game-room/enter-room-config';
 
 export default function OmokCreateRoom() {
   const navigate = useNavigate();
@@ -22,7 +23,7 @@ export default function OmokCreateRoom() {
   const handleCreateRoom = async () => {
     try {
       const sessionKey = SessionManager.getSessionKey();
-      
+
       if (!sessionKey) {
         alert('로그인이 필요합니다.');
         navigate('/login');
@@ -39,21 +40,23 @@ export default function OmokCreateRoom() {
       });
 
       // 방 생성 응답 저장
-      const roomData = {
+      const roomConfig = {
         enter_code: response.enter_code,
         session_key: sessionKey,
         game_config: gameConfig
       };
 
-      // localStorage에 백업 저장 (새로고침 시에도 유지)
-      localStorage.setItem('omok_room_data', JSON.stringify(roomData));
+      // enter-room-config.ts를 이용해 저장
+      saveRoomConfig(roomConfig);
+
+      if (!loadRoomConfig()) {
+        throw new Error('방 설정 저장 실패');
+      }
 
       console.log('방 생성 성공:', response);
 
       // 방 생성 성공 시 게임방으로 이동
-      navigate('/omok/game-room', {
-        state: roomData
-      });
+      navigate('/omok/game-room');
     } catch (error) {
       console.error('방 생성 실패:', error);
       alert('방 생성에 실패했습니다.');
@@ -83,12 +86,12 @@ export default function OmokCreateRoom() {
 
         {/* 게임 설정 */}
         <div className="rounded-xl p-6 border mb-6"
-             style={{ 
-               backgroundColor: 'rgba(22,22,28,0.6)', 
-               borderColor: '#2a2a33'
-             }}>
+          style={{
+            backgroundColor: 'rgba(22,22,28,0.6)',
+            borderColor: '#2a2a33'
+          }}>
           <h3 className="text-xl font-bold mb-6" style={{ color: '#e8eaf0' }}>게임 설정</h3>
-          
+
           <div className="grid grid-cols-2 gap-8">
             {/* 기본 시간 설정 */}
             <div>
@@ -190,10 +193,10 @@ export default function OmokCreateRoom() {
 
         {/* 방 만들기 버튼 */}
         <div className="flex justify-center gap-4">
-          <button 
+          <button
             onClick={() => navigate(-1)}
             className="px-8 py-4 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap border"
-            style={{ 
+            style={{
               backgroundColor: '#141822',
               borderColor: '#2a2a33',
               color: '#e8eaf0'
@@ -209,11 +212,11 @@ export default function OmokCreateRoom() {
             취소
           </button>
 
-          <button 
+          <button
             onClick={handleCreateRoom}
             disabled={createRoomMutation.isPending}
             className="px-8 py-4 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap text-white text-lg"
-            style={{ 
+            style={{
               background: createRoomMutation.isPending ? '#2a2a33' : 'linear-gradient(180deg, #1f6feb, #1b4fd8)',
               boxShadow: createRoomMutation.isPending ? 'none' : '0 2px 8px rgba(0,0,0,0.3)',
               opacity: createRoomMutation.isPending ? 0.5 : 1,
@@ -226,7 +229,7 @@ export default function OmokCreateRoom() {
         {/* 에러 메시지 */}
         {createRoomMutation.isError && (
           <div className="mt-4 p-4 rounded-lg text-center"
-               style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
+            style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
             방 생성에 실패했습니다. 다시 시도해주세요.
           </div>
         )}

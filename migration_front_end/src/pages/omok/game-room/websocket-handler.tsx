@@ -168,7 +168,7 @@ export class WebSocketHandler {
         }
 
         // Handle Game End
-        if (response.theWinner !== undefined && response.theWinner !== Color.COLOR_NONE) {
+        if (response.theWinner !== undefined) {
             const winner = this.colorEnumToString(response.theWinner);
             if (winner) {
                 this.gameEndListeners.forEach(listener => listener(winner));
@@ -241,13 +241,13 @@ export class WebSocketHandler {
         this.stopPing();
         this.pingInterval = setInterval(() => {
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                this.send({ ping: {} } as a ny);
+                this.send({ ping: {} } as any);
             }
         }, 15000);
-    
-    
-ate stopPing(): void {
-            if(this.pingInterval) {
+    }
+
+    private stopPing(): void {
+        if (this.pingInterval) {
             clearInterval(this.pingInterval);
             this.pingInterval = null;
         }

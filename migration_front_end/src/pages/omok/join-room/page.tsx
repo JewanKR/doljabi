@@ -26,7 +26,6 @@ export default function OmokJoinRoom() {
       state: {
         enter_code: parseInt(codeToJoin, 10), // game-room 페이지에서 기대하는 형식으로 변환
         session_key: sessionKey,
-        isHost: false
       }
     });
   };
@@ -46,20 +45,20 @@ export default function OmokJoinRoom() {
         <div className="max-w-md mx-auto">
           {/* 입장 코드 입력 */}
           <div className="rounded-xl p-8 border"
-               style={{
-                 backgroundColor: 'rgba(22,22,28,0.6)',
-                 borderColor: '#2a2a33',
-                 boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
-               }}>
+            style={{
+              backgroundColor: 'rgba(22,22,28,0.6)',
+              borderColor: '#2a2a33',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
+            }}>
             <h3 className="text-2xl font-bold mb-6" style={{ color: '#e8eaf0' }}>입장 코드 입력</h3>
 
             {error && (
               <div className="mb-4 p-3 rounded-lg border"
-                   style={{
-                     backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                     borderColor: '#ef4444',
-                     color: '#ef4444'
-                   }}>
+                style={{
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  borderColor: '#ef4444',
+                  color: '#ef4444'
+                }}>
                 {error}
               </div>
             )}
