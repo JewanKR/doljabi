@@ -1,4 +1,3 @@
-<<<<<<<< HEAD:web/src/pages/omok/game-room/page.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -1374,7 +1373,6 @@ export default function OmokGameRoom() {
     </div>
   );
 }
-========
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -2269,4 +2267,3 @@ export default function GameRoom() {
     </div>
   );
 }
->>>>>>>> 61e944779eeadd2ee3d05a278a4544a0203d9e79:front-end-4/src/pages/baduk/game-room/page.tsx
