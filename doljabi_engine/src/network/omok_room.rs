@@ -241,9 +241,9 @@ impl GameLogic for OmokRoom {
                         println!("✅ 착수 성공! 턴 변경됨");
                         true
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         #[cfg(debug_assertions)]
-                        match e {
+                        match _e {
                             crate::game::badukboard::BadukBoardError::BannedChaksu => {
                                 println!("⛔ 착수 실패: 금수!");
                             }
@@ -251,7 +251,7 @@ impl GameLogic for OmokRoom {
                                 println!("❌ 착수 실패: 이미 돌이 있음");
                             }
                             _ => {
-                                println!("❌ 착수 실패: {:?}", e);
+                                println!("❌ 착수 실패: {:?}", _e);
                             }
                         }
                         false

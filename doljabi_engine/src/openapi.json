@@ -123,44 +123,6 @@
         }
       }
     },
-    "/api/room/{enter_code}/session/{session_key}": {
-      "get": {
-        "operationId": "enter_room",
-        "parameters": [
-          {
-            "name": "enter_code",
-            "in": "path",
-            "description": "방 입장 코드",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "minimum": 0
-            }
-          },
-          {
-            "name": "session_key",
-            "in": "path",
-            "description": "세션 키",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "101": {
-            "description": "WebSocket 연결 성공: 방 입장 성공"
-          },
-          "400": {
-            "description": "유효하지 않은 세션 키"
-          },
-          "404": {
-            "description": "존재하지 않는 방"
-          }
-        }
-      }
-    },
     "/api/session_check": {
       "post": {
         "tags": [
@@ -283,6 +245,44 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/ws/room/{enter_code}/session/{session_key}": {
+      "get": {
+        "operationId": "enter_room",
+        "parameters": [
+          {
+            "name": "enter_code",
+            "in": "path",
+            "description": "방 입장 코드",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "session_key",
+            "in": "path",
+            "description": "세션 키",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "WebSocket 연결 성공: 방 입장 성공"
+          },
+          "400": {
+            "description": "유효하지 않은 세션 키"
+          },
+          "404": {
+            "description": "존재하지 않는 방"
           }
         }
       }
