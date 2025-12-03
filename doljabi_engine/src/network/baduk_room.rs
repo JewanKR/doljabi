@@ -110,10 +110,10 @@ impl GameLogic for BadukRoom {
                     Duration::from_millis(p.overtime())
                 } else {
                     self.game.set_winner(self.game.board.is_turn().reverse());
-                    Duration::from_secs(u64::MAX)
+                    Duration::from_secs(30 * 24 * 3600) // 30 days instead of u64::MAX
                 }
             }
-            None => Duration::from_secs(u64::MAX)
+            None => Duration::from_secs(30 * 24 * 3600) // 30 days instead of u64::MAX
         }
     }
 

@@ -1,10 +1,14 @@
 
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { login, signup } from '../../api/authClient';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useLogin } from '../../api/endpoints/auth/auth';
+import { useSignup } from '../../api/endpoints/auth/auth';
+import { useGetUserProfileHandler } from '../../api/endpoints/user/user';
+import { SessionManager } from '../../api/axios-instance';
 
 export default function Home() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<'omok' | 'baduk'>('baduk');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignupModal, setShowSignupModal] = useState(false);
@@ -15,7 +19,6 @@ export default function Home() {
     password: ''
   });
   const [loginError, setLoginError] = useState('');
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
   
   const [signupForm, setSignupForm] = useState({
     login_id: '',
@@ -24,7 +27,57 @@ export default function Home() {
     confirmPassword: ''
   });
   const [signupError, setSignupError] = useState('');
-  const [isSigningUp, setIsSigningUp] = useState(false);
+
+  // 사용자 프로필 상태
+  const [userProfile, setUserProfile] = useState<{username: string; rating: number} | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  const loginMutation = useLogin();
+  const signupMutation = useSignup();
+  const userProfileMutation = useGetUserProfileHandler();
+
+  // URL 경로에 따라 모달 상태 설정
+  useEffect(() => {
+    if (location.pathname === '/login') {
+      setShowLoginModal(true);
+      setShowSignupModal(false);
+    } else if (location.pathname === '/signup') {
+      setShowSignupModal(true);
+      setShowLoginModal(false);
+    } else {
+      setShowLoginModal(false);
+      setShowSignupModal(false);
+    }
+  }, [location.pathname]);
+
+  // 로그인 상태 확인 및 유저 프로필 가져오기
+  useEffect(() => {
+    const sessionKey = SessionManager.getSessionKey();
+    
+    if (sessionKey) {
+      setIsLoggedIn(true);
+      
+      // 유저 프로필 가져오기 (백엔드는 session_key를 받음)
+      userProfileMutation.mutateAsync({
+        data: { session_key: sessionKey } as any
+      }).then((response) => {
+        if (response.success && response.user) {
+          setUserProfile({
+            username: response.user.username || '사용자',
+            rating: response.user.rating || 1500
+          });
+        }
+      }).catch((error) => {
+        console.error('프로필 가져오기 실패:', error);
+        // 세션이 유효하지 않으면 로그아웃
+        SessionManager.clearSessionKey();
+        setIsLoggedIn(false);
+      });
+    } else {
+      setIsLoggedIn(false);
+      setUserProfile(null);
+    }
+  }, []);
 
   const handleLoginSubmit = async () => {
     setLoginError('');
@@ -39,29 +92,44 @@ export default function Home() {
       return;
     }
     
-    setIsLoggingIn(true);
-    
     try {
-      const result = await login({
-        login_id: loginForm.login_id,
-        password: loginForm.password
+      const result = await loginMutation.mutateAsync({
+        data: {
+          login_id: loginForm.login_id,
+          password: loginForm.password
+        }
       });
       
-      if (result.status === 200 && result.data?.success) {
-        // 로그인 성공 - session_key는 authClient에서 자동으로 저장됨
+      if (result.success && result.session_key) {
+        // 세션키를 SessionManager에 저장
+        SessionManager.setSessionKey(result.session_key);
+        setIsLoggedIn(true);
+        
+        // 유저 프로필 가져오기
+        const profileResponse = await userProfileMutation.mutateAsync({
+          data: { session_key: result.session_key } as any
+        });
+        
+        if (profileResponse.success && profileResponse.user) {
+          setUserProfile({
+            username: profileResponse.user.username || '사용자',
+            rating: profileResponse.user.rating || 1500
+          });
+        }
+        
+        // 모달 닫고 홈으로 리다이렉트
         setShowLoginModal(false);
         setLoginForm({ login_id: '', password: '' });
-        // 페이지 새로고침 또는 상태 업데이트
-        window.location.reload();
+        navigate('/');
       } else {
-        // 로그인 실패
         setLoginError(result.message || '로그인에 실패했습니다.');
       }
-    } catch (error) {
-      console.error('로그인 오류:', error);
-      setLoginError('로그인 처리 중 오류가 발생했습니다.');
-    } finally {
-      setIsLoggingIn(false);
+    } catch (error: any) {
+      // 에러 응답 구조에 따라 메시지 추출
+      const errorMessage = error?.response?.data?.message 
+        || error?.message 
+        || '로그인 처리 중 오류가 발생했습니다.';
+      setLoginError(errorMessage);
     }
   };
 
@@ -93,27 +161,29 @@ export default function Home() {
       return;
     }
     
-    setIsSigningUp(true);
-    
     try {
-      const result = await signup({
-        login_id: signupForm.login_id,
-        password: signupForm.password,
-        username: signupForm.username
+      const result = await signupMutation.mutateAsync({
+        data: {
+          login_id: signupForm.login_id,
+          username: signupForm.username,
+          password: signupForm.password
+        }
       });
       
-      if (result.status === 201 || result.status === 200) {
+      if (result.success) {
         setShowSignupModal(false);
         setShowSignupSuccess(true);
         setSignupForm({ login_id: '', username: '', password: '', confirmPassword: '' });
+        navigate('/');
       } else {
         setSignupError(result.message || '회원가입에 실패했습니다.');
       }
-    } catch (error) {
-      console.error('회원가입 오류:', error);
-      setSignupError('회원가입 처리 중 오류가 발생했습니다.');
-    } finally {
-      setIsSigningUp(false);
+    } catch (error: any) {
+      // 에러 응답 구조에 따라 메시지 추출
+      const errorMessage = error?.response?.data?.message 
+        || error?.message 
+        || '회원가입 처리 중 오류가 발생했습니다.';
+      setSignupError(errorMessage);
     }
   };
 
@@ -121,12 +191,14 @@ export default function Home() {
     setShowLoginModal(false);
     setLoginForm({ login_id: '', password: '' });
     setLoginError('');
+    navigate('/');
   };
 
   const resetSignupModal = () => {
     setShowSignupModal(false);
     setSignupForm({ login_id: '', username: '', password: '', confirmPassword: '' });
     setSignupError('');
+    navigate('/');
   };
 
   return (
@@ -151,35 +223,82 @@ export default function Home() {
         </div>
         
         <div className="flex items-center space-x-4">
-          <button 
-            onClick={() => setShowLoginModal(true)}
-            className="px-6 py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap border"
-            style={{ 
-              backgroundColor: '#141822', 
-              borderColor: '#2a2a33',
-              color: '#e8eaf0'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#8ab4f8';
-              e.currentTarget.style.color = '#8ab4f8';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = '#2a2a33';
-              e.currentTarget.style.color = '#e8eaf0';
-            }}
-          >
-            로그인
-          </button>
-          <button 
-            onClick={() => setShowSignupModal(true)}
-            className="px-6 py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap text-white"
-            style={{ 
-              background: 'linear-gradient(180deg, #1f6feb, #1b4fd8)',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-            }}
-          >
-            회원가입
-          </button>
+          {isLoggedIn && userProfile ? (
+            <>
+              {/* 로그인 상태: 유저 정보 표시 */}
+              <div className="flex items-center space-x-4 px-6 py-2 rounded-lg border"
+                   style={{
+                     backgroundColor: 'rgba(22,22,28,0.6)',
+                     borderColor: '#2a2a33'
+                   }}>
+                <div className="text-right">
+                  <div className="font-semibold" style={{ color: '#e8eaf0' }}>
+                    {userProfile.username}
+                  </div>
+                  <div className="text-sm" style={{ color: '#9aa1ad' }}>
+                    레이팅: {userProfile.rating}
+                  </div>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  SessionManager.clearSessionKey();
+                  setIsLoggedIn(false);
+                  setUserProfile(null);
+                  navigate('/');
+                }}
+                className="px-6 py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap border"
+                style={{ 
+                  backgroundColor: '#141822', 
+                  borderColor: '#2a2a33',
+                  color: '#e8eaf0'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#ef4444';
+                  e.currentTarget.style.color = '#ef4444';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#2a2a33';
+                  e.currentTarget.style.color = '#e8eaf0';
+                }}
+              >
+                로그아웃
+              </button>
+            </>
+          ) : (
+            <>
+              {/* 비로그인 상태: 로그인/회원가입 버튼 */}
+              <button 
+                onClick={() => navigate('/login')}
+                className="px-6 py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap border"
+                style={{ 
+                  backgroundColor: '#141822', 
+                  borderColor: '#2a2a33',
+                  color: '#e8eaf0'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#8ab4f8';
+                  e.currentTarget.style.color = '#8ab4f8';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#2a2a33';
+                  e.currentTarget.style.color = '#e8eaf0';
+                }}
+              >
+                로그인
+              </button>
+              <button 
+                onClick={() => navigate('/signup')}
+                className="px-6 py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap text-white"
+                style={{ 
+                  background: 'linear-gradient(180deg, #1f6feb, #1b4fd8)',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                }}
+              >
+                회원가입
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -467,7 +586,6 @@ export default function Home() {
                         color: '#e8eaf0'
                       }}
                       placeholder="아이디를 입력하세요"
-                      disabled={isLoggingIn}
                     />
                   </div>
                   <div>
@@ -485,12 +603,6 @@ export default function Home() {
                         color: '#e8eaf0'
                       }}
                       placeholder="비밀번호를 입력하세요"
-                      disabled={isLoggingIn}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          handleLoginSubmit();
-                        }
-                      }}
                     />
                   </div>
                 </div>
@@ -498,14 +610,14 @@ export default function Home() {
                 <div className="mt-6 space-y-3">
                   <button 
                     onClick={handleLoginSubmit}
-                    disabled={isLoggingIn}
+                    disabled={loginMutation.isPending}
                     className="w-full py-3 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ 
                       background: 'linear-gradient(180deg, #1f6feb, #1b4fd8)',
                       boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
                     }}
                   >
-                    {isLoggingIn ? '로그인 중...' : '로그인'}
+                    {loginMutation.isPending ? '로그인 중...' : '로그인'}
                   </button>
                   <button 
                     onClick={resetLoginModal}
@@ -569,11 +681,10 @@ export default function Home() {
                       className="w-full px-4 py-3 rounded-lg border text-sm"
                       style={{ 
                         backgroundColor: '#141822', 
-                        borderColor: '#2a2a33',
+                        borderColor: '#2a3a33',
                         color: '#e8eaf0'
                       }}
                       placeholder="아이디를 입력하세요"
-                      disabled={isSigningUp}
                     />
                   </div>
                   <div>
@@ -591,7 +702,6 @@ export default function Home() {
                         color: '#e8eaf0'
                       }}
                       placeholder="닉네임을 입력하세요"
-                      disabled={isSigningUp}
                     />
                   </div>
                   <div>
@@ -609,7 +719,6 @@ export default function Home() {
                         color: '#e8eaf0'
                       }}
                       placeholder="비밀번호를 입력하세요 (6자 이상)"
-                      disabled={isSigningUp}
                     />
                   </div>
                   <div>
@@ -627,12 +736,6 @@ export default function Home() {
                         color: '#e8eaf0'
                       }}
                       placeholder="비밀번호를 다시 입력하세요"
-                      disabled={isSigningUp}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          handleSignupSubmit();
-                        }
-                      }}
                     />
                   </div>
                 </div>
@@ -640,14 +743,14 @@ export default function Home() {
                 <div className="mt-6 space-y-3">
                   <button 
                     onClick={handleSignupSubmit}
-                    disabled={isSigningUp}
+                    disabled={signupMutation.isPending}
                     className="w-full py-3 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ 
                       background: 'linear-gradient(180deg, #1f6feb, #1b4fd8)',
                       boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
                     }}
                   >
-                    {isSigningUp ? '회원가입 중...' : '회원가입'}
+                    {signupMutation.isPending ? '회원가입 중...' : '회원가입'}
                   </button>
                   <button 
                     onClick={resetSignupModal}
@@ -706,7 +809,7 @@ export default function Home() {
                     <button 
                       onClick={() => {
                         setShowSignupSuccess(false);
-                        setShowLoginModal(true);
+                        navigate('/login');
                       }}
                       className="w-full py-3 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap text-white"
                       style={{ 
