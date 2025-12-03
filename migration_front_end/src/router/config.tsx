@@ -13,12 +13,12 @@ const BadukWaitingRoom = lazy(() => import('../pages/baduk/waiting-room/page'));
 const BadukGameRoom = lazy(() => import('../pages/baduk/game-room/page'));
 
 // Omok pages
-const OmokQuickMatch = lazy(() => import('../pages/omok/quick-match/page'));
+// const OmokQuickMatch = lazy(() => import('../pages/omok/quick-match/page'));
 const OmokCreateRoom = lazy(() => import('../pages/omok/create-room/page'));
 const OmokJoinRoom = lazy(() => import('../pages/omok/join-room/page'));
 
 import OmokGameRoom from '../pages/omok/game-room/page';
-import OmokRankedMatch from '../pages/omok/ranked-match/page';
+// import OmokRankedMatch from '../pages/omok/ranked-match/page';
 
 const routes: RouteObject[] = [
   {
@@ -56,14 +56,6 @@ const routes: RouteObject[] = [
   {
     path: '/baduk/game-room',
     element: <BadukGameRoom />,
-  },
-  {
-    path: '/omok/quick-match',
-    element: <OmokQuickMatch />,
-  },
-  {
-    path: '/omok/ranked-match',
-    element: <OmokRankedMatch />,
   },
   {
     path: '/omok/create-room',
