@@ -25,14 +25,28 @@ const KOREAN_NUM_MAP: Record<string, number> = {
   구: 9,
 };
 
+// 한글 알파벳 발음 → 알파벳 매핑
+const KOREAN_ALPHA_MAP: Record<string, string> = {
+  피: 'P',
+  오: 'O',
+  이: 'E', // E열 말할 때 대비용
+  에이: 'A',
+  비: 'B',
+  씨: 'C',
+  디: 'D',
+  // 필요하면 더 추가
+};
+
 // "삼" / "십오" / "15" → 숫자 변환 함수
 function koreanTextToNumber(text: string): number | null {
   const t = text.replace(/\s+/g, '');
 
+  // 숫자 그대로 들어온 경우
   if (/^\d+$/.test(t)) {
     return parseInt(t, 10);
   }
 
+  // 10, 11~19
   if (t === '십') return 10;
   if (t.startsWith('십')) {
     const tail = t.slice(1);
@@ -40,6 +54,7 @@ function koreanTextToNumber(text: string): number | null {
     return ones ? 10 + ones : null;
   }
 
+  // 1~9
   return KOREAN_NUM_MAP[t] ?? null;
 }
 
@@ -51,11 +66,58 @@ function alphaToCol(ch: string): number | null {
   return code;
 }
 
+// "피삼" / "오오" / "PE" 같은 걸 "P3" / "O5" / "P2" 로 바꿔주는 전처리
+function normalizeAlphaCoordinateLike(raw: string): string {
+  const t = raw.replace(/\s+/g, '');
+
+  // 행/열 패턴은 여기서 건드리지 않음
+  if (t.includes('행') || t.includes('열')) return t;
+
+  const upper = t.toUpperCase();
+
+  
+
+  // 1) "PE" 처럼 알파벳 두 글자인 경우 (P2 말했는데 PE로 인식된 케이스)
+  if (/^[A-Z]{2}$/.test(upper)) {
+    const colAlpha = upper[0];
+    const rowAlpha = upper[1];
+
+    // 뒤 글자를 숫자로 추정
+    const romanToDigit: Record<string, number> = {
+      E: 2, // "투(2)"를 E로 인식한 경우
+      O: 5, // "오(5)"를 O로 인식한 경우
+      I: 2, // "이(2)"를 I로 인식한 경우
+    };
+
+    const n = romanToDigit[rowAlpha];
+    if (n) {
+      return `${colAlpha}${n}`; // 예: "PE" → "P2"
+    }
+  }
+
+  // 2) "피삼", "오오" 같은 한글 발음 → 알파벳 + 숫자
+  for (const [kor, alpha] of Object.entries(KOREAN_ALPHA_MAP)) {
+    if (t.startsWith(kor)) {
+      const rest = t.slice(kor.length);
+      const num = koreanTextToNumber(rest); // 한글/숫자 둘 다 처리
+      if (num !== null) {
+        return `${alpha}${num}`; // 예: "피삼" → "P3", "오오" → "O5"
+      }
+    }
+  }
+
+  return t;
+}
+
 function parseVoiceToCoordinate(
   rawText: string,
   boardSize: number
 ): { row: number; col: number; serverCoordinate: number } | null {
-  const text = rawText.replace(/\s+/g, '');
+  // 공백 제거
+  const compact = rawText.replace(/\s+/g, '');
+
+  // "피삼", "오오", "PE" 등을 "P3", "O5", "P2"로 정규화
+  const text = normalizeAlphaCoordinateLike(compact);
 
   let row: number | null = null;
   let col: number | null = null;
@@ -287,7 +349,7 @@ export default function GameRoom() {
     return String(coord);
   })();
 
-  /* ============================================================================================
+    /* ============================================================================================
      🎙 음성 인식 핸들러
   ============================================================================================ */
 
@@ -297,6 +359,7 @@ export default function GameRoom() {
       setLastHeard(text);
 
       const lower = text.toLowerCase();
+      const compactLower = lower.replace(/\s+/g, ''); // 공백 제거 버전
 
       // 0) 착수
       if (lower.includes('착수')) {
@@ -316,22 +379,36 @@ export default function GameRoom() {
         return;
       }
 
-      // 1) 기권
-      if (lower.includes('기권') || lower.includes('포기')) {
+      // 1) 기권 (기권, 포기, 기건)
+      if (
+        compactLower.includes('기권') ||
+        compactLower.includes('기건') || // 오인식
+        lower.includes('포기')
+      ) {
         console.log('🟢 음성 명령: 기권');
         handleResign();
         return;
       }
 
-      // 2) 무승부
-      if (lower.includes('무승부')) {
+      // 2) 무승부 (무승부, 무슨부, 무슨부 신청)
+      if (
+        compactLower.includes('무승부') ||
+        compactLower.includes('무슨부') // 오인식들 전부 커버
+      ) {
         console.log('🟢 음성 명령: 무승부 신청');
         handleDrawRequest();
         return;
       }
 
-      // 3) 수 넘김
-      if (lower.includes('수 넘김') || lower.includes('넘김') || lower.includes('패스')) {
+      // 3) 수 넘김 (수 넘김, 수넘김, 넘김, 패스, 순환김, 수넝김)
+      if (
+        lower.includes('수 넘김') ||
+        compactLower.includes('수넘김') ||
+        compactLower.includes('넘김') ||
+        compactLower.includes('패스') ||
+        compactLower.includes('순환김') || // 오인식
+        compactLower.includes('수넝김')    // 오인식
+      ) {
         console.log('🟢 음성 명령: 수 넘김');
         handlePass();
         return;
@@ -376,6 +453,7 @@ export default function GameRoom() {
       handleDrawRequest,
     ]
   );
+
 
   /* ==================== 음성 인식 시작 / 정리 ==================== */
   useEffect(() => {
