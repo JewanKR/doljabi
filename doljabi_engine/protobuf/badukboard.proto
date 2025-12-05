@@ -4,16 +4,16 @@ package badukboardproto;
 
 /* 바둑, 오목 비트보드를 그대로 직렬화한 상태 */
 message BadukBoardState {
-    repeated fixed64 black = 1 [jstype = JS_STRING];
-    repeated fixed64 white = 2 [jstype = JS_STRING];
+    repeated fixed64 black = 1;
+    repeated fixed64 white = 2;
 }
 
 /** 플레이어 시간 정보 */
 message PlayerTimeInfo {
-    uint64 main_time = 1 [jstype = JS_STRING];
-    uint64 fischer_time = 2 [jstype = JS_STRING];
+    uint64 main_time = 1;
+    uint64 fischer_time = 2;
     uint32 remaining_overtime = 3;
-    uint64 overtime = 4 [jstype = JS_STRING];
+    uint64 overtime = 4;
 }
 
 /** 바둑판 턴 정보 */

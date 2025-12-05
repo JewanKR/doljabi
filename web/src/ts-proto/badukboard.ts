@@ -57,16 +57,16 @@ export function colorToJSON(object: Color): string {
 
 /** 바둑, 오목 비트보드를 그대로 직렬화한 상태 */
 export interface BadukBoardState {
-  black: string[];  // fixed64를 문자열로 저장하여 BigInt로 파싱
-  white: string[];  // fixed64를 문자열로 저장하여 BigInt로 파싱
+  black: bigint[];
+  white: bigint[];
 }
 
 /** 플레이어 시간 정보 */
 export interface PlayerTimeInfo {
-  mainTime: number;
-  fischerTime: number;
+  mainTime: bigint;
+  fischerTime: bigint;
   remainingOvertime: number;
-  overtime: number;
+  overtime: bigint;
 }
 
 /** 보드 시간 턴 정보 */
@@ -147,16 +147,18 @@ function createBaseBadukBoardState(): BadukBoardState {
 
 export const BadukBoardState: MessageFns<BadukBoardState> = {
   encode(message: BadukBoardState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    writer.uint32(10).fork();
     for (const v of message.black) {
-      writer.fixed64(BigInt(v));
+      if (BigInt.asUintN(64, v!) !== v!) {
+        throw new globalThis.Error("value provided for field v! of type fixed64 too large");
+      }
+      writer.uint32(9).fixed64(v!);
     }
-    writer.join();
-    writer.uint32(18).fork();
     for (const v of message.white) {
-      writer.fixed64(BigInt(v));
+      if (BigInt.asUintN(64, v!) !== v!) {
+        throw new globalThis.Error("value provided for field v! of type fixed64 too large");
+      }
+      writer.uint32(17).fixed64(v!);
     }
-    writer.join();
     return writer;
   },
 
@@ -169,7 +171,7 @@ export const BadukBoardState: MessageFns<BadukBoardState> = {
       switch (tag >>> 3) {
         case 1: {
           if (tag === 9) {
-            message.black.push(reader.fixed64().toString());
+            message.black.push(reader.fixed64() as bigint);
 
             continue;
           }
@@ -177,7 +179,7 @@ export const BadukBoardState: MessageFns<BadukBoardState> = {
           if (tag === 10) {
             const end2 = reader.uint32() + reader.pos;
             while (reader.pos < end2) {
-              message.black.push(reader.fixed64().toString());
+              message.black.push(reader.fixed64() as bigint);
             }
 
             continue;
@@ -187,7 +189,7 @@ export const BadukBoardState: MessageFns<BadukBoardState> = {
         }
         case 2: {
           if (tag === 17) {
-            message.white.push(reader.fixed64().toString());
+            message.white.push(reader.fixed64() as bigint);
 
             continue;
           }
@@ -195,7 +197,7 @@ export const BadukBoardState: MessageFns<BadukBoardState> = {
           if (tag === 18) {
             const end2 = reader.uint32() + reader.pos;
             while (reader.pos < end2) {
-              message.white.push(reader.fixed64().toString());
+              message.white.push(reader.fixed64() as bigint);
             }
 
             continue;
@@ -214,18 +216,18 @@ export const BadukBoardState: MessageFns<BadukBoardState> = {
 
   fromJSON(object: any): BadukBoardState {
     return {
-      black: globalThis.Array.isArray(object?.black) ? object.black.map((e: any) => globalThis.Number(e)) : [],
-      white: globalThis.Array.isArray(object?.white) ? object.white.map((e: any) => globalThis.Number(e)) : [],
+      black: globalThis.Array.isArray(object?.black) ? object.black.map((e: any) => BigInt(e)) : [],
+      white: globalThis.Array.isArray(object?.white) ? object.white.map((e: any) => BigInt(e)) : [],
     };
   },
 
   toJSON(message: BadukBoardState): unknown {
     const obj: any = {};
     if (message.black?.length) {
-      obj.black = message.black.map((e) => Math.round(e));
+      obj.black = message.black.map((e) => e.toString());
     }
     if (message.white?.length) {
-      obj.white = message.white.map((e) => Math.round(e));
+      obj.white = message.white.map((e) => e.toString());
     }
     return obj;
   },
@@ -242,21 +244,30 @@ export const BadukBoardState: MessageFns<BadukBoardState> = {
 };
 
 function createBasePlayerTimeInfo(): PlayerTimeInfo {
-  return { mainTime: 0, fischerTime: 0, remainingOvertime: 0, overtime: 0 };
+  return { mainTime: 0n, fischerTime: 0n, remainingOvertime: 0, overtime: 0n };
 }
 
 export const PlayerTimeInfo: MessageFns<PlayerTimeInfo> = {
   encode(message: PlayerTimeInfo, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.mainTime !== 0) {
+    if (message.mainTime !== 0n) {
+      if (BigInt.asUintN(64, message.mainTime) !== message.mainTime) {
+        throw new globalThis.Error("value provided for field message.mainTime of type uint64 too large");
+      }
       writer.uint32(8).uint64(message.mainTime);
     }
-    if (message.fischerTime !== 0) {
+    if (message.fischerTime !== 0n) {
+      if (BigInt.asUintN(64, message.fischerTime) !== message.fischerTime) {
+        throw new globalThis.Error("value provided for field message.fischerTime of type uint64 too large");
+      }
       writer.uint32(16).uint64(message.fischerTime);
     }
     if (message.remainingOvertime !== 0) {
       writer.uint32(24).uint32(message.remainingOvertime);
     }
-    if (message.overtime !== 0) {
+    if (message.overtime !== 0n) {
+      if (BigInt.asUintN(64, message.overtime) !== message.overtime) {
+        throw new globalThis.Error("value provided for field message.overtime of type uint64 too large");
+      }
       writer.uint32(32).uint64(message.overtime);
     }
     return writer;
@@ -274,7 +285,7 @@ export const PlayerTimeInfo: MessageFns<PlayerTimeInfo> = {
             break;
           }
 
-          message.mainTime = longToNumber(reader.uint64());
+          message.mainTime = reader.uint64() as bigint;
           continue;
         }
         case 2: {
@@ -282,7 +293,7 @@ export const PlayerTimeInfo: MessageFns<PlayerTimeInfo> = {
             break;
           }
 
-          message.fischerTime = longToNumber(reader.uint64());
+          message.fischerTime = reader.uint64() as bigint;
           continue;
         }
         case 3: {
@@ -298,7 +309,7 @@ export const PlayerTimeInfo: MessageFns<PlayerTimeInfo> = {
             break;
           }
 
-          message.overtime = longToNumber(reader.uint64());
+          message.overtime = reader.uint64() as bigint;
           continue;
         }
       }
@@ -312,26 +323,26 @@ export const PlayerTimeInfo: MessageFns<PlayerTimeInfo> = {
 
   fromJSON(object: any): PlayerTimeInfo {
     return {
-      mainTime: isSet(object.mainTime) ? globalThis.Number(object.mainTime) : 0,
-      fischerTime: isSet(object.fischerTime) ? globalThis.Number(object.fischerTime) : 0,
+      mainTime: isSet(object.mainTime) ? BigInt(object.mainTime) : 0n,
+      fischerTime: isSet(object.fischerTime) ? BigInt(object.fischerTime) : 0n,
       remainingOvertime: isSet(object.remainingOvertime) ? globalThis.Number(object.remainingOvertime) : 0,
-      overtime: isSet(object.overtime) ? globalThis.Number(object.overtime) : 0,
+      overtime: isSet(object.overtime) ? BigInt(object.overtime) : 0n,
     };
   },
 
   toJSON(message: PlayerTimeInfo): unknown {
     const obj: any = {};
-    if (message.mainTime !== 0) {
-      obj.mainTime = Math.round(message.mainTime);
+    if (message.mainTime !== 0n) {
+      obj.mainTime = message.mainTime.toString();
     }
-    if (message.fischerTime !== 0) {
-      obj.fischerTime = Math.round(message.fischerTime);
+    if (message.fischerTime !== 0n) {
+      obj.fischerTime = message.fischerTime.toString();
     }
     if (message.remainingOvertime !== 0) {
       obj.remainingOvertime = Math.round(message.remainingOvertime);
     }
-    if (message.overtime !== 0) {
-      obj.overtime = Math.round(message.overtime);
+    if (message.overtime !== 0n) {
+      obj.overtime = message.overtime.toString();
     }
     return obj;
   },
@@ -341,10 +352,10 @@ export const PlayerTimeInfo: MessageFns<PlayerTimeInfo> = {
   },
   fromPartial<I extends Exact<DeepPartial<PlayerTimeInfo>, I>>(object: I): PlayerTimeInfo {
     const message = createBasePlayerTimeInfo();
-    message.mainTime = object.mainTime ?? 0;
-    message.fischerTime = object.fischerTime ?? 0;
+    message.mainTime = object.mainTime ?? 0n;
+    message.fischerTime = object.fischerTime ?? 0n;
     message.remainingOvertime = object.remainingOvertime ?? 0;
-    message.overtime = object.overtime ?? 0;
+    message.overtime = object.overtime ?? 0n;
     return message;
   },
 };
@@ -1464,7 +1475,7 @@ export const ServerToClientResponse: MessageFns<ServerToClientResponse> = {
   },
 };
 
-type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined;
+type Builtin = Date | Function | Uint8Array | string | number | boolean | bigint | undefined;
 
 export type DeepPartial<T> = T extends Builtin ? T
   : T extends globalThis.Array<infer U> ? globalThis.Array<DeepPartial<U>>
@@ -1475,14 +1486,6 @@ export type DeepPartial<T> = T extends Builtin ? T
 type KeysOfUnion<T> = T extends T ? keyof T : never;
 export type Exact<P, I extends P> = P extends Builtin ? P
   : P & { [K in keyof P]: Exact<P[K], I[K]> } & { [K in Exclude<keyof I, KeysOfUnion<P>>]: never };
-
-function longToNumber(int64: { toString(): string }): number {
-  const str = int64.toString();
-  const num = globalThis.Number(str);
-  // MAX_SAFE_INTEGER를 넘어도 에러를 던지지 않고 그냥 변환
-  // JavaScript number는 64비트 float이므로 정확도 손실이 있지만 사용 가능
-  return num;
-}
 
 function isSet(value: any): boolean {
   return value !== null && value !== undefined;

@@ -140,8 +140,8 @@ pub async fn run_game_node<G: GameLogic>(
     tokio::pin!(empty_room_timeout);
     let mut running = false;
 
-    // 게임 타이머 설정 (초기값은 매우 긴 시간: 30일)
-    let game_timer = tokio::time::sleep(Duration::from_secs(30 * 24 * 3600));
+    // 게임 타이머 설정
+    let game_timer = tokio::time::sleep(Duration::from_secs(u64::MAX));
     tokio::pin!(game_timer);
     let mut timer_active = false;
 
@@ -324,10 +324,10 @@ pub async fn create_room_request (
             // 초를 밀리초로 변환 (프론트엔드는 초 단위로 보냄)
             let (main_time, fischer_time, remaining_overtime, overtime) = config.output();
             let config_ms = BadukBoardGameConfig::new(
-                main_time * 1000,     // 초 → 밀리초
-                fischer_time * 1000,  // 초 → 밀리초
+                main_time,
+                fischer_time,
                 remaining_overtime,
-                overtime * 1000       // 초 → 밀리초
+                overtime
             );
             let game = BadukRoom::new(config_ms);
             tokio::spawn(run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx, tx_clone));
@@ -336,10 +336,10 @@ pub async fn create_room_request (
             // 초를 밀리초로 변환 (프론트엔드는 초 단위로 보냄)
             let (main_time, fischer_time, remaining_overtime, overtime) = config.output();
             let config_ms = BadukBoardGameConfig::new(
-                main_time * 1000,     // 초 → 밀리초
-                fischer_time * 1000,  // 초 → 밀리초
+                main_time,
+                fischer_time,
                 remaining_overtime,
-                overtime * 1000       // 초 → 밀리초
+                overtime
             );
             let game = OmokRoom::new(config_ms);
             tokio::spawn(run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx, tx_clone));

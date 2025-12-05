@@ -42,10 +42,6 @@ pub struct Omok {
         &self.board
     }
 
-    pub fn switch_turn(&mut self) {
-        self.board.switch_turn();
-    }
-
     // 방향 크기 정의
     pub fn direction_value(&self, dir: Direction) -> u16 {
         match dir {
