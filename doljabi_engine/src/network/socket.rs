@@ -22,7 +22,7 @@ pub enum RoomCommunicationDataForm {
 
 #[utoipa::path(
     get,
-    path = "/api/room/{enter_code}/session/{session_key}",
+    path = "/ws/room/{enter_code}/session/{session_key}",
     params(
         ("enter_code" = u16, Path, description = "방 입장 코드"),
         ("session_key" = String, Path, description = "세션 키")

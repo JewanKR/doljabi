@@ -50,9 +50,20 @@ pub struct UserProfile {
     pub rating: i32,
     // 나중에 필드 더 추가 가능 (예: created_at, bio 등)
 }
+impl UserProfile {
+    pub fn convert_session2proto(self) -> crate::proto::badukboardproto::UserInfo {
+        crate::proto::badukboardproto::UserInfo {
+            user_name: match self.username {
+                Some(name) => name,
+                None => "".to_string(),
+            },
+            rating: self.rating as u32
+        }
+    }
+}
 
 /// user_id로 유저 프로필 가져오기
-fn get_user_profile_by_id(
+pub fn get_user_profile_by_id(
     conn: &Connection,
     user_id: u64,
 ) -> rusqlite::Result<Option<UserProfile>> {

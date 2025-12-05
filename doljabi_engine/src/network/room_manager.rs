@@ -140,7 +140,7 @@ pub async fn run_game_node<G: GameLogic>(
     tokio::pin!(empty_room_timeout);
     let mut running = false;
 
-    // 게임 타이머 설정 (초기값은 무한대)
+    // 게임 타이머 설정
     let game_timer = tokio::time::sleep(Duration::from_secs(u64::MAX));
     tokio::pin!(game_timer);
     let mut timer_active = false;
@@ -164,8 +164,14 @@ pub async fn run_game_node<G: GameLogic>(
                             let duration = game.set_timer();
                             game_timer.as_mut().reset(tokio::time::Instant::now() + duration);
                             timer_active = true;
+                            // 게임 시작 응답을 모든 클라이언트에게 전송
+                            let _ = broadcast_tx.send(Arc::new(response.clone()));
                         },
                         GameRoomResponse::GameOver => {
+                            // 게임 종료 응답을 모든 클라이언트에게 전송
+                            let _ = broadcast_tx.send(Arc::new(response.clone()));
+                            #[cfg(debug_assertions)]
+                            println!("📤 게임 종료 응답 브로드캐스트 완료");
                             break;
                         },
                         GameRoomResponse::ChangeTurn => {
@@ -174,6 +180,8 @@ pub async fn run_game_node<G: GameLogic>(
                                 let duration = game.set_timer();
                                 game_timer.as_mut().reset(tokio::time::Instant::now() + duration);
                             }
+                            // 착수 응답을 모든 클라이언트에게 전송
+                            let _ = broadcast_tx.send(Arc::new(response.clone()));
                         },
                     }
 
@@ -313,11 +321,27 @@ pub async fn create_room_request (
 
     match payload {
         CreateRoomRequestForm::Baduk(config) => {
-            let game = BadukRoom::new(config);
+            // 초를 밀리초로 변환 (프론트엔드는 초 단위로 보냄)
+            let (main_time, fischer_time, remaining_overtime, overtime) = config.output();
+            let config_ms = BadukBoardGameConfig::new(
+                main_time,
+                fischer_time,
+                remaining_overtime,
+                overtime
+            );
+            let game = BadukRoom::new(config_ms);
             tokio::spawn(run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx, tx_clone));
         }
         CreateRoomRequestForm::Omok(config) => {
-            let game = OmokRoom::new(config);
+            // 초를 밀리초로 변환 (프론트엔드는 초 단위로 보냄)
+            let (main_time, fischer_time, remaining_overtime, overtime) = config.output();
+            let config_ms = BadukBoardGameConfig::new(
+                main_time,
+                fischer_time,
+                remaining_overtime,
+                overtime
+            );
+            let game = OmokRoom::new(config_ms);
             tokio::spawn(run_game_node(game, enter_code, manager, mpsc_rx, broadcast_tx, tx_clone));
         }
     };
