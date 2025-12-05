@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ClientToServerRequest,
@@ -8,6 +8,12 @@ import {
 } from '../../../ts-proto/badukboard';
 import { SessionManager } from '../../../api/axios-instance';
 import { loadRoomConfig } from './enter-room-config';
+import {
+  startAutoVoice,
+  stopAutoVoice,
+  updateVoiceCallback,
+} from '../../../voice_control/autoVoiceHandler';
+import { parseVoiceToCoordinate } from './voice-utils';
 
 interface Player {
   nickname: string;
@@ -46,6 +52,7 @@ export default function OmokGameRoom() {
   const [myColor, setMyColor] = useState<'black' | 'white' | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [canStartGame, setCanStartGame] = useState(false);
+  const [lastHeard, setLastHeard] = useState<string>(''); // 🎙️ 음성 인식 텍스트
   const wsRef = useRef<WebSocket | null>(null);
 
   const [players, setPlayers] = useState<{ black: Player; white: Player }>({
@@ -235,7 +242,7 @@ export default function OmokGameRoom() {
 
     // WebSocket 연결 (바이너리 프로토콜)
     const host = window.location.hostname;
-    const wsUrl = `wss://${host}/ws/room/${enterCode}/session/${sessionKey}`;
+    const wsUrl = `ws://localhost:27000/ws/room/${enterCode}/session/${sessionKey}`;
     console.log('🔌 WebSocket 연결 시도:', wsUrl);
     const ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';
@@ -611,6 +618,128 @@ export default function OmokGameRoom() {
     wsRef.current.send(encoded);
     console.log('🎮 게임 시작 요청 전송');
   };
+
+  /* ============================================================================================
+     🎙 음성 인식 핸들러
+  ============================================================================================ */
+
+  const handleVoiceText = useCallback(
+    (text: string) => {
+      console.log('🎙 음성 텍스트:', text);
+      setLastHeard(text);
+
+      const lower = text.toLowerCase();
+      const compactLower = lower.replace(/\s+/g, ''); // 공백 제거 버전
+
+      // 0) 착수
+      if (lower.includes('착수')) {
+        console.log('🟢 음성 명령: 착수');
+
+        if (!selectedPosition) {
+          console.log('❌ 선택된 좌표가 없어서 착수 명령을 무시합니다.');
+          return;
+        }
+
+        if (currentTurn !== myColor) {
+          console.log('❌ 내 차례가 아니라 착수 명령을 무시합니다.');
+          return;
+        }
+
+        handlePlaceStone();
+        return;
+      }
+
+      // 1) 기권 (기권, 포기, 기건)
+      if (
+        compactLower.includes('기권') ||
+        compactLower.includes('기건') || // 오인식
+        lower.includes('포기')
+      ) {
+        console.log('🟢 음성 명령: 기권');
+        handleResign();
+        return;
+      }
+
+      // 2) 무승부 (무승부, 무슨부, 무슨부 신청)
+      if (
+        compactLower.includes('무승부') ||
+        compactLower.includes('무슨부') // 오인식들 전부 커버
+      ) {
+        console.log('🟢 음성 명령: 무승부 신청');
+        handleDrawRequest();
+        return;
+      }
+
+      // 3) 수 넘김 (수 넘김, 수넘김, 넘김, 패스, 순환김, 수넝김)
+      if (
+        lower.includes('수 넘김') ||
+        compactLower.includes('수넘김') ||
+        compactLower.includes('넘김') ||
+        compactLower.includes('패스') ||
+        compactLower.includes('순환김') || // 오인식
+        compactLower.includes('수넝김')    // 오인식
+      ) {
+        console.log('🟢 음성 명령: 수 넘김');
+        handlePass();
+        return;
+      }
+
+      // 4) 좌표 선택
+      if (currentTurn !== myColor) {
+        console.log('내 차례가 아니라서 좌표 선택 음성은 무시합니다.');
+        return;
+      }
+
+      const parsed = parseVoiceToCoordinate(text, boardSize);
+      if (!parsed) {
+        console.log('❌ 좌표 해석 실패 (행/열 패턴이나 A4 패턴 아님):', text);
+        return;
+      }
+
+      const { row, col, serverCoordinate } = parsed;
+      const rowIndex = row - 1;
+      const colIndex = col - 1;
+
+      if (board[rowIndex][colIndex] !== null) {
+        console.log(`❌ 이미 돌이 있는 위치입니다: ${row}행 ${col}열`);
+        return;
+      }
+
+      setSelectedPosition({ row: rowIndex, col: colIndex });
+
+      console.log(
+        `🟡 좌표 선택: ${row}행 ${col}열 → 서버 좌표 ${serverCoordinate} (착수는 '착수'라고 말할 때 확정)`
+      );
+    },
+    [
+      board,
+      boardSize,
+      currentTurn,
+      myColor,
+      selectedPosition,
+      handlePlaceStone,
+      handlePass,
+      handleResign,
+      handleDrawRequest,
+    ]
+  );
+
+  /* ==================== 음성 인식 시작 / 정리 ==================== */
+  useEffect(() => {
+    if (!gameStarted) return;
+    
+    startAutoVoice(handleVoiceText);
+
+    return () => {
+      stopAutoVoice();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameStarted]);
+
+  useEffect(() => {
+    if (!gameStarted) return;
+    updateVoiceCallback(handleVoiceText);
+  }, [handleVoiceText, gameStarted]);
 
   // 디버깅 로그
   useEffect(() => {
@@ -1018,6 +1147,51 @@ export default function OmokGameRoom() {
                 boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.2)',
               }}
             >
+              {/* 좌표 라벨 - 상단 (A, B, C...) */}
+              <div className="absolute top-2 left-8 right-8 pointer-events-none">
+                {Array.from({ length: boardSize }).map((_, i) => {
+                  const cellSize = 100 / (boardSize - 1);
+                  const leftPosition = `${i * cellSize}%`;
+                  return (
+                    <div
+                      key={`col-label-${i}`}
+                      className="absolute text-xs font-semibold"
+                      style={{
+                        color: 'rgba(0,0,0,0.7)',
+                        left: leftPosition,
+                        transform: 'translateX(-50%)',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {String.fromCharCode(65 + i)}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 좌표 라벨 - 왼쪽 (1, 2, 3...) */}
+              <div className="absolute top-8 bottom-8 left-2 pointer-events-none">
+                {Array.from({ length: boardSize }).map((_, i) => {
+                  const cellSize = 100 / (boardSize - 1);
+                  const topPosition = `${i * cellSize}%`;
+                  return (
+                    <div
+                      key={`row-label-${i}`}
+                      className="absolute text-xs font-semibold"
+                      style={{
+                        color: 'rgba(0,0,0,0.7)',
+                        top: topPosition,
+                        transform: 'translateY(-50%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {i + 1}
+                    </div>
+                  );
+                })}
+              </div>
+
               {/* 그리드 */}
               <div
                 className="absolute inset-8 grid gap-0"
@@ -1337,6 +1511,42 @@ export default function OmokGameRoom() {
           )}
         </div>
       </div>
+
+      {/* 🎙️ 음성 인식 표시 (오른쪽 아래 고정) */}
+      {gameStarted && (
+        <div
+          className="fixed bottom-6 right-6 rounded-xl p-4 border shadow-2xl z-50"
+          style={{
+            backgroundColor: 'rgba(22,22,28,0.95)',
+            borderColor: '#1f6feb',
+            boxShadow: '0 8px 32px rgba(31,111,235,0.4)',
+            maxWidth: '320px',
+          }}
+        >
+          <div className="flex items-start space-x-3">
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: '#1f6feb' }}
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="8" y="4" width="4" height="8" rx="2" fill="white"/>
+                <path d="M8 10C8 12 7 13 10 13C13 13 12 12 12 10" stroke="white" strokeWidth="1" strokeLinecap="round"/>
+                <line x1="10" y1="13" x2="10" y2="16" stroke="white" strokeWidth="1" strokeLinecap="round"/>
+                <line x1="8" y1="16" x2="12" y2="16" stroke="white" strokeWidth="1" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-semibold mb-1 flex items-center justify-between">
+                <span style={{ color: '#8ab4f8' }}>🎙️ 음성 인식</span>
+                <span className="text-xs" style={{ color: '#10b981' }}>● ON</span>
+              </div>
+              <div className="text-sm break-words" style={{ color: '#e8eaf0' }}>
+                {lastHeard ? `"${lastHeard}"` : '말해보세요 (예: 삼행오열)'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

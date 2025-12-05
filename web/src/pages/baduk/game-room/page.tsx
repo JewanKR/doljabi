@@ -236,7 +236,7 @@ export default function BadukGameRoom() {
 
     // WebSocket 연결 (바이너리 프로토콜)
     const host = window.location.hostname;
-    const wsUrl = `wss://${host}/ws/room/${enterCode}/session/${sessionKey}`;
+    const wsUrl = `ws://localhost:27000/ws/room/${enterCode}/session/${sessionKey}`;
     console.log('🔌 WebSocket 연결 시도:', wsUrl);
     const ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';

@@ -1,0 +1,32 @@
+*   [33m5d46c09[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Merge main_temp branch
+[31m|[m[32m\[m  
+[31m|[m * [33m8a534da[m[33m ([m[1;31morigin/main_temp[m[33m)[m 돌잡이 v0.3.2 preview.3 2025-12-05
+[31m|[m *   [33m64e84ce[m 돌잡이 v0.3.1 preview.2 2025-12-05 버그 픽스
+[31m|[m [33m|[m[34m\[m  
+[31m|[m [33m|[m * [33medd830d[m[33m ([m[1;31morigin/feature/omok-websocket-integration[m[33m)[m 돌잡이 v0.3.1 preview.1 2025-12-05
+[31m|[m * [34m|[m [33m564e832[m 2025-12-03(1)
+* [34m|[m [34m|[m   [33m11b587e[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Merge pull request #13 from JewanKR/feature/omok-websocket-integration
+[35m|[m[36m\[m [34m\[m [34m\[m  
+[35m|[m * [34m\[m [34m\[m   [33m0f2a2f8[m Merge branch 'main' into feature/omok-websocket-integration
+[35m|[m [34m|[m[35m\[m [34m\[m [34m\[m  
+[35m|[m [34m|[m[35m/[m [34m/[m [34m/[m  
+[35m|[m[35m/[m[34m|[m [34m|[m [34m/[m   
+[35m|[m [34m|[m [34m|[m[34m/[m    
+[35m|[m [34m|[m[34m/[m[34m|[m     
+* [34m|[m [34m|[m   [33m5e08bfb[m Merge pull request #12 from JewanKR/2025-12-03
+[1;33m|[m[1;34m\[m [34m\[m [34m\[m  
+[1;33m|[m * [34m|[m [34m|[m [33m98c2fa7[m base2
+* [1;34m|[m [34m|[m [34m|[m   [33m859c2a2[m Merge pull request #9 from JewanKR/main_temp
+[1;35m|[m[1;36m\[m [1;34m\[m [34m\[m [34m\[m  
+[1;35m|[m * [1;34m\[m [34m\[m [34m\[m   [33mf31d88d[m Merge branch 'main' into main_temp
+[1;35m|[m [31m|[m[1;35m\[m [1;34m\[m [34m\[m [34m\[m  
+[1;35m|[m [31m|[m[1;35m/[m [1;34m/[m [34m/[m [34m/[m  
+[1;35m|[m[1;35m/[m[31m|[m [1;34m|[m [34m|[m [34m|[m   
+* [31m|[m [1;34m|[m [34m|[m [34m|[m   [33m1f0dc31[m Merge pull request #8 from JewanKR/main_temp
+[33m|[m[34m\[m [31m\[m [1;34m\[m [34m\[m [34m\[m  
+[33m|[m * [31m\[m [1;34m\[m [34m\[m [34m\[m   [33m09ef18f[m Merge branch 'main' into main_temp
+[33m|[m [35m|[m[33m\[m [31m\[m [1;34m\[m [34m\[m [34m\[m  
+[33m|[m [35m|[m[33m/[m [31m/[m [1;34m/[m [34m/[m [34m/[m  
+[33m|[m[33m/[m[35m|[m [31m|[m [1;34m|[m [34m|[m [34m|[m   
+[33m|[m [35m|[m [31m|[m [1;34m|[m * [34m|[m [33m007eb4a[m 2025-12-04(2)
+[33m|[m [35m|[m [31m|[m [1;34m|[m * [34m|[m [33m8b58e16[m 2025-12-04(1)
