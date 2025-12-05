@@ -3,6 +3,7 @@ import type { RouteObject } from 'react-router-dom';
 
 const Home = lazy(() => import('../pages/home/page'));
 const NotFound = lazy(() => import('../pages/NotFound'));
+const UserProfile = lazy(() => import('../pages/user-profile/page'));
 
 // Baduk pages
 const BadukQuickMatch = lazy(() => import('../pages/baduk/quick-match/page'));
@@ -33,6 +34,10 @@ const routes: RouteObject[] = [
   {
     path: '/signup',
     element: <Home />,
+  },
+  {
+    path: '/user-profile',
+    element: <UserProfile />,
   },
   {
     path: '/baduk/quick-match',

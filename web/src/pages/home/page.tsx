@@ -226,17 +226,31 @@ export default function Home() {
           {isLoggedIn && userProfile ? (
             <>
               {/* 로그인 상태: 유저 정보 표시 */}
-              <div className="flex items-center space-x-4 px-6 py-2 rounded-lg border"
-                   style={{
-                     backgroundColor: 'rgba(22,22,28,0.6)',
-                     borderColor: '#2a2a33'
-                   }}>
-                <div className="text-right">
+              <div 
+                onClick={() => navigate('/user-profile')}
+                className="px-6 py-2 rounded-lg border cursor-pointer transition-all"
+                style={{
+                  backgroundColor: 'rgba(22,22,28,0.6)',
+                  borderColor: '#2a2a33'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#1f6feb';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(31, 111, 235, 0.3)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#2a2a33';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                <div className="flex items-center space-x-3">
                   <div className="font-semibold" style={{ color: '#e8eaf0' }}>
                     {userProfile.username}
                   </div>
-                  <div className="text-sm" style={{ color: '#9aa1ad' }}>
-                    레이팅: {userProfile.rating}
+                  <div className="text-sm flex items-center space-x-1" style={{ color: '#9aa1ad' }}>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M6 1L7 4L10 4.5L7.5 6.5L8 9.5L6 8L4 9.5L4.5 6.5L2 4.5L5 4L6 1Z" fill="#f59e0b"/>
+                    </svg>
+                    <span>{userProfile.rating}</span>
                   </div>
                 </div>
               </div>

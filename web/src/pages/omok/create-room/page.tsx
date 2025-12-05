@@ -10,10 +10,10 @@ export default function OmokCreateRoom() {
   const createRoomMutation = useCreateRoomRequest();
 
   const [gameConfig, setGameConfig] = useState<BadukBoardGameConfig>({
-    main_time: 600,
-    fischer_time: 10,
-    overtime: 30,
-    remaining_overtime: 3
+    main_time: 0,           // 0초 (밀리초)
+    fischer_time: 0,        // 0초 (밀리초)
+    overtime: 30000,        // 30초 (밀리초)
+    remaining_overtime: 3   // 3회
   });
 
   const handleSliderChange = (field: keyof BadukBoardGameConfig, value: number) => {
@@ -68,7 +68,8 @@ export default function OmokCreateRoom() {
     }
   };
 
-  const formatTime = (seconds: number): string => {
+  const formatTime = (ms: number): string => {
+    const seconds = Math.floor(ms / 1000);
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
@@ -112,13 +113,13 @@ export default function OmokCreateRoom() {
                   <input
                     type="range"
                     min="0"
-                    max="3600"
-                    step="60"
+                    max="7200000"
+                    step="60000"
                     value={gameConfig.main_time}
                     onChange={(e) => handleSliderChange('main_time', parseInt(e.target.value))}
                     className="w-full h-2 rounded-lg appearance-none cursor-pointer"
                     style={{
-                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${(gameConfig.main_time / 3600) * 100}%, #2a2a33 ${(gameConfig.main_time / 3600) * 100}%, #2a2a33 100%)`
+                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${(gameConfig.main_time / 28800000) * 100}%, #2a2a33 ${(gameConfig.main_time / 28800000) * 100}%, #2a2a33 100%)`
                     }}
                   />
                 </div>
@@ -127,19 +128,19 @@ export default function OmokCreateRoom() {
                   <div className="flex items-center justify-between mb-3">
                     <span style={{ color: '#9aa1ad' }}>피셔 시간</span>
                     <span className="font-mono font-semibold" style={{ color: '#e8eaf0' }}>
-                      {gameConfig.fischer_time}초
+                      {Math.floor(gameConfig.fischer_time / 1000)}초
                     </span>
                   </div>
                   <input
                     type="range"
                     min="0"
-                    max="60"
-                    step="1"
+                    max="60000"
+                    step="1000"
                     value={gameConfig.fischer_time}
                     onChange={(e) => handleSliderChange('fischer_time', parseInt(e.target.value))}
                     className="w-full h-2 rounded-lg appearance-none cursor-pointer"
                     style={{
-                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${(gameConfig.fischer_time / 60) * 100}%, #2a2a33 ${(gameConfig.fischer_time / 60) * 100}%, #2a2a33 100%)`
+                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${(gameConfig.fischer_time / 60000) * 100}%, #2a2a33 ${(gameConfig.fischer_time / 60000) * 100}%, #2a2a33 100%)`
                     }}
                   />
                 </div>
@@ -154,19 +155,19 @@ export default function OmokCreateRoom() {
                   <div className="flex items-center justify-between mb-3">
                     <span style={{ color: '#9aa1ad' }}>초읽기 시간</span>
                     <span className="font-mono font-semibold" style={{ color: '#e8eaf0' }}>
-                      {gameConfig.overtime}초
+                      {Math.floor(gameConfig.overtime / 1000)}초
                     </span>
                   </div>
                   <input
                     type="range"
                     min="0"
-                    max="300"
-                    step="1"
+                    max="300000"
+                    step="1000"
                     value={gameConfig.overtime}
                     onChange={(e) => handleSliderChange('overtime', parseInt(e.target.value))}
                     className="w-full h-2 rounded-lg appearance-none cursor-pointer"
                     style={{
-                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${(gameConfig.overtime / 300) * 100}%, #2a2a33 ${(gameConfig.overtime / 300) * 100}%, #2a2a33 100%)`
+                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${(gameConfig.overtime / 300000) * 100}%, #2a2a33 ${(gameConfig.overtime / 300000) * 100}%, #2a2a33 100%)`
                     }}
                   />
                 </div>

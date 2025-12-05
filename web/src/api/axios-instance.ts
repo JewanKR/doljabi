@@ -28,7 +28,7 @@ class SessionManager {
 
 // axios 인스턴스 생성
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "/" || "http://localhost:27000",
+  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:27000",
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",
@@ -39,7 +39,7 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const sessionKey = SessionManager.getSessionKey();
-    
+
     // 세션키가 있으면 커스텀 헤더에 추가
     if (sessionKey) {
       config.headers.set("X-Session-Key", sessionKey);
@@ -74,7 +74,7 @@ export const customInstance = <T>(
   options?: AxiosRequestConfig
 ): Promise<T> => {
   const source = axios.CancelToken.source();
-  
+
   const promise = axiosInstance({
     ...config,
     ...options,

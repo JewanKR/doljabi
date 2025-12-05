@@ -249,6 +249,106 @@
         }
       }
     },
+    "/api/user/update-password": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "operationId": "update_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePasswordForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "비밀번호 변경 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "현재 비밀번호가 올바르지 않음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user/update-username": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "operationId": "update_username",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUsernameForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "닉네임 변경 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "잘못된 요청 또는 이미 사용 중인 닉네임",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ws/room/{enter_code}/session/{session_key}": {
       "get": {
         "operationId": "enter_room",
@@ -457,6 +557,40 @@
           "username": {
             "type": "string",
             "description": "사용자 이름 (닉네임)"
+          }
+        }
+      },
+      "UpdatePasswordForm": {
+        "type": "object",
+        "required": [
+          "session_key",
+          "current_password",
+          "new_password"
+        ],
+        "properties": {
+          "current_password": {
+            "type": "string"
+          },
+          "new_password": {
+            "type": "string"
+          },
+          "session_key": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateUsernameForm": {
+        "type": "object",
+        "required": [
+          "session_key",
+          "new_username"
+        ],
+        "properties": {
+          "new_username": {
+            "type": "string"
+          },
+          "session_key": {
+            "type": "string"
           }
         }
       },
