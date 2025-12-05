@@ -218,6 +218,169 @@
         }
       }
     },
+    "/api/users/me": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "summary": "세션 키로 내 정보 조회\n내 정보 조회 (세션키로)",
+        "operationId": "get_my_profile",
+        "parameters": [
+          {
+            "name": "session_key",
+            "in": "query",
+            "description": "세션 키",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "내 정보 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효하지 않은 세션",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "user"
+        ],
+        "summary": "내 계정 탈퇴",
+        "operationId": "delete_my_account",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "계정 삭제 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효하지 않은 세션",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/nickname": {
+      "patch": {
+        "tags": [
+          "user"
+        ],
+        "summary": "내 닉네임 변경",
+        "operationId": "update_my_nickname",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMyNicknameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "닉네임 변경 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "유효하지 않은 세션",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/password": {
+      "patch": {
+        "tags": [
+          "user"
+        ],
+        "summary": "내 비밀번호 변경",
+        "operationId": "update_my_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMyPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "비밀번호 변경 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "세션/비밀번호 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/soyul/auth/login": {
       "post": {
         "tags": [
@@ -279,47 +442,6 @@
         "responses": {
           "200": {
             "description": "로그아웃 성공",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/soyul/auth/me": {
-      "post": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "세션 키로 내 정보 조회",
-        "operationId": "me",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SessionKeyRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "유저 정보",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MeResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "세션 없음/만료",
             "content": {
               "application/json": {
                 "schema": {
@@ -434,6 +556,8 @@
           "login_id",
           "username",
           "rating",
+          "wins",
+          "losses",
           "is_banned"
         ],
         "properties": {
@@ -442,6 +566,10 @@
           },
           "login_id": {
             "type": "string"
+          },
+          "losses": {
+            "type": "integer",
+            "format": "int32"
           },
           "rating": {
             "type": "integer",
@@ -453,6 +581,10 @@
           },
           "username": {
             "type": "string"
+          },
+          "wins": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -495,6 +627,40 @@
         "properties": {
           "is_banned": {
             "type": "boolean"
+          }
+        }
+      },
+      "UpdateMyNicknameRequest": {
+        "type": "object",
+        "required": [
+          "session_key",
+          "new_username"
+        ],
+        "properties": {
+          "new_username": {
+            "type": "string"
+          },
+          "session_key": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateMyPasswordRequest": {
+        "type": "object",
+        "required": [
+          "session_key",
+          "old_password",
+          "new_password"
+        ],
+        "properties": {
+          "new_password": {
+            "type": "string"
+          },
+          "old_password": {
+            "type": "string"
+          },
+          "session_key": {
+            "type": "string"
           }
         }
       },

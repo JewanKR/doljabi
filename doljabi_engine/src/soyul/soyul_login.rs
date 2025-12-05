@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, State, Query},
     http::StatusCode,
     Json,
 };
@@ -329,6 +329,24 @@ async fn destroy_session(store: &SessionStore, session_key: &str) -> bool {
 // ============================================================
 // 2) 로그인 / 회원가입 API
 // ============================================================
+#[derive(Deserialize, ToSchema)]
+pub struct SessionQuery {
+    pub session_key: String,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct UpdateMyNicknameRequest {
+    pub session_key: String,
+    pub new_username: String,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct UpdateMyPasswordRequest {
+    pub session_key: String,
+    pub old_password: String,
+    pub new_password: String,
+}
+
 
 #[derive(Deserialize, ToSchema)]
 pub struct SignupRequest {
@@ -361,6 +379,8 @@ pub struct MeResponse {
     pub login_id: String,
     pub username: String,
     pub rating: i32,
+    pub wins: i32,
+    pub losses: i32,
     pub is_banned: bool,
 }
 
@@ -516,21 +536,24 @@ pub async fn login(
 }
 
 /// 세션 키로 내 정보 조회
+/// 내 정보 조회 (세션키로)
 #[utoipa::path(
-    post,
-    path = "/soyul/auth/me",
-    request_body = SessionKeyRequest,
-    responses(
-        (status = 200, description = "유저 정보", body = MeResponse),
-        (status = 401, description = "세션 없음/만료", body = GenericResponse)
+    get,
+    path = "/api/users/me",
+    params(
+        ("session_key" = String, Query, description = "세션 키")
     ),
-    tag = "auth"
+    responses(
+        (status = 200, description = "내 정보 조회 성공", body = MeResponse),
+        (status = 401, description = "유효하지 않은 세션", body = GenericResponse)
+    ),
+    tag = "user"
 )]
-pub async fn me(
+pub async fn get_my_profile(
     State(state): State<LoginState>,
-    Json(body): Json<SessionKeyRequest>,
+    Query(q): Query<SessionQuery>,
 ) -> Result<Json<MeResponse>, (StatusCode, Json<GenericResponse>)> {
-    let Some(user_id) = get_user_id(&state.sessions, &body.session_key).await else {
+    let Some(user_id) = get_user_id(&state.sessions, &q.session_key).await else {
         return Err((
             StatusCode::UNAUTHORIZED,
             Json(GenericResponse {
@@ -540,12 +563,17 @@ pub async fn me(
         ));
     };
 
-    let (login_id, username, rating, is_banned) = {
+    let (login_id, username, rating, wins, losses, is_banned) = {
         let db = state.db.clone();
         let mut conn = db.lock().await;
 
         let result = conn.query_row(
-            "SELECT login_id, username, COALESCE(rating, 1500), COALESCE(is_banned, 0) FROM users WHERE id = ?1",
+            "SELECT login_id, username,
+                    COALESCE(rating, 1500),
+                    COALESCE(wins, 0),
+                    COALESCE(losses, 0),
+                    COALESCE(is_banned, 0)
+             FROM users WHERE id = ?1",
             params![user_id],
             |row| {
                 Ok((
@@ -553,6 +581,8 @@ pub async fn me(
                     row.get::<_, String>(1)?,
                     row.get::<_, i32>(2)?,
                     row.get::<_, i32>(3)?,
+                    row.get::<_, i32>(4)?,
+                    row.get::<_, i32>(5)?,
                 ))
             },
         );
@@ -576,9 +606,200 @@ pub async fn me(
         login_id,
         username,
         rating,
+        wins,
+        losses,
         is_banned: is_banned != 0,
     }))
 }
+
+/// 내 닉네임 변경
+#[utoipa::path(
+    patch,
+    path = "/api/users/me/nickname",
+    request_body = UpdateMyNicknameRequest,
+    responses(
+        (status = 200, description = "닉네임 변경 성공", body = GenericResponse),
+        (status = 401, description = "유효하지 않은 세션", body = GenericResponse)
+    ),
+    tag = "user"
+)]
+pub async fn update_my_nickname(
+    State(state): State<LoginState>,
+    Json(body): Json<UpdateMyNicknameRequest>,
+) -> Result<Json<GenericResponse>, (StatusCode, Json<GenericResponse>)> {
+    let Some(user_id) = get_user_id(&state.sessions, &body.session_key).await else {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(GenericResponse {
+                success: false,
+                message: "유효하지 않은 세션입니다.".to_string(),
+            }),
+        ));
+    };
+
+    let affected = {
+        let db = state.db.clone();
+        let mut conn = db.lock().await;
+
+        conn.execute(
+            "UPDATE users SET username = ?1 WHERE id = ?2",
+            params![body.new_username, user_id],
+        )
+        .map_err(internal_error)?
+    };
+
+    if affected == 0 {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(GenericResponse {
+                success: false,
+                message: "유저 정보를 업데이트할 수 없습니다.".to_string(),
+            }),
+        ));
+    }
+
+    Ok(Json(GenericResponse {
+        success: true,
+        message: "닉네임이 변경되었습니다.".to_string(),
+    }))
+}
+
+/// 내 비밀번호 변경
+#[utoipa::path(
+    patch,
+    path = "/api/users/me/password",
+    request_body = UpdateMyPasswordRequest,
+    responses(
+        (status = 200, description = "비밀번호 변경 성공", body = GenericResponse),
+        (status = 401, description = "세션/비밀번호 오류", body = GenericResponse)
+    ),
+    tag = "user"
+)]
+pub async fn update_my_password(
+    State(state): State<LoginState>,
+    Json(body): Json<UpdateMyPasswordRequest>,
+) -> Result<Json<GenericResponse>, (StatusCode, Json<GenericResponse>)> {
+    let Some(user_id) = get_user_id(&state.sessions, &body.session_key).await else {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(GenericResponse {
+                success: false,
+                message: "유효하지 않은 세션입니다.".to_string(),
+            }),
+        ));
+    };
+
+    // 현재 비밀번호 확인
+    let stored_hash = {
+        let db = state.db.clone();
+        let mut conn = db.lock().await;
+
+        let result = conn.query_row(
+            "SELECT password_hash FROM users WHERE id = ?1",
+            params![user_id],
+            |row| row.get::<_, String>(0),
+        );
+
+        match result {
+            Ok(h) => h,
+            Err(e) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(GenericResponse {
+                        success: false,
+                        message: format!("DB 오류: {e}"),
+                    }),
+                ))
+            }
+        }
+    };
+
+    let parsed_hash = PasswordHash::new(&stored_hash).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(GenericResponse {
+                success: false,
+                message: format!("비밀번호 해시 파싱 오류: {e}"),
+            }),
+        )
+    })?;
+
+    if Argon2::default()
+        .verify_password(body.old_password.as_bytes(), &parsed_hash)
+        .is_err()
+    {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(GenericResponse {
+                success: false,
+                message: "현재 비밀번호가 올바르지 않습니다.".to_string(),
+            }),
+        ));
+    }
+
+    // 새 비밀번호 해시 후 저장
+    let new_hash = hash_password(&body.new_password).map_err(internal_error)?;
+
+    {
+        let db = state.db.clone();
+        let mut conn = db.lock().await;
+
+        conn.execute(
+            "UPDATE users SET password_hash = ?1 WHERE id = ?2",
+            params![new_hash, user_id],
+        )
+        .map_err(internal_error)?;
+    }
+
+    Ok(Json(GenericResponse {
+        success: true,
+        message: "비밀번호가 변경되었습니다.".to_string(),
+    }))
+}
+
+/// 내 계정 탈퇴
+#[utoipa::path(
+    delete,
+    path = "/api/users/me",
+    request_body = SessionKeyRequest,
+    responses(
+        (status = 200, description = "계정 삭제 성공", body = GenericResponse),
+        (status = 401, description = "유효하지 않은 세션", body = GenericResponse)
+    ),
+    tag = "user"
+)]
+pub async fn delete_my_account(
+    State(state): State<LoginState>,
+    Json(body): Json<SessionKeyRequest>,
+) -> Result<Json<GenericResponse>, (StatusCode, Json<GenericResponse>)> {
+    let Some(user_id) = get_user_id(&state.sessions, &body.session_key).await else {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(GenericResponse {
+                success: false,
+                message: "유효하지 않은 세션입니다.".to_string(),
+            }),
+        ));
+    };
+
+    // DB에서 유저 삭제
+    {
+        let db = state.db.clone();
+        let mut conn = db.lock().await;
+
+        conn.execute("DELETE FROM users WHERE id = ?1", params![user_id])
+            .map_err(internal_error)?;
+    }
+
+    // 세션 삭제
+    destroy_session(&state.sessions, &body.session_key).await;
+
+    Ok(Json(GenericResponse {
+        success: true,
+        message: "계정이 삭제되었습니다.".to_string(),
+    }))
+}
+
 
 /// 로그아웃 (세션 삭제)
 #[utoipa::path(
@@ -613,6 +834,10 @@ pub fn login_router() -> OpenApiRouter<LoginState> {
     OpenApiRouter::new()
         .routes(routes!(signup))
         .routes(routes!(login))
-        .routes(routes!(me))
         .routes(routes!(logout))
+        .routes(routes!(get_my_profile))
+        .routes(routes!(update_my_nickname))
+        .routes(routes!(update_my_password))
+        .routes(routes!(delete_my_account))
 }
+
