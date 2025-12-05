@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ClientToServerRequest,
@@ -36,9 +36,9 @@ export default function OmokGameRoom() {
   
   const [boardSize] = useState(15);
   const [board, setBoard] = useState<(null | 'black' | 'white')[][]>(
-    Array(15)
+    Array(boardSize)
       .fill(null)
-      .map(() => Array(15).fill(null))
+      .map(() => Array(boardSize).fill(null))
   );
 
   const [gameStarted, setGameStarted] = useState(false);
@@ -54,25 +54,25 @@ export default function OmokGameRoom() {
       nickname: '---',
       rating: '---' as any,
       color: 'black',
-      mainTime: 1800,
-      byoyomiTime: 30,
+      mainTime: 0,
+      byoyomiTime: 30000,
       byoyomiCount: 3,
     },
     white: {
       nickname: '---',
       rating: '---' as any,
       color: 'white',
-      mainTime: 1800,
-      byoyomiTime: 30,
+      mainTime: 0,
+      byoyomiTime: 30000,
       byoyomiCount: 3,
     },
   });
 
-  const [initialTime] = useState({ black: 1800, white: 1800 });
+  const [initialTime] = useState({ black: 1800000, white: 1800000 });
   const [isInByoyomi, setIsInByoyomi] = useState({ black: false, white: false });
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 비트보드를 2D 배열로 변환하는 유틸리티 함수 (15x15 오목판용)
+  // 비트보드를 2D 배열로 변환하는 유틸리티 함수
   const bitboardToBoardArray = (
     blackBitboard: string[] | null | undefined,
     whiteBitboard: string[] | null | undefined,
@@ -194,27 +194,35 @@ export default function OmokGameRoom() {
         }
       }));
     }
+
+    // 턴 정보 업데이트
+    const turnColor = colorEnumToString(gameState.turn);
+    if (turnColor) {
+      setCurrentTurn(turnColor);
+    }
   };
 
   // 타이머 관리 (게임 시작 후에만 작동)
   useEffect(() => {
     if (!gameStarted) return;
 
+    // 클라이언트 타이머 시작
     timerRef.current = setInterval(() => {
       setPlayers(prev => {
         const newPlayers = { ...prev };
         const current = newPlayers[currentTurn];
 
         if (current.mainTime > 0) {
-          current.mainTime -= 1;
-          if (current.mainTime === 0) {
+          current.mainTime -= 1000;
+          if (current.mainTime <= 0) {
+            current.mainTime = 0;
             setIsInByoyomi(prev => ({ ...prev, [currentTurn]: true }));
           }
         } else if (current.byoyomiTime > 0) {
-          current.byoyomiTime -= 1;
-          if (current.byoyomiTime === 0 && current.byoyomiCount > 0) {
+          current.byoyomiTime -= 1000;
+          if (current.byoyomiTime <= 0 && current.byoyomiCount > 0) {
             current.byoyomiCount -= 1;
-            current.byoyomiTime = 30;
+            current.byoyomiTime = 30000;
           }
         }
 
@@ -391,20 +399,20 @@ export default function OmokGameRoom() {
         if (response.drawOffer) {
           const opponentName = response.drawOffer.userName || '상대방';
           console.log('🤝 무승부 신청 수신:', opponentName);
-          if (confirm(`${opponentName}님이 무승부를 제안했습니다. 수락하시겠습니까?`)) {
-            console.log('✅ 무승부 수락 - 서버에 무승부 요청 전송');
-            // 무승부 수락 = 나도 무승부 요청을 보냄
-            const drawRequest: ClientToServerRequest = {
-              sessionKey: sessionKey || '',
-              drawOffer: {}
-            };
-            const encoded = ClientToServerRequest.encode(drawRequest).finish();
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-              wsRef.current.send(encoded);
-              console.log('🤝 무승부 수락 요청 전송 완료');
-            }
-          } else {
-            console.log('❌ 무승부 거절');
+            if (confirm(`${opponentName}님이 무승부를 제안했습니다. 수락하시겠습니까?`)) {
+              console.log('✅ 무승부 수락 - 서버에 무승부 요청 전송');
+              // 무승부 수락 = 나도 무승부 요청을 보냄
+              const drawRequest: ClientToServerRequest = {
+                sessionKey: sessionKey || '',
+                drawOffer: {}
+              };
+              const encoded = ClientToServerRequest.encode(drawRequest).finish();
+              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                wsRef.current.send(encoded);
+                console.log('🤝 무승부 수락 요청 전송 완료');
+              }
+            } else {
+              console.log('❌ 무승부 거절');
           }
         }
         
@@ -460,7 +468,8 @@ export default function OmokGameRoom() {
     };
   }, []); // 빈 배열 - 마운트 시 한 번만 실행
 
-  const formatTime = (seconds: number) => {
+  const formatTime = (ms: number) => {
+    const seconds = Math.floor(ms / 1000);
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
@@ -530,7 +539,7 @@ export default function OmokGameRoom() {
     }
 
     // 좌표 계산 (0~224)
-    const coordinate = row * 15 + col;
+    const coordinate = row * boardSize + col;
 
     // 서버로 착수 요청 전송 (Protobuf)
     const chaksuRequest: ClientToServerRequest = {
@@ -652,6 +661,8 @@ export default function OmokGameRoom() {
   const myPlayer = myColor ? players[myColor] : players.black;
   const opponentColor = myColor === 'black' ? 'white' : myColor === 'white' ? 'black' : 'white';
   const opponentPlayer = players[opponentColor];
+
+  const isMyColor = myColor === 'black' ? 'black' : myColor === 'white' ? 'white' : 'black'
 
   const myTimePercentage = myColor ? getTimePercentage(myPlayer.mainTime, initialTime[myColor]) : 0;
   const opponentTimePercentage = getTimePercentage(opponentPlayer.mainTime, initialTime[opponentColor]);
@@ -901,8 +912,8 @@ export default function OmokGameRoom() {
                       메인 시간
                     </span>
                     <span
-                      className={`font-mono font-bold ${isInByoyomi[myColor] ? 'text-red-500' : ''}`}
-                      style={{ color: isInByoyomi[myColor] ? '#ef4444' : '#e8eaf0' }}
+                      className={`font-mono font-bold ${isInByoyomi[isMyColor] ? 'text-red-500' : ''}`}
+                      style={{ color: isInByoyomi[isMyColor] ? '#ef4444' : '#e8eaf0' }}
                     >
                       {formatTime(myPlayer.mainTime)}
                     </span>
@@ -912,8 +923,8 @@ export default function OmokGameRoom() {
                     <span className="text-sm" style={{ color: '#9aa1ad' }}>
                       초읽기
                     </span>
-                    <span className={`font-mono font-bold ${isInByoyomi[myColor] ? 'text-red-500' : ''}`}
-                          style={{ color: isInByoyomi[myColor] ? '#ef4444' : '#9aa1ad' }}>
+                    <span className={`font-mono font-bold ${isInByoyomi[isMyColor] ? 'text-red-500' : ''}`}
+                          style={{ color: isInByoyomi[isMyColor] ? '#ef4444' : '#9aa1ad' }}>
                       {formatTime(myPlayer.byoyomiTime)}
                     </span>
                   </div>
@@ -921,8 +932,8 @@ export default function OmokGameRoom() {
                     <span className="text-sm" style={{ color: '#9aa1ad' }}>
                       남은 횟수
                     </span>
-                    <span className={`font-mono font-bold ${isInByoyomi[myColor] ? 'text-red-500' : ''}`}
-                          style={{ color: isInByoyomi[myColor] ? '#ef4444' : '#9aa1ad' }}>
+                    <span className={`font-mono font-bold ${isInByoyomi[isMyColor] ? 'text-red-500' : ''}`}
+                          style={{ color: isInByoyomi[isMyColor] ? '#ef4444' : '#9aa1ad' }}>
                       {myPlayer.byoyomiCount}회
                     </span>
                   </div>
@@ -1238,7 +1249,7 @@ export default function OmokGameRoom() {
                   className="text-2xl font-mono font-bold text-center p-3 rounded"
                   style={{ backgroundColor: '#141822', color: '#8ab4f8' }}
                 >
-                  {selectedPosition ? `${selectedPosition.row * 15 + selectedPosition.col}` : '미선택'}
+                  {selectedPosition ? `${selectedPosition.row * boardSize + selectedPosition.col}` : '미선택'}
                 </div>
               </div>
 

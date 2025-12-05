@@ -1,19 +1,21 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SessionManager } from '../../../api/axios-instance';
+import { saveRoomConfig } from '../game-room/enter-room-config';
 
 export default function BadukJoinRoom() {
   const navigate = useNavigate();
   const [roomCode, setRoomCode] = useState('');
   const [error, setError] = useState('');
 
-  const handleJoinRoom = () => {
+  const handleJoinRoom = (targetRoomCode?: string) => {
+    const codeToJoin = targetRoomCode || roomCode;
     const sessionKey = SessionManager.getSessionKey();
 
-    console.log('🚪 바둑 방 입장 시도:', roomCode);
+    console.log('🚪 방 입장 시도:', codeToJoin);
     console.log('🔑 세션키:', sessionKey ? '있음' : '없음');
 
-    if (!roomCode.trim()) {
+    if (!codeToJoin.trim()) {
       setError('방 입장 코드를 입력해주세요.');
       return;
     }
@@ -26,17 +28,22 @@ export default function BadukJoinRoom() {
     }
 
     // 방 입장 정보 저장
-    const roomData = {
-      enter_code: parseInt(roomCode, 10),
+    const roomConfig = {
+      enter_code: parseInt(codeToJoin, 10),
       session_key: sessionKey,
       isHost: false
     };
 
-    localStorage.setItem('baduk_room_data', JSON.stringify(roomData));
-    console.log('💾 방 입장 설정 저장:', roomData);
+    // enter-room-config.ts를 이용해 저장
+    saveRoomConfig(roomConfig);
+    console.log('💾 방 입장 설정 저장:', roomConfig);
 
     console.log('🚀 게임방으로 이동');
     navigate('/baduk/game-room');
+  };
+
+  const handleDirectCodeJoin = () => {
+    handleJoinRoom();
   };
 
   return (
@@ -75,21 +82,22 @@ export default function BadukJoinRoom() {
                 type="text"
                 value={roomCode}
                 onChange={(e) => {
-                  setRoomCode(e.target.value);
+                  setRoomCode(e.target.value.toUpperCase());
                   setError('');
                 }}
-                placeholder="예: 12345"
+                placeholder=""
                 className="w-full px-4 py-4 rounded-lg border text-xl text-center font-bold tracking-wider"
                 style={{
                   backgroundColor: '#141822',
                   borderColor: '#2a2a33',
                   color: '#e8eaf0'
                 }}
+                maxLength={6}
               />
             </div>
 
             <button
-              onClick={handleJoinRoom}
+              onClick={handleDirectCodeJoin}
               className="w-full py-4 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap text-white"
               style={{
                 background: 'linear-gradient(180deg, #1f6feb, #1b4fd8)',

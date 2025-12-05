@@ -57,8 +57,8 @@ export function colorToJSON(object: Color): string {
 
 /** 바둑, 오목 비트보드를 그대로 직렬화한 상태 */
 export interface BadukBoardState {
-  black: string[];  // fixed64를 문자열로 저장하여 BigInt로 파싱
-  white: string[];  // fixed64를 문자열로 저장하여 BigInt로 파싱
+  black: number[];
+  white: number[];
 }
 
 /** 플레이어 시간 정보 */
@@ -147,16 +147,12 @@ function createBaseBadukBoardState(): BadukBoardState {
 
 export const BadukBoardState: MessageFns<BadukBoardState> = {
   encode(message: BadukBoardState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    writer.uint32(10).fork();
     for (const v of message.black) {
-      writer.fixed64(BigInt(v));
+      writer.uint32(9).fixed64(v!);
     }
-    writer.join();
-    writer.uint32(18).fork();
     for (const v of message.white) {
-      writer.fixed64(BigInt(v));
+      writer.uint32(17).fixed64(v!);
     }
-    writer.join();
     return writer;
   },
 
@@ -169,7 +165,7 @@ export const BadukBoardState: MessageFns<BadukBoardState> = {
       switch (tag >>> 3) {
         case 1: {
           if (tag === 9) {
-            message.black.push(reader.fixed64().toString());
+            message.black.push(longToNumber(reader.fixed64()));
 
             continue;
           }
@@ -177,7 +173,7 @@ export const BadukBoardState: MessageFns<BadukBoardState> = {
           if (tag === 10) {
             const end2 = reader.uint32() + reader.pos;
             while (reader.pos < end2) {
-              message.black.push(reader.fixed64().toString());
+              message.black.push(longToNumber(reader.fixed64()));
             }
 
             continue;
@@ -187,7 +183,7 @@ export const BadukBoardState: MessageFns<BadukBoardState> = {
         }
         case 2: {
           if (tag === 17) {
-            message.white.push(reader.fixed64().toString());
+            message.white.push(longToNumber(reader.fixed64()));
 
             continue;
           }
@@ -195,7 +191,7 @@ export const BadukBoardState: MessageFns<BadukBoardState> = {
           if (tag === 18) {
             const end2 = reader.uint32() + reader.pos;
             while (reader.pos < end2) {
-              message.white.push(reader.fixed64().toString());
+              message.white.push(longToNumber(reader.fixed64()));
             }
 
             continue;
@@ -1477,10 +1473,13 @@ export type Exact<P, I extends P> = P extends Builtin ? P
   : P & { [K in keyof P]: Exact<P[K], I[K]> } & { [K in Exclude<keyof I, KeysOfUnion<P>>]: never };
 
 function longToNumber(int64: { toString(): string }): number {
-  const str = int64.toString();
-  const num = globalThis.Number(str);
-  // MAX_SAFE_INTEGER를 넘어도 에러를 던지지 않고 그냥 변환
-  // JavaScript number는 64비트 float이므로 정확도 손실이 있지만 사용 가능
+  const num = globalThis.Number(int64.toString());
+  if (num > globalThis.Number.MAX_SAFE_INTEGER) {
+    throw new globalThis.Error("Value is larger than Number.MAX_SAFE_INTEGER");
+  }
+  if (num < globalThis.Number.MIN_SAFE_INTEGER) {
+    throw new globalThis.Error("Value is smaller than Number.MIN_SAFE_INTEGER");
+  }
   return num;
 }
 
