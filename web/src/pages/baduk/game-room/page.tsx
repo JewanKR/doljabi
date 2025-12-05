@@ -1206,25 +1206,6 @@ export default function BadukGameRoom() {
             </>
           ) : (
             <>
-              {/* 착수 정보 */}
-              <div
-                className="rounded-xl p-4 border"
-                style={{
-                  backgroundColor: 'rgba(22,22,28,0.6)',
-                  borderColor: '#2a2a33',
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-                }}
-              >
-                <div className="text-sm mb-2" style={{ color: '#9aa1ad' }}>
-                  선택된 위치
-                </div>
-                <div
-                  className="text-2xl font-mono font-bold text-center p-3 rounded"
-                  style={{ backgroundColor: '#141822', color: '#8ab4f8' }}
-                >
-                  {selectedPosition ? `${selectedPosition.row * boardSize + selectedPosition.col}` : '미선택'}
-                </div>
-              </div>
 
               {/* 착수 버튼 */}
               <button
