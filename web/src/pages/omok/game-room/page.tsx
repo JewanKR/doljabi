@@ -380,21 +380,7 @@ export default function OmokGameRoom() {
         if (response.drawOffer) {
           const opponentName = response.drawOffer.userName || '상대방';
           console.log('🤝 무승부 신청 수신:', opponentName);
-            if (confirm(`${opponentName}님이 무승부를 제안했습니다. 수락하시겠습니까?`)) {
-              console.log('✅ 무승부 수락 - 서버에 무승부 요청 전송');
-              // 무승부 수락 = 나도 무승부 요청을 보냄
-              const drawRequest: ClientToServerRequest = {
-                sessionKey: sessionKey || '',
-                drawOffer: {}
-              };
-              const encoded = ClientToServerRequest.encode(drawRequest).finish();
-              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                wsRef.current.send(encoded);
-                console.log('🤝 무승부 수락 요청 전송 완료');
-              }
-            } else {
-              console.log('❌ 무승부 거절');
-          }
+          alert(`${opponentName}님이 무승부를 제안했습니다.`)
         }
         
         // 기권 응답 처리
@@ -595,7 +581,6 @@ export default function OmokGameRoom() {
     const encoded = ClientToServerRequest.encode(drawRequest).finish();
     wsRef.current.send(encoded);
     console.log('🤝 무승부 신청 전송');
-    alert('무승부 신청이 상대방에게 전송되었습니다.');
   };
 
   const handleStartGame = () => {
@@ -1279,20 +1264,15 @@ export default function OmokGameRoom() {
 
                 <button
                   onClick={handleDrawRequest}
-                  disabled={!isMyTurn}
                   className="w-full py-3 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap border"
                   style={{
                     backgroundColor: '#141822',
                     borderColor: '#2a2a33',
                     color: '#e8eaf0',
-                    opacity: isMyTurn ? 1 : 0.5,
-                    cursor: isMyTurn ? 'pointer' : 'not-allowed',
                   }}
                   onMouseEnter={e => {
-                    if (isMyTurn) {
-                      e.currentTarget.style.borderColor = '#f59e0b';
-                      e.currentTarget.style.color = '#f59e0b';
-                    }
+                    e.currentTarget.style.borderColor = '#f59e0b';
+                    e.currentTarget.style.color = '#f59e0b';
                   }}
                   onMouseLeave={e => {
                     e.currentTarget.style.borderColor = '#2a2a33';

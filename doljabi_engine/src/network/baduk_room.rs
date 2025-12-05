@@ -315,6 +315,12 @@ impl GameLogic for BadukRoom {
                 let offer_player = self.players.check_id_to_color(user_id);
                 let mut game_room_status = GameRoomResponse::None;
 
+                match &offer_player {
+                    Color::Black => {self.players.black_player.as_mut().map(|p| p.draw_offer());}
+                    Color::White => {self.players.white_player.as_mut().map(|p| p.draw_offer());}
+                    _ => {}
+                }
+
                 // 둘 다 무승부 요청을 하면 비김
                 if self.players.check_draw() {
                     game_room_status = GameRoomResponse::GameOver;

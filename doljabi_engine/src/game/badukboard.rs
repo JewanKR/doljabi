@@ -340,14 +340,6 @@ pub struct Players {
         self.black_player.is_none() && self.white_player.is_none()
     }
 
-    pub fn draw_offer(&mut self, color: &Color) {
-        match &color {
-            Color::Black => {self.black_player.as_mut().map(|p| p.draw_offer = true);},
-            Color::White => {self.white_player.as_mut().map(|p| p.draw_offer = true);},
-            _ => {}
-        }
-    }
-
     pub fn check_draw(&self) -> bool {
         self.black_player.as_ref().is_some_and(|p| p.check_draw_offer())
         && self.white_player.as_ref().is_some_and(|p| p.check_draw_offer())
