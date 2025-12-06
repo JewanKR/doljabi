@@ -478,10 +478,224 @@ pub async fn get_user_profile_handler(
     }
 }
 
+// 🔹 닉네임 변경 요청
+#[derive(Deserialize, ToSchema)]
+pub struct UpdateUsernameForm {
+    pub session_key: String,
+    pub new_username: String,
+}
+
+// 🔹 비밀번호 변경 요청
+#[derive(Deserialize, ToSchema)]
+pub struct UpdatePasswordForm {
+    pub session_key: String,
+    pub current_password: String,
+    pub new_password: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/user/update-username",
+    tag = "user",
+    request_body = UpdateUsernameForm,
+    responses(
+        (status = 200, description = "닉네임 변경 성공", body = ApiResponse),
+        (status = 400, description = "잘못된 요청 또는 이미 사용 중인 닉네임", body = ApiResponse),
+        (status = 500, description = "서버 내부 오류", body = ApiResponse),
+    )
+)]
+pub async fn update_username(
+    State(session_store): State<SessionStore>,
+    Json(form): Json<UpdateUsernameForm>,
+) -> (StatusCode, Json<ApiResponse>) {
+    let user_id_opt = get_user_id_by_session(&session_store, &form.session_key).await;
+
+    if user_id_opt.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse {
+                success: false,
+                message: "세션 키가 올바르지 않습니다.".into(),
+            }),
+        );
+    }
+
+    let user_id = user_id_opt.unwrap();
+
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("❌ DB 오픈 실패: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: "데이터베이스 연결 오류".into(),
+                }),
+            );
+        }
+    };
+
+    match conn.execute(
+        "UPDATE users SET username = ?1 WHERE id = ?2",
+        params![form.new_username, user_id as i64],
+    ) {
+        Ok(_) => {
+            println!("✅ 닉네임 변경 성공: user_id={}, new_username={}", user_id, form.new_username);
+            (
+                StatusCode::OK,
+                Json(ApiResponse {
+                    success: true,
+                    message: "닉네임이 변경되었습니다.".into(),
+                }),
+            )
+        }
+        Err(e) => {
+            eprintln!("❌ 닉네임 변경 실패: {}", e);
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse {
+                    success: false,
+                    message: "닉네임 변경 실패 (이미 사용 중일 수 있습니다)".into(),
+                }),
+            )
+        }
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/user/update-password",
+    tag = "user",
+    request_body = UpdatePasswordForm,
+    responses(
+        (status = 200, description = "비밀번호 변경 성공", body = ApiResponse),
+        (status = 400, description = "현재 비밀번호가 올바르지 않음", body = ApiResponse),
+        (status = 500, description = "서버 내부 오류", body = ApiResponse),
+    )
+)]
+pub async fn update_password(
+    State(session_store): State<SessionStore>,
+    Json(form): Json<UpdatePasswordForm>,
+) -> (StatusCode, Json<ApiResponse>) {
+    let user_id_opt = get_user_id_by_session(&session_store, &form.session_key).await;
+
+    if user_id_opt.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse {
+                success: false,
+                message: "세션 키가 올바르지 않습니다.".into(),
+            }),
+        );
+    }
+
+    let user_id = user_id_opt.unwrap();
+
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("❌ DB 오픈 실패: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: "데이터베이스 연결 오류".into(),
+                }),
+            );
+        }
+    };
+
+    // 현재 비밀번호 확인
+    let mut stmt = match conn.prepare("SELECT password_hash FROM users WHERE id = ?1") {
+        Ok(stmt) => stmt,
+        Err(e) => {
+            eprintln!("❌ 쿼리 준비 실패: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: "서버 오류".into(),
+                }),
+            );
+        }
+    };
+
+    let stored_hash: String = match stmt.query_row([user_id as i64], |row| row.get(0)) {
+        Ok(hash) => hash,
+        Err(e) => {
+            eprintln!("❌ 유저 조회 실패: {}", e);
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse {
+                    success: false,
+                    message: "유저를 찾을 수 없습니다.".into(),
+                }),
+            );
+        }
+    };
+
+    // 현재 비밀번호 검증
+    let is_valid = verify_argon2(&form.current_password, &stored_hash).unwrap_or(false);
+    if !is_valid {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse {
+                success: false,
+                message: "현재 비밀번호가 올바르지 않습니다.".into(),
+            }),
+        );
+    }
+
+    // 새 비밀번호 해싱
+    let new_hash = match argon2_hash(&form.new_password) {
+        Ok(hash) => hash,
+        Err(e) => {
+            eprintln!("❌ 비밀번호 해싱 실패: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: "비밀번호 처리 오류".into(),
+                }),
+            );
+        }
+    };
+
+    // 비밀번호 업데이트
+    match conn.execute(
+        "UPDATE users SET password_hash = ?1 WHERE id = ?2",
+        params![new_hash, user_id as i64],
+    ) {
+        Ok(_) => {
+            println!("✅ 비밀번호 변경 성공: user_id={}", user_id);
+            (
+                StatusCode::OK,
+                Json(ApiResponse {
+                    success: true,
+                    message: "비밀번호가 변경되었습니다.".into(),
+                }),
+            )
+        }
+        Err(e) => {
+            eprintln!("❌ 비밀번호 변경 실패: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: "비밀번호 변경 실패".into(),
+                }),
+            )
+        }
+    }
+}
+
 pub fn login_router() -> OpenApiRouter<SessionStore> {
     OpenApiRouter::new()
         .routes(routes!(signup))
         .routes(routes!(login))
         .routes(routes!(session_check))
         .routes(routes!(get_user_profile_handler))
+        .routes(routes!(update_username))
+        .routes(routes!(update_password))
 }
