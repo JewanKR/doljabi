@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SessionManager } from '../../api/axios-instance';
-import { useGetUserProfileHandler, useDeleteUser, updateUsername, updatePassword  } from '../../api/endpoints/user/user';
+import { useGetUserProfileHandler, useDeleteUser, updateUsername, updatePassword, useGetGameResult  } from '../../api/endpoints/user/user';
 
 interface UserStats {
   username: string | null;
@@ -25,9 +25,49 @@ export default function UserProfile() {
   const userProfileMutation = useGetUserProfileHandler();
   const deleteUserMutation = useDeleteUser();
 
+  // 세션키 가져오기
+  const sessionKey = SessionManager.getSessionKey();
+
+  // 게임 결과 가져오기 (프로필과 병렬로 로드)
+  const gameResultQuery = useGetGameResult(sessionKey || '', {
+    query: {
+      enabled: !!sessionKey,
+    },
+  });
+
+  // 게임 결과가 로드되면 userProfile 업데이트
   useEffect(() => {
-    const sessionKey = SessionManager.getSessionKey();
-    
+    // 에러 상태이거나 로딩 중이면 업데이트하지 않음
+    if (gameResultQuery.isError || gameResultQuery.isLoading) {
+      return;
+    }
+
+    // 성공적으로 데이터를 받았을 때만 업데이트
+    if (gameResultQuery.data && userProfile) {
+      const data = gameResultQuery.data;
+      const totalGames = data.win + data.lose + data.draw;
+      // 이미 같은 값이면 업데이트하지 않음 (무한 루프 방지)
+      if (
+        userProfile.wins !== data.win ||
+        userProfile.losses !== data.lose ||
+        userProfile.draws !== data.draw
+      ) {
+        setUserProfile((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            totalGames,
+            wins: data.win,
+            losses: data.lose,
+            draws: data.draw,
+          };
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameResultQuery.data, gameResultQuery.isError, gameResultQuery.isLoading]);
+
+  useEffect(() => {
     if (!sessionKey) {
       alert('로그인이 필요합니다.');
       navigate('/');
@@ -39,26 +79,25 @@ export default function UserProfile() {
       data: { session_key: sessionKey } as any
     }).then((response) => {
       if (response.user) {
+        setNewNickname(response.user.username || '');
+        // 게임 결과는 gameResultQuery에서 별도로 가져와서 업데이트됨 (37-62줄 참고)
         setUserProfile({
           username: response.user.username || null,
           rating: response.user.rating,
-          // TODO: 백엔드에서 통계 데이터 받아오기
           totalGames: 0,
           wins: 0,
           losses: 0,
           draws: 0,
         });
-        setNewNickname(response.user.username || '');
       }
     }).catch((error) => {
       console.error('프로필 가져오기 실패:', error);
       SessionManager.clearSessionKey();
       navigate('/');
     });
-  }, [navigate]);
+  }, [navigate, sessionKey]);
 
   const handleNicknameUpdate = async () => {
-    const sessionKey = SessionManager.getSessionKey();
     if (!sessionKey) {
       alert('로그인이 필요합니다.');
       navigate('/');
@@ -95,7 +134,6 @@ export default function UserProfile() {
   };
 
   const handlePasswordUpdate = async () => {
-    const sessionKey = SessionManager.getSessionKey();
     if (!sessionKey) {
       alert('로그인이 필요합니다.');
       navigate('/');
@@ -149,7 +187,6 @@ export default function UserProfile() {
       return;
     }
 
-    const sessionKey = SessionManager.getSessionKey();
     if (!sessionKey) {
       alert('로그인이 필요합니다.');
       navigate('/');

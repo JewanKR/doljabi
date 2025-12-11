@@ -102,6 +102,29 @@ pub struct OmokRoom {
             white_time: Some(self.white_player_time_info()),
         }
     }
+
+    pub fn record_winner(&mut self, color: Color) {
+        use crate::soyul::soyul_login::{record_game_win, record_game_lose, record_game_draw};
+
+        let black_player_id = self.players.black_player.as_ref().map(|bp| bp.user_id()).unwrap_or(u64::MAX);
+        let white_player_id = self.players.white_player.as_ref().map(|wp| wp.user_id()).unwrap_or(u64::MAX);
+
+        match color {
+            Color::Black => {
+                let _ = record_game_win(black_player_id);
+                let _ = record_game_lose(white_player_id);
+            }
+            Color::White => {
+                let _ = record_game_lose(black_player_id);
+                let _ = record_game_win(white_player_id);
+            }
+            Color::Free => {
+                let _ = record_game_draw(black_player_id);
+                let _ = record_game_draw(white_player_id);
+            }
+            _ => {}
+        }
+    }
 }
 
 impl GameLogic for OmokRoom { 
@@ -173,6 +196,8 @@ impl GameLogic for OmokRoom {
                     })
                 } else {
                     self.game.set_winner(self.game.board.is_turn().reverse());
+                    self.record_winner(self.game.board.is_turn().reverse());
+                    
                     (GameRoomResponse::GameOver, ServerToClientResponse{
                         response_type: true,
                         turn: convert_game2proto_color(self.game.board.is_turn()) as i32,
@@ -276,6 +301,7 @@ impl GameLogic for OmokRoom {
                 let the_winner = match self.game.winner() {
                     Some(color) => {
                         game_room_status = GameRoomResponse::GameOver;
+                        self.record_winner(color);
                         Some(convert_game2proto_color(color) as i32)
                     },
                     None => None
@@ -297,6 +323,7 @@ impl GameLogic for OmokRoom {
 
                 let winner = self.players.check_id_to_color(user_id).reverse();
                 self.game.set_winner(winner);
+                self.record_winner(winner);
                 
                 response = (GameRoomResponse::GameOver, ServerToClientResponse {
                     response_type: true,
@@ -325,6 +352,7 @@ impl GameLogic for OmokRoom {
                 if self.players.check_draw() {
                     game_room_status = GameRoomResponse::GameOver;
                     self.game.set_winner(Color::Free);
+                    self.record_winner(Color::Free);
                     winner = Some(convert_game2proto_color(Color::Free) as i32);
                 }
 

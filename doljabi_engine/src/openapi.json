@@ -249,6 +249,46 @@
         }
       }
     },
+    "/api/user/game_result_info/session/{session_key}": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "operationId": "get_game_result",
+        "parameters": [
+          {
+            "name": "session_key",
+            "in": "path",
+            "description": "세션 키",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "게임 결과 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameResultInformationFrom"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "세션 키가 올바르지 않음"
+          },
+          "404": {
+            "description": "해당 유저 없음"
+          },
+          "500": {
+            "description": "서버 내부 오류"
+          }
+        }
+      }
+    },
     "/api/user/profile": {
       "post": {
         "tags": [
@@ -536,6 +576,28 @@
             "type": "integer",
             "format": "int32",
             "minimum": 0
+          }
+        }
+      },
+      "GameResultInformationFrom": {
+        "type": "object",
+        "required": [
+          "win",
+          "lose",
+          "draw"
+        ],
+        "properties": {
+          "draw": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lose": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "win": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

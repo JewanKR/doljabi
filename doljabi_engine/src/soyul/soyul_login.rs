@@ -1,4 +1,4 @@
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{Json, extract::{Path, State}, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 #[cfg(debug_assertions)]
 use serde_json;
@@ -224,7 +224,10 @@ pub async fn signup(Json(form): Json<SignupForm>) -> (StatusCode, Json<ApiRespon
             login_id TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             username TEXT UNIQUE,
-            rating INTEGER DEFAULT 1500
+            rating INTEGER DEFAULT 1500,
+            win INTEGER DEFAULT 0,
+            lose INTEGER DEFAULT 0,
+            draw INTEGER DEFAULT 0
         )",
         [],
     ) {
@@ -800,6 +803,154 @@ pub async fn delete_user(
     }
 }
 
+/// 게임 승리 기록: user_id의 win 컬럼을 1 증가
+pub fn record_game_win(user_id: u64) -> rusqlite::Result<()> {
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("❌ DB 오픈 실패: {}", e);
+            return Err(e);
+        }
+    };
+
+    conn.execute(
+        "UPDATE users SET win = win + 1 WHERE id = ?1",
+        params![user_id as i64],
+    )?;
+
+    println!("✅ 승리 기록 성공: user_id={}", user_id);
+    Ok(())
+}
+
+/// 게임 패배 기록: user_id의 lose 컬럼을 1 증가
+pub fn record_game_lose(user_id: u64) -> rusqlite::Result<()> {
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("❌ DB 오픈 실패: {}", e);
+            return Err(e);
+        }
+    };
+
+    conn.execute(
+        "UPDATE users SET lose = lose + 1 WHERE id = ?1",
+        params![user_id as i64],
+    )?;
+
+    println!("✅ 패배 기록 성공: user_id={}", user_id);
+    Ok(())
+}
+
+/// 게임 무승부 기록: user_id의 draw 컬럼을 1 증가
+pub fn record_game_draw(user_id: u64) -> rusqlite::Result<()> {
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("❌ DB 오픈 실패: {}", e);
+            return Err(e);
+        }
+    };
+
+    conn.execute(
+        "UPDATE users SET draw = draw + 1 WHERE id = ?1",
+        params![user_id as i64],
+    )?;
+
+    println!("✅ 무승부 기록 성공: user_id={}", user_id);
+    Ok(())
+}
+
+/// user_id로 게임 결과(win, lose, draw) 조회
+pub fn get_game_result_by_id(
+    conn: &Connection,
+    user_id: u64,
+) -> rusqlite::Result<Option<GameResultInformationFrom>> {
+    let mut stmt = conn.prepare(
+        "SELECT win, lose, draw
+         FROM users
+         WHERE id = ?1",
+    )?;
+
+    let result = stmt.query_row([user_id as i64], |row| {
+        Ok(GameResultInformationFrom {
+            win: row.get(0)?,
+            lose: row.get(1)?,
+            draw: row.get(2)?,
+        })
+    });
+
+    match result {
+        Ok(info) => Ok(Some(info)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+#[derive(Serialize, ToSchema, Debug)]
+pub struct GameResultInformationFrom {
+    pub win: i32,
+    pub lose: i32,
+    pub draw: i32,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/user/game_result_info/session/{session_key}",
+    tag = "user",
+    params(
+        ("session_key" = String, Path, description = "세션 키")
+    ),
+    responses(
+        (status = 200, description = "게임 결과 조회 성공", body = GameResultInformationFrom),
+        (status = 400, description = "세션 키가 올바르지 않음"),
+        (status = 404, description = "해당 유저 없음"),
+        (status = 500, description = "서버 내부 오류"),
+    )
+)]
+pub async fn get_game_result(
+    State(session_store): State<SessionStore>,
+    Path(session_key): Path<String>,
+) -> impl IntoResponse {
+    // 세션키로 user_id 찾기
+    let user_id_opt = get_user_id_by_session(&session_store, &session_key).await;
+
+    if user_id_opt.is_none() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+
+    let user_id = match user_id_opt {
+        Some(id) => id,
+        _ => {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("⚠️ 게임 결과 조회(DB 오픈 실패): {}", e);
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    match get_game_result_by_id(&conn, user_id) {
+        Ok(Some(result)) => {
+            println!("✅ 게임 결과 조회 성공: user_id={}, win={}, lose={}, draw={}", 
+                user_id, result.win, result.lose, result.draw);
+            (StatusCode::OK, Json(result)).into_response()
+        }
+        Ok(None) => {
+            eprintln!("❌ 게임 결과 없음: user_id={}", user_id);
+            StatusCode::NOT_FOUND.into_response()
+        }
+        Err(e) => {
+            eprintln!("⚠️ 게임 결과 조회 중 에러: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+
 pub fn login_router() -> OpenApiRouter<SessionStore> {
     OpenApiRouter::new()
         .routes(routes!(signup))
@@ -809,4 +960,5 @@ pub fn login_router() -> OpenApiRouter<SessionStore> {
         .routes(routes!(update_username))
         .routes(routes!(update_password))
         .routes(routes!(delete_user))
+        .routes(routes!(get_game_result))
 }

@@ -6,17 +6,27 @@
  * OpenAPI spec version: 1.0.0
  */
 import {
-  useMutation
+  useMutation,
+  useQuery
 } from '@tanstack/react-query';
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   MutationFunction,
   QueryClient,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
   UseMutationOptions,
-  UseMutationResult
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
   ApiResponse,
+  GameResultInformationFrom,
   SessionCheckForm,
   UpdatePasswordForm,
   UpdateUsernameForm,
@@ -88,7 +98,93 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
       return useMutation(mutationOptions, queryClient);
     }
-    export const getUserProfileHandler = (
+    export const getGameResult = (
+    sessionKey: string,
+ options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
+) => {
+      
+      
+      return customInstance<GameResultInformationFrom>(
+      {url: `/api/user/game_result_info/session/${sessionKey}`, method: 'GET', signal
+    },
+      options);
+    }
+  
+
+
+
+export const getGetGameResultQueryKey = (sessionKey?: string,) => {
+    return [
+    `/api/user/game_result_info/session/${sessionKey}`
+    ] as const;
+    }
+
+    
+export const getGetGameResultQueryOptions = <TData = Awaited<ReturnType<typeof getGameResult>>, TError = void>(sessionKey: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGameResult>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGameResultQueryKey(sessionKey);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGameResult>>> = ({ signal }) => getGameResult(sessionKey, requestOptions, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(sessionKey),  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGameResult>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetGameResultQueryResult = NonNullable<Awaited<ReturnType<typeof getGameResult>>>
+export type GetGameResultQueryError = void
+
+
+export function useGetGameResult<TData = Awaited<ReturnType<typeof getGameResult>>, TError = void>(
+ sessionKey: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGameResult>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getGameResult>>,
+          TError,
+          Awaited<ReturnType<typeof getGameResult>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetGameResult<TData = Awaited<ReturnType<typeof getGameResult>>, TError = void>(
+ sessionKey: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGameResult>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getGameResult>>,
+          TError,
+          Awaited<ReturnType<typeof getGameResult>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetGameResult<TData = Awaited<ReturnType<typeof getGameResult>>, TError = void>(
+ sessionKey: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGameResult>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetGameResult<TData = Awaited<ReturnType<typeof getGameResult>>, TError = void>(
+ sessionKey: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGameResult>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetGameResultQueryOptions(sessionKey,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+export const getUserProfileHandler = (
     sessionCheckForm: SessionCheckForm,
  options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
 ) => {

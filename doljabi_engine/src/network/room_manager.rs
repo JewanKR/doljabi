@@ -170,6 +170,7 @@ pub async fn run_game_node<G: GameLogic>(
                         GameRoomResponse::GameOver => {
                             // 게임 종료 응답을 모든 클라이언트에게 전송
                             let _ = broadcast_tx.send(Arc::new(response.clone()));
+
                             #[cfg(debug_assertions)]
                             println!("📤 게임 종료 응답 브로드캐스트 완료");
                             break;

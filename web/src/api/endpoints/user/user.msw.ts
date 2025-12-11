@@ -20,12 +20,15 @@ import type {
 
 import type {
   ApiResponse,
+  GameResultInformationFrom,
   UserProfile,
   UserProfileResponse
 } from '../../model';
 
 
 export const getDeleteUserResponseMock = (overrideResponse: Partial< ApiResponse > = {}): ApiResponse => ({message: faker.string.alpha({length: {min: 10, max: 20}}), success: faker.datatype.boolean(), ...overrideResponse})
+
+export const getGetGameResultResponseMock = (overrideResponse: Partial< GameResultInformationFrom > = {}): GameResultInformationFrom => ({draw: faker.number.int({min: undefined, max: undefined}), lose: faker.number.int({min: undefined, max: undefined}), win: faker.number.int({min: undefined, max: undefined}), ...overrideResponse})
 
 export const getGetUserProfileHandlerResponseUserProfileMock = (overrideResponse: Partial<UserProfile> = {}): UserProfile => ({...{rating: faker.number.int({min: undefined, max: undefined}), username: faker.helpers.arrayElement([faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), undefined])}, ...overrideResponse});
 
@@ -42,6 +45,18 @@ export const getDeleteUserMockHandler = (overrideResponse?: ApiResponse | ((info
     return new HttpResponse(JSON.stringify(overrideResponse !== undefined
     ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
     : getDeleteUserResponseMock()),
+      { status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+  }, options)
+}
+
+export const getGetGameResultMockHandler = (overrideResponse?: GameResultInformationFrom | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<GameResultInformationFrom> | GameResultInformationFrom), options?: RequestHandlerOptions) => {
+  return http.get('*/api/user/game_result_info/session/:sessionKey', async (info) => {await delay(1000);
+  
+    return new HttpResponse(JSON.stringify(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getGetGameResultResponseMock()),
       { status: 200,
         headers: { 'Content-Type': 'application/json' }
       })
@@ -85,6 +100,7 @@ export const getUpdateUsernameMockHandler = (overrideResponse?: ApiResponse | ((
 }
 export const getUserMock = () => [
   getDeleteUserMockHandler(),
+  getGetGameResultMockHandler(),
   getGetUserProfileHandlerMockHandler(),
   getUpdatePasswordMockHandler(),
   getUpdateUsernameMockHandler()

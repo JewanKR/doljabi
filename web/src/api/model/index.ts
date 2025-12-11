@@ -14,6 +14,7 @@ export * from './createRoomRequestFormOneOfGameType';
 export * from './createRoomRequestFormOneOfThree';
 export * from './createRoomRequestFormOneOfThreeGameType';
 export * from './createRoomResponseForm';
+export * from './gameResultInformationFrom';
 export * from './loginForm';
 export * from './loginResponse';
 export * from './loginResponseSessionKey';
