@@ -6,6 +6,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface SessionCheckForm {
+export interface UpdatePasswordForm {
+  current_password: string;
+  new_password: string;
   session_key: string;
 }

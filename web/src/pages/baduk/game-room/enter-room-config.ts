@@ -67,3 +67,11 @@ export function getGameConfig(): any {
   const config = loadRoomConfig();
   return config?.game_config;
 }
+
+/**
+ * 호스트 여부만 가져옵니다.
+ */
+export function getIsHost(): boolean {
+  const config = loadRoomConfig();
+  return config?.isHost || false;
+}

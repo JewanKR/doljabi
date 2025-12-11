@@ -199,6 +199,96 @@
         }
       }
     },
+    "/api/user/delete": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "operationId": "delete_user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionCheckForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "유저 정보 삭제 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "세션 키가 올바르지 않음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user/game_result_info/session/{session_key}": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "operationId": "get_game_result",
+        "parameters": [
+          {
+            "name": "session_key",
+            "in": "path",
+            "description": "세션 키",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "게임 결과 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameResultInformationFrom"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "세션 키가 올바르지 않음"
+          },
+          "404": {
+            "description": "해당 유저 없음"
+          },
+          "500": {
+            "description": "서버 내부 오류"
+          }
+        }
+      }
+    },
     "/api/user/profile": {
       "post": {
         "tags": [
@@ -242,6 +332,106 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user/update-password": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "operationId": "update_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePasswordForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "비밀번호 변경 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "현재 비밀번호가 올바르지 않음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user/update-username": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "operationId": "update_username",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUsernameForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "닉네임 변경 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "잘못된 요청 또는 이미 사용 중인 닉네임",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
                 }
               }
             }
@@ -389,6 +579,28 @@
           }
         }
       },
+      "GameResultInformationFrom": {
+        "type": "object",
+        "required": [
+          "win",
+          "lose",
+          "draw"
+        ],
+        "properties": {
+          "draw": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lose": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "win": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "LoginForm": {
         "type": "object",
         "required": [
@@ -457,6 +669,40 @@
           "username": {
             "type": "string",
             "description": "사용자 이름 (닉네임)"
+          }
+        }
+      },
+      "UpdatePasswordForm": {
+        "type": "object",
+        "required": [
+          "session_key",
+          "current_password",
+          "new_password"
+        ],
+        "properties": {
+          "current_password": {
+            "type": "string"
+          },
+          "new_password": {
+            "type": "string"
+          },
+          "session_key": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateUsernameForm": {
+        "type": "object",
+        "required": [
+          "session_key",
+          "new_username"
+        ],
+        "properties": {
+          "new_username": {
+            "type": "string"
+          },
+          "session_key": {
+            "type": "string"
           }
         }
       },

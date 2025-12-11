@@ -3,6 +3,7 @@ import type { RouteObject } from 'react-router-dom';
 
 const Home = lazy(() => import('../pages/home/page'));
 const NotFound = lazy(() => import('../pages/NotFound'));
+const UserProfile = lazy(() => import('../pages/user-profile/page'));
 
 // Baduk pages
 const BadukQuickMatch = lazy(() => import('../pages/baduk/quick-match/page'));
@@ -14,12 +15,11 @@ const BadukSinglePlay = lazy(() => import('../pages/baduk/single-play/page'));
 
 // Omok pages
 const OmokQuickMatch = lazy(() => import('../pages/omok/quick-match/page'));
+const OmokRankedMatch = lazy(() => import('../pages/omok/ranked-match/page'));
 const OmokCreateRoom = lazy(() => import('../pages/omok/create-room/page'));
 const OmokJoinRoom = lazy(() => import('../pages/omok/join-room/page'));
+const OmokGameRoom = lazy(() => import('../pages/omok/game-room/page'));
 const OmokSinglePlay = lazy(() => import('../pages/omok/single-play/page'));
-
-import OmokGameRoom from '../pages/omok/game-room/page';
-import OmokRankedMatch from '../pages/omok/ranked-match/page';
 
 const routes: RouteObject[] = [
   {
@@ -33,6 +33,10 @@ const routes: RouteObject[] = [
   {
     path: '/signup',
     element: <Home />,
+  },
+  {
+    path: '/user-profile',
+    element: <UserProfile />,
   },
   {
     path: '/baduk/quick-match',

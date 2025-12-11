@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface SessionCheckForm {
+export interface UpdateUsernameForm {
+  new_username: string;
   session_key: string;
 }

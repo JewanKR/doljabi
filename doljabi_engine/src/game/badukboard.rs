@@ -22,7 +22,7 @@ pub enum BadukBoardError {
     InvalidArgument,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Color {
     Black,
     White,
@@ -159,13 +159,6 @@ pub struct BadukBoard {
     // 턴 넘김
     pub fn switch_turn(&mut self) {
         self.turn = self.turn.reverse();
-        /* 
-        match self.turn.clone() {
-            Color::Black => {self.turn = Color::White;},
-            Color::White => {self.turn = Color::Black;},
-            _ => {println!("Error: switch_turn: 색 지정이 잘못 되었습니다.")},
-        }
-        */
     }
 }
 
@@ -230,7 +223,6 @@ pub struct Player {
         self.overtime = overtime;
     }
 
-    // TODO: 시작 시간 설정
     pub fn start_turn(&mut self) {
         self.main_time += self.fischer_time;
         self.turn_start_time = tokio::time::Instant::now();
@@ -346,14 +338,6 @@ pub struct Players {
 
     pub fn check_empty_room(&self) -> bool {
         self.black_player.is_none() && self.white_player.is_none()
-    }
-
-    pub fn draw_offer(&mut self, color: &Color) {
-        match &color {
-            Color::Black => {self.black_player.as_mut().map(|p| p.draw_offer = true);},
-            Color::White => {self.white_player.as_mut().map(|p| p.draw_offer = true);},
-            _ => {}
-        }
     }
 
     pub fn check_draw(&self) -> bool {

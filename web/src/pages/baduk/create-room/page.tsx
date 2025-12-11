@@ -3,16 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { useCreateRoomRequest } from '../../../api/endpoints/default/default';
 import { SessionManager } from '../../../api/axios-instance';
 import type { BadukBoardGameConfig } from '../../../api/model';
+import { saveRoomConfig } from '../game-room/enter-room-config';
 
 export default function BadukCreateRoom() {
   const navigate = useNavigate();
   const createRoomMutation = useCreateRoomRequest();
 
   const [gameConfig, setGameConfig] = useState<BadukBoardGameConfig>({
-    main_time: 1800,      // 30분
-    fischer_time: 30,     // 30초
-    overtime: 60,         // 60초
-    remaining_overtime: 3 // 3회
+    main_time: 3600000,      // 60분 (밀리초)
+    fischer_time: 0,         // 0초 (밀리초)
+    overtime: 60000,         // 60초 (밀리초)
+    remaining_overtime: 3    // 3회
   });
 
   const handleSliderChange = (field: keyof BadukBoardGameConfig, value: number) => {
@@ -44,23 +45,29 @@ export default function BadukCreateRoom() {
       });
       console.log('✅ 방 생성 API 응답:', response);
 
-      // 방 정보 저장
-      localStorage.setItem('baduk_room_data', JSON.stringify({
+      // 방 생성 응답 저장
+      const roomConfig = {
         enter_code: response.enter_code,
         session_key: sessionKey,
         game_config: gameConfig,
         isHost: true
-      }));
+      };
+
+      // enter-room-config.ts를 이용해 저장
+      saveRoomConfig(roomConfig);
+      console.log('💾 방 설정 저장 완료:', roomConfig);
 
       console.log('🚀 게임방으로 이동:', response.enter_code);
       navigate('/baduk/game-room');
     } catch (error: any) {
       console.error('❌ 방 생성 실패:', error);
+      console.error('❌ 에러 상세:', error.response?.data || error.message);
       alert('방 생성에 실패했습니다: ' + (error.response?.data?.message || error.message));
     }
   };
 
-  const formatTime = (seconds: number): string => {
+  const formatTime = (ms: number): string => {
+    const seconds = Math.floor(ms / 1000);
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
@@ -104,13 +111,13 @@ export default function BadukCreateRoom() {
                   <input
                     type="range"
                     min="0"
-                    max="3600"
-                    step="60"
+                    max="28800000"
+                    step="60000"
                     value={gameConfig.main_time}
                     onChange={(e) => handleSliderChange('main_time', parseInt(e.target.value))}
                     className="w-full h-2 rounded-lg appearance-none cursor-pointer"
                     style={{
-                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${(gameConfig.main_time / 3600) * 100}%, #2a2a33 ${(gameConfig.main_time / 3600) * 100}%, #2a2a33 100%)`
+                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${(gameConfig.main_time / 28800000) * 100}%, #2a2a33 ${(gameConfig.main_time / 28800000) * 100}%, #2a2a33 100%)`
                     }}
                   />
                 </div>
@@ -119,19 +126,19 @@ export default function BadukCreateRoom() {
                   <div className="flex items-center justify-between mb-3">
                     <span style={{ color: '#9aa1ad' }}>피셔 시간</span>
                     <span className="font-mono font-semibold" style={{ color: '#e8eaf0' }}>
-                      {gameConfig.fischer_time}초
+                      {Math.floor(gameConfig.fischer_time / 1000)}초
                     </span>
                   </div>
                   <input
                     type="range"
                     min="0"
-                    max="60"
-                    step="1"
+                    max="60000"
+                    step="1000"
                     value={gameConfig.fischer_time}
                     onChange={(e) => handleSliderChange('fischer_time', parseInt(e.target.value))}
                     className="w-full h-2 rounded-lg appearance-none cursor-pointer"
                     style={{
-                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${(gameConfig.fischer_time / 60) * 100}%, #2a2a33 ${(gameConfig.fischer_time / 60) * 100}%, #2a2a33 100%)`
+                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${(gameConfig.fischer_time / 60000) * 100}%, #2a2a33 ${(gameConfig.fischer_time / 60000) * 100}%, #2a2a33 100%)`
                     }}
                   />
                 </div>
@@ -146,19 +153,19 @@ export default function BadukCreateRoom() {
                   <div className="flex items-center justify-between mb-3">
                     <span style={{ color: '#9aa1ad' }}>초읽기 시간</span>
                     <span className="font-mono font-semibold" style={{ color: '#e8eaf0' }}>
-                      {gameConfig.overtime}초
+                      {Math.floor(gameConfig.overtime / 1000)}초
                     </span>
                   </div>
                   <input
                     type="range"
                     min="0"
-                    max="300"
-                    step="1"
+                    max="300000"
+                    step="1000"
                     value={gameConfig.overtime}
                     onChange={(e) => handleSliderChange('overtime', parseInt(e.target.value))}
                     className="w-full h-2 rounded-lg appearance-none cursor-pointer"
                     style={{
-                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${(gameConfig.overtime / 300) * 100}%, #2a2a33 ${(gameConfig.overtime / 300) * 100}%, #2a2a33 100%)`
+                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${(gameConfig.overtime / 300000) * 100}%, #2a2a33 ${(gameConfig.overtime / 300000) * 100}%, #2a2a33 100%)`
                     }}
                   />
                 </div>
@@ -197,6 +204,14 @@ export default function BadukCreateRoom() {
               backgroundColor: '#141822',
               borderColor: '#2a2a33',
               color: '#e8eaf0'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = '#ef4444';
+              e.currentTarget.style.color = '#ef4444';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = '#2a2a33';
+              e.currentTarget.style.color = '#e8eaf0';
             }}>
             취소
           </button>

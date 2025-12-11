@@ -1,4 +1,4 @@
-use axum::{extract::State, Json, http::StatusCode};
+use axum::{Json, extract::{Path, State}, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 #[cfg(debug_assertions)]
 use serde_json;
@@ -12,7 +12,7 @@ use argon2::{
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::soyul::session::{get_user_id_by_session, generate_session_key, insert_session, SessionStore};
+use crate::soyul::session::{get_user_id_by_session, generate_session_key, insert_session, remove_session, SessionStore};
 
 //
 // 공통 에러 타입
@@ -50,9 +50,20 @@ pub struct UserProfile {
     pub rating: i32,
     // 나중에 필드 더 추가 가능 (예: created_at, bio 등)
 }
+impl UserProfile {
+    pub fn convert_session2proto(self) -> crate::proto::badukboardproto::UserInfo {
+        crate::proto::badukboardproto::UserInfo {
+            user_name: match self.username {
+                Some(name) => name,
+                None => "".to_string(),
+            },
+            rating: self.rating as u32
+        }
+    }
+}
 
 /// user_id로 유저 프로필 가져오기
-fn get_user_profile_by_id(
+pub fn get_user_profile_by_id(
     conn: &Connection,
     user_id: u64,
 ) -> rusqlite::Result<Option<UserProfile>> {
@@ -213,7 +224,10 @@ pub async fn signup(Json(form): Json<SignupForm>) -> (StatusCode, Json<ApiRespon
             login_id TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             username TEXT UNIQUE,
-            rating INTEGER DEFAULT 1500
+            rating INTEGER DEFAULT 1500,
+            win INTEGER DEFAULT 0,
+            lose INTEGER DEFAULT 0,
+            draw INTEGER DEFAULT 0
         )",
         [],
     ) {
@@ -430,7 +444,16 @@ pub async fn get_user_profile_handler(
         }
     };
 
-    match get_user_profile_by_id(&conn, user_id_opt.unwrap()) {
+    let user_id = match user_id_opt {
+        Some(id) => id,
+        _ => {return (StatusCode::INTERNAL_SERVER_ERROR, Json(UserProfileResponse{
+            success: false,
+            message: "유효하지 않은 세션키".into(),
+            user: None,
+        }));},
+    };
+
+    match get_user_profile_by_id(&conn, user_id) {
         Ok(Some(profile)) => {
             println!("✅ 유저 정보 조회 성공: {:?}", profile);
             (
@@ -467,10 +490,475 @@ pub async fn get_user_profile_handler(
     }
 }
 
+// 🔹 닉네임 변경 요청
+#[derive(Deserialize, ToSchema)]
+pub struct UpdateUsernameForm {
+    pub session_key: String,
+    pub new_username: String,
+}
+
+// 🔹 비밀번호 변경 요청
+#[derive(Deserialize, ToSchema)]
+pub struct UpdatePasswordForm {
+    pub session_key: String,
+    pub current_password: String,
+    pub new_password: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/user/update-username",
+    tag = "user",
+    request_body = UpdateUsernameForm,
+    responses(
+        (status = 200, description = "닉네임 변경 성공", body = ApiResponse),
+        (status = 400, description = "잘못된 요청 또는 이미 사용 중인 닉네임", body = ApiResponse),
+        (status = 500, description = "서버 내부 오류", body = ApiResponse),
+    )
+)]
+pub async fn update_username(
+    State(session_store): State<SessionStore>,
+    Json(form): Json<UpdateUsernameForm>,
+) -> (StatusCode, Json<ApiResponse>) {
+    let user_id_opt = get_user_id_by_session(&session_store, &form.session_key).await;
+
+    if user_id_opt.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse {
+                success: false,
+                message: "세션 키가 올바르지 않습니다.".into(),
+            }),
+        );
+    }
+
+    let user_id = match user_id_opt {
+        Some(id) => id,
+        _ => {return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse{
+            success: false,
+            message: "유효하지 않은 세션키".into(),
+        }));},
+    };
+
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("❌ DB 오픈 실패: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: "데이터베이스 연결 오류".into(),
+                }),
+            );
+        }
+    };
+
+    match conn.execute(
+        "UPDATE users SET username = ?1 WHERE id = ?2",
+        params![form.new_username, user_id as i64],
+    ) {
+        Ok(_) => {
+            println!("✅ 닉네임 변경 성공: user_id={}, new_username={}", user_id, form.new_username);
+            (
+                StatusCode::OK,
+                Json(ApiResponse {
+                    success: true,
+                    message: "닉네임이 변경되었습니다.".into(),
+                }),
+            )
+        }
+        Err(e) => {
+            eprintln!("❌ 닉네임 변경 실패: {}", e);
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse {
+                    success: false,
+                    message: "닉네임 변경 실패 (이미 사용 중일 수 있습니다)".into(),
+                }),
+            )
+        }
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/user/update-password",
+    tag = "user",
+    request_body = UpdatePasswordForm,
+    responses(
+        (status = 200, description = "비밀번호 변경 성공", body = ApiResponse),
+        (status = 400, description = "현재 비밀번호가 올바르지 않음", body = ApiResponse),
+        (status = 500, description = "서버 내부 오류", body = ApiResponse),
+    )
+)]
+pub async fn update_password(
+    State(session_store): State<SessionStore>,
+    Json(form): Json<UpdatePasswordForm>,
+) -> (StatusCode, Json<ApiResponse>) {
+    let user_id_opt = get_user_id_by_session(&session_store, &form.session_key).await;
+
+    if user_id_opt.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse {
+                success: false,
+                message: "세션 키가 올바르지 않습니다.".into(),
+            }),
+        );
+    }
+
+    let user_id = match user_id_opt {
+        Some(id) => id,
+        _ => {return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse{
+            success: false,
+            message: "유효하지 않은 세션키".into(),
+        }));},
+    };
+
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("❌ DB 오픈 실패: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: "데이터베이스 연결 오류".into(),
+                }),
+            );
+        }
+    };
+
+    // 현재 비밀번호 확인
+    let mut stmt = match conn.prepare("SELECT password_hash FROM users WHERE id = ?1") {
+        Ok(stmt) => stmt,
+        Err(e) => {
+            eprintln!("❌ 쿼리 준비 실패: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: "서버 오류".into(),
+                }),
+            );
+        }
+    };
+
+    let stored_hash: String = match stmt.query_row([user_id as i64], |row| row.get(0)) {
+        Ok(hash) => hash,
+        Err(e) => {
+            eprintln!("❌ 유저 조회 실패: {}", e);
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse {
+                    success: false,
+                    message: "유저를 찾을 수 없습니다.".into(),
+                }),
+            );
+        }
+    };
+
+    // 현재 비밀번호 검증
+    let is_valid = verify_argon2(&form.current_password, &stored_hash).unwrap_or(false);
+    if !is_valid {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse {
+                success: false,
+                message: "현재 비밀번호가 올바르지 않습니다.".into(),
+            }),
+        );
+    }
+
+    // 새 비밀번호 해싱
+    let new_hash = match argon2_hash(&form.new_password) {
+        Ok(hash) => hash,
+        Err(e) => {
+            eprintln!("❌ 비밀번호 해싱 실패: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: "비밀번호 처리 오류".into(),
+                }),
+            );
+        }
+    };
+
+    // 비밀번호 업데이트
+    match conn.execute(
+        "UPDATE users SET password_hash = ?1 WHERE id = ?2",
+        params![new_hash, user_id as i64],
+    ) {
+        Ok(_) => {
+            println!("✅ 비밀번호 변경 성공: user_id={}", user_id);
+            (
+                StatusCode::OK,
+                Json(ApiResponse {
+                    success: true,
+                    message: "비밀번호가 변경되었습니다.".into(),
+                }),
+            )
+        }
+        Err(e) => {
+            eprintln!("❌ 비밀번호 변경 실패: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: "비밀번호 변경 실패".into(),
+                }),
+            )
+        }
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/user/delete",
+    tag = "user",
+    request_body = SessionCheckForm,
+    responses(
+        (status = 200, description = "유저 정보 삭제 성공", body = ApiResponse),
+        (status = 400, description = "세션 키가 올바르지 않음", body = ApiResponse),
+        (status = 500, description = "서버 내부 오류", body = ApiResponse),
+    )
+)]
+pub async fn delete_user(
+    State(session_store): State<SessionStore>,
+    Json(form): Json<SessionCheckForm>,
+) -> (StatusCode, Json<ApiResponse>) {
+    // 세션키로 user_id 찾기
+    let user_id_opt = get_user_id_by_session(&session_store, &form.session_key).await;
+
+    if user_id_opt.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse {
+                success: false,
+                message: "세션 키가 올바르지 않습니다.".into(),
+            }),
+        );
+    }
+
+    let user_id = match user_id_opt {
+        Some(id) => id,
+        _ => {return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse{
+            success: false,
+            message: "유효하지 않은 세션키".into(),
+        }));},
+    };
+
+    remove_session(&session_store, &form.session_key).await;
+
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("⚠️ 유저 삭제(DB 오픈 실패): {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: "데이터베이스 연결 오류".into(),
+                }),
+            );
+        }
+    };
+
+    // DB에서 유저 정보 삭제
+    match conn.execute("DELETE FROM users WHERE id = ?1", params![user_id as i64]) {
+        Ok(rows_affected) => {
+            if rows_affected == 0 {
+                eprintln!("❌ 유저 삭제 실패: 해당 유저를 찾을 수 없음 (user_id={})", user_id);
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(ApiResponse {
+                        success: false,
+                        message: "해당 유저를 찾을 수 없습니다.".into(),
+                    }),
+                );
+            }
+
+            println!("✅ 유저 정보 삭제 성공: user_id={}", user_id);
+
+            (
+                StatusCode::OK,
+                Json(ApiResponse {
+                    success: true,
+                    message: "유저 정보가 삭제되었습니다.".into(),
+                }),
+            )
+        }
+        Err(e) => {
+            eprintln!("❌ 유저 삭제 실패: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: "유저 정보 삭제 중 오류가 발생했습니다.".into(),
+                }),
+            )
+        }
+    }
+}
+
+/// 게임 승리 기록: user_id의 win 컬럼을 1 증가
+pub fn record_game_win(user_id: u64) -> rusqlite::Result<()> {
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("❌ DB 오픈 실패: {}", e);
+            return Err(e);
+        }
+    };
+
+    conn.execute(
+        "UPDATE users SET win = win + 1 WHERE id = ?1",
+        params![user_id as i64],
+    )?;
+
+    println!("✅ 승리 기록 성공: user_id={}", user_id);
+    Ok(())
+}
+
+/// 게임 패배 기록: user_id의 lose 컬럼을 1 증가
+pub fn record_game_lose(user_id: u64) -> rusqlite::Result<()> {
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("❌ DB 오픈 실패: {}", e);
+            return Err(e);
+        }
+    };
+
+    conn.execute(
+        "UPDATE users SET lose = lose + 1 WHERE id = ?1",
+        params![user_id as i64],
+    )?;
+
+    println!("✅ 패배 기록 성공: user_id={}", user_id);
+    Ok(())
+}
+
+/// 게임 무승부 기록: user_id의 draw 컬럼을 1 증가
+pub fn record_game_draw(user_id: u64) -> rusqlite::Result<()> {
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("❌ DB 오픈 실패: {}", e);
+            return Err(e);
+        }
+    };
+
+    conn.execute(
+        "UPDATE users SET draw = draw + 1 WHERE id = ?1",
+        params![user_id as i64],
+    )?;
+
+    println!("✅ 무승부 기록 성공: user_id={}", user_id);
+    Ok(())
+}
+
+/// user_id로 게임 결과(win, lose, draw) 조회
+pub fn get_game_result_by_id(
+    conn: &Connection,
+    user_id: u64,
+) -> rusqlite::Result<Option<GameResultInformationFrom>> {
+    let mut stmt = conn.prepare(
+        "SELECT win, lose, draw
+         FROM users
+         WHERE id = ?1",
+    )?;
+
+    let result = stmt.query_row([user_id as i64], |row| {
+        Ok(GameResultInformationFrom {
+            win: row.get(0)?,
+            lose: row.get(1)?,
+            draw: row.get(2)?,
+        })
+    });
+
+    match result {
+        Ok(info) => Ok(Some(info)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+#[derive(Serialize, ToSchema, Debug)]
+pub struct GameResultInformationFrom {
+    pub win: i32,
+    pub lose: i32,
+    pub draw: i32,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/user/game_result_info/session/{session_key}",
+    tag = "user",
+    params(
+        ("session_key" = String, Path, description = "세션 키")
+    ),
+    responses(
+        (status = 200, description = "게임 결과 조회 성공", body = GameResultInformationFrom),
+        (status = 400, description = "세션 키가 올바르지 않음"),
+        (status = 404, description = "해당 유저 없음"),
+        (status = 500, description = "서버 내부 오류"),
+    )
+)]
+pub async fn get_game_result(
+    State(session_store): State<SessionStore>,
+    Path(session_key): Path<String>,
+) -> impl IntoResponse {
+    // 세션키로 user_id 찾기
+    let user_id_opt = get_user_id_by_session(&session_store, &session_key).await;
+
+    if user_id_opt.is_none() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+
+    let user_id = match user_id_opt {
+        Some(id) => id,
+        _ => {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let conn = match Connection::open("mydb.db") {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("⚠️ 게임 결과 조회(DB 오픈 실패): {}", e);
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    match get_game_result_by_id(&conn, user_id) {
+        Ok(Some(result)) => {
+            println!("✅ 게임 결과 조회 성공: user_id={}, win={}, lose={}, draw={}", 
+                user_id, result.win, result.lose, result.draw);
+            (StatusCode::OK, Json(result)).into_response()
+        }
+        Ok(None) => {
+            eprintln!("❌ 게임 결과 없음: user_id={}", user_id);
+            StatusCode::NOT_FOUND.into_response()
+        }
+        Err(e) => {
+            eprintln!("⚠️ 게임 결과 조회 중 에러: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+
 pub fn login_router() -> OpenApiRouter<SessionStore> {
     OpenApiRouter::new()
         .routes(routes!(signup))
         .routes(routes!(login))
         .routes(routes!(session_check))
         .routes(routes!(get_user_profile_handler))
+        .routes(routes!(update_username))
+        .routes(routes!(update_password))
+        .routes(routes!(delete_user))
+        .routes(routes!(get_game_result))
 }
