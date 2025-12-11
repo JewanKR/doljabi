@@ -25,6 +25,8 @@ import type {
 } from '../../model';
 
 
+export const getDeleteUserResponseMock = (overrideResponse: Partial< ApiResponse > = {}): ApiResponse => ({message: faker.string.alpha({length: {min: 10, max: 20}}), success: faker.datatype.boolean(), ...overrideResponse})
+
 export const getGetUserProfileHandlerResponseUserProfileMock = (overrideResponse: Partial<UserProfile> = {}): UserProfile => ({...{rating: faker.number.int({min: undefined, max: undefined}), username: faker.helpers.arrayElement([faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), undefined])}, ...overrideResponse});
 
 export const getGetUserProfileHandlerResponseMock = (overrideResponse: Partial< UserProfileResponse > = {}): UserProfileResponse => ({message: faker.string.alpha({length: {min: 10, max: 20}}), success: faker.datatype.boolean(), user: faker.helpers.arrayElement([faker.helpers.arrayElement([null,{...getGetUserProfileHandlerResponseUserProfileMock()},]), undefined]), ...overrideResponse})
@@ -33,6 +35,18 @@ export const getUpdatePasswordResponseMock = (overrideResponse: Partial< ApiResp
 
 export const getUpdateUsernameResponseMock = (overrideResponse: Partial< ApiResponse > = {}): ApiResponse => ({message: faker.string.alpha({length: {min: 10, max: 20}}), success: faker.datatype.boolean(), ...overrideResponse})
 
+
+export const getDeleteUserMockHandler = (overrideResponse?: ApiResponse | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<ApiResponse> | ApiResponse), options?: RequestHandlerOptions) => {
+  return http.post('*/api/user/delete', async (info) => {await delay(1000);
+  
+    return new HttpResponse(JSON.stringify(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getDeleteUserResponseMock()),
+      { status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+  }, options)
+}
 
 export const getGetUserProfileHandlerMockHandler = (overrideResponse?: UserProfileResponse | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<UserProfileResponse> | UserProfileResponse), options?: RequestHandlerOptions) => {
   return http.post('*/api/user/profile', async (info) => {await delay(1000);
@@ -70,6 +84,7 @@ export const getUpdateUsernameMockHandler = (overrideResponse?: ApiResponse | ((
   }, options)
 }
 export const getUserMock = () => [
+  getDeleteUserMockHandler(),
   getGetUserProfileHandlerMockHandler(),
   getUpdatePasswordMockHandler(),
   getUpdateUsernameMockHandler()

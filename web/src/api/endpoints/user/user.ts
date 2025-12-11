@@ -30,7 +30,65 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
-export const getUserProfileHandler = (
+export const deleteUser = (
+    sessionCheckForm: SessionCheckForm,
+ options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
+) => {
+      
+      
+      return customInstance<ApiResponse>(
+      {url: `/api/user/delete`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: sessionCheckForm, signal
+    },
+      options);
+    }
+  
+
+
+export const getDeleteUserMutationOptions = <TError = ApiResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{data: SessionCheckForm}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{data: SessionCheckForm}, TContext> => {
+
+const mutationKey = ['deleteUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteUser>>, {data: SessionCheckForm}> = (props) => {
+          const {data} = props ?? {};
+
+          return  deleteUser(data,requestOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteUserMutationResult = NonNullable<Awaited<ReturnType<typeof deleteUser>>>
+    export type DeleteUserMutationBody = SessionCheckForm
+    export type DeleteUserMutationError = ApiResponse
+
+    export const useDeleteUser = <TError = ApiResponse,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{data: SessionCheckForm}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteUser>>,
+        TError,
+        {data: SessionCheckForm},
+        TContext
+      > => {
+
+      const mutationOptions = getDeleteUserMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    export const getUserProfileHandler = (
     sessionCheckForm: SessionCheckForm,
  options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
 ) => {

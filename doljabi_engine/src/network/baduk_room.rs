@@ -5,12 +5,14 @@ pub struct BadukRoom {
     game: Baduk,
     game_config: BadukBoardGameConfig,
     players: Players,
+    pass_turn: bool,
 } impl BadukRoom {
     pub fn new(game_config: BadukBoardGameConfig) -> Self { Self {
         running: false,
         game: Baduk::new(),
         game_config: game_config,
         players: Players::new(),
+        pass_turn: false,
     }}
 
     pub fn turn_user_id(&self) -> Option<u64> {
@@ -257,7 +259,10 @@ impl GameLogic for BadukRoom {
                 let success = match self.game.chaksu(chaksu_request.coordinate as u16) {
                     Ok(_) => {
                         game_room_status = GameRoomResponse::ChangeTurn;
+
+                        self.pass_turn = false;
                         self.players.switch_turn(self.game.board.is_turn().reverse());
+                        
                         #[cfg(debug_assertions)]
                         println!("✅ 착수 성공! 턴 변경됨");
                         true
@@ -347,11 +352,31 @@ impl GameLogic for BadukRoom {
 
                 // 턴 넘김을 시도하는 사람의 턴인지 확인
                 if self.players.check_id_to_color(user_id) != turn {
+                    println!("무승부 신청 유저 색 {:?}", self.players.check_id_to_color(user_id));
+                    println!("현제 턴 {:?}", turn);
                     return response;
                 }
 
+                if self.pass_turn {
+                    let determined_winner = self.game.determine_winner();
+                    self.game.set_winner(determined_winner);
+
+                    response = (GameRoomResponse::GameOver, ServerToClientResponse {
+                        response_type: true,
+                        turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
+                        the_winner: Some(convert_game2proto_color(determined_winner) as i32),
+                        game_state: Some(self.badukboard_status()),
+                        users_info: None,
+                        payload: Some(server_to_client_response::Payload::PassTurn(PassTurnResponse{})),
+                    });
+
+                    return response;
+                } else {
+                    self.pass_turn = true;
+                }
+
                 // turn 변경
-                self.game.switch_turn();
+                self.players.switch_turn(turn);
                 self.game.board.switch_turn();
 
                 response = (GameRoomResponse::ChangeTurn, ServerToClientResponse {
@@ -372,8 +397,3 @@ impl GameLogic for BadukRoom {
     }
 
 }
-
-// TODO: 착수 요청 처리
-// TODO: 무승부 요청 처리
-// TODO: 기권 처리
-// TODO: 수넘김 처리

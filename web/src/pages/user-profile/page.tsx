@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SessionManager } from '../../api/axios-instance';
-import { useGetUserProfileHandler, updateUsername, updatePassword  } from '../../api/endpoints/user/user';
+import { useGetUserProfileHandler, useDeleteUser, updateUsername, updatePassword  } from '../../api/endpoints/user/user';
 
 interface UserStats {
   username: string | null;
@@ -23,6 +23,7 @@ export default function UserProfile() {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const userProfileMutation = useGetUserProfileHandler();
+  const deleteUserMutation = useDeleteUser();
 
   useEffect(() => {
     const sessionKey = SessionManager.getSessionKey();
@@ -143,13 +144,34 @@ export default function UserProfile() {
     }
   };
 
-  const handleAccountDeletion = () => {
+  const handleAccountDeletion = async () => {
     if (!confirm('정말로 회원탈퇴 하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
       return;
     }
-    // TODO: 백엔드 API 연결
-    console.log('회원탈퇴');
-    alert('회원탈퇴 기능은 곧 구현됩니다.');
+
+    const sessionKey = SessionManager.getSessionKey();
+    if (!sessionKey) {
+      alert('로그인이 필요합니다.');
+      navigate('/');
+      return;
+    }
+
+    try {
+      const result = await deleteUserMutation.mutateAsync({
+        data: { session_key: sessionKey } as any
+      });
+
+      if (result.success) {
+        alert('회원탈퇴가 완료되었습니다.');
+        SessionManager.clearSessionKey();
+        navigate('/');
+      } else {
+        alert(result.message || '회원탈퇴에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('회원탈퇴 오류:', error);
+      alert('회원탈퇴 중 오류가 발생했습니다.');
+    }
   };
 
   if (!userProfile) {

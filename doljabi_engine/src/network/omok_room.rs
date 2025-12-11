@@ -256,6 +256,8 @@ impl GameLogic for OmokRoom {
                 let success = match self.game.chaksu(chaksu_request.coordinate as u16, true) {
                     Ok(_) => {
                         game_room_status = GameRoomResponse::ChangeTurn;
+                        self.players.switch_turn(self.game.board.is_turn().reverse());
+
                         #[cfg(debug_assertions)]
                         println!("✅ 착수 성공! 턴 변경됨");
                         true
@@ -370,4 +372,3 @@ impl GameLogic for OmokRoom {
         response
     }
 }
-

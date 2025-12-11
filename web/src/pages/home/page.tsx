@@ -401,6 +401,7 @@ export default function Home() {
             {/* 빠른 대국 */}
             <div 
               onClick={() => navigate(`/${activeTab}/quick-match`)}
+              disabled={true}
               className="rounded-2xl p-8 border cursor-pointer transition-all hover:scale-105 hover:-translate-y-1"
               style={{ 
                 backgroundColor: 'rgba(22,22,28,0.6)', 

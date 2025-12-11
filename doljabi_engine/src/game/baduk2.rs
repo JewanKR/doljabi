@@ -56,10 +56,6 @@ impl Baduk {
         &self.board
     }
 
-    pub fn switch_turn(&mut self) {
-        self.board.switch_turn();
-    }
-
     /// 현재 보드 상태를 BoardState로 변환
     fn get_board_state(&self) -> BoardState {
         let black_vec = self.board.bitboard_black().clone();
@@ -433,15 +429,15 @@ impl Baduk {
 
     /// 승패 판정
     /// 반환값: Some(Color) - 승자, None - 무승부
-    pub fn determine_winner(&self) -> Option<Color> {
+    pub fn determine_winner(&self) -> Color {
         let (black_score, white_score) = self.calculate_score();
         
         if black_score > white_score {
-            Some(Color::Black)
+            Color::Black
         } else if white_score > black_score {
-            Some(Color::White)
+            Color::White
         } else {
-            None // 무승부
+            Color::Free
         }
     }
 }
