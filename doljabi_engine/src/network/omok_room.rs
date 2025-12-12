@@ -159,11 +159,11 @@ impl GameLogic for OmokRoom {
                     Duration::from_millis(p.overtime())
                 } else {
                     self.game.set_winner(self.game.board.is_turn().reverse());
-                    Duration::from_secs(u64::MAX)
+                    Duration::from_secs(12614400000)
                 }
 
             }
-            None => Duration::from_secs(u64::MAX)
+            None => Duration::from_secs(12614400000)
         }
     }
 
@@ -183,7 +183,7 @@ impl GameLogic for OmokRoom {
                         users_info: None,
                         payload: None,
                     })
-                } else if p.remain_time() > 0 {
+                } else if p.remain_time() > 1 {
                     p.sub_remain_overtime();
                     self.set_timer();
                     (GameRoomResponse::None, ServerToClientResponse{
@@ -197,6 +197,7 @@ impl GameLogic for OmokRoom {
                 } else {
                     self.game.set_winner(self.game.board.is_turn().reverse());
                     self.record_winner(self.game.board.is_turn().reverse());
+                    self.set_timer();
                     
                     (GameRoomResponse::GameOver, ServerToClientResponse{
                         response_type: true,
