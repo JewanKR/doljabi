@@ -119,7 +119,7 @@ export default function OmokCreateRoom() {
                     onChange={(e) => handleSliderChange('main_time', parseInt(e.target.value))}
                     className="w-full h-2 rounded-lg appearance-none cursor-pointer"
                     style={{
-                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${(gameConfig.main_time / 28800000) * 100}%, #2a2a33 ${(gameConfig.main_time / 28800000) * 100}%, #2a2a33 100%)`
+                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${(gameConfig.main_time / 7200000) * 100}%, #2a2a33 ${(gameConfig.main_time / 7200000) * 100}%, #2a2a33 100%)`
                     }}
                   />
                 </div>
@@ -181,14 +181,14 @@ export default function OmokCreateRoom() {
                   </div>
                   <input
                     type="range"
-                    min="0"
+                    min="1"
                     max="10"
                     step="1"
                     value={gameConfig.remaining_overtime}
                     onChange={(e) => handleSliderChange('remaining_overtime', parseInt(e.target.value))}
                     className="w-full h-2 rounded-lg appearance-none cursor-pointer"
                     style={{
-                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${(gameConfig.remaining_overtime / 10) * 100}%, #2a2a33 ${(gameConfig.remaining_overtime / 10) * 100}%, #2a2a33 100%)`
+                      background: `linear-gradient(to right, #1f6feb 0%, #1f6feb ${((gameConfig.remaining_overtime -1) / 9 ) * 100}%, #2a2a33 ${((gameConfig.remaining_overtime -1) / 9) * 100}%, #2a2a33 100%)`
                     }}
                   />
                 </div>

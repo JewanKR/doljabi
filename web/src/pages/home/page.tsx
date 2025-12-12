@@ -399,8 +399,8 @@ export default function Home() {
           {/* Game Options */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
             {/* 빠른 대국 */}
-            <div 
-              onClick={() => navigate(`/${activeTab}/quick-match`)}
+            <button 
+              onClick={() => navigate(`/home`)}
               disabled={true}
               className="rounded-2xl p-8 border cursor-pointer transition-all hover:scale-105 hover:-translate-y-1"
               style={{ 
@@ -430,11 +430,12 @@ export default function Home() {
                   랜덤 매칭으로 즉시 게임 시작
                 </p>
               </div>
-            </div>
+            </button>
 
             {/* 등급전 */}
-            <div 
-              onClick={() => navigate(`/${activeTab}/ranked-match`)}
+            <button 
+              onClick={() => navigate(`/home`)}
+              disabled={true}
               className="rounded-2xl p-8 border cursor-pointer transition-all hover:scale-105 hover:-translate-y-1"
               style={{ 
                 backgroundColor: 'rgba(22,22,28,0.6)', 
@@ -466,7 +467,7 @@ export default function Home() {
                   레이팅을 걸고 실력을 겨루세요
                 </p>
               </div>
-            </div>
+            </button>
 
             {/* 방 생성 */}
             <div 

@@ -162,7 +162,7 @@ pub async fn run_game_node<G: GameLogic>(
                             running = true;
                             // 게임 시작 시 타이머 설정
                             let duration = game.set_timer();
-                            game_timer.as_mut().reset(tokio::time::Instant::now() + duration);
+                            game_timer.as_mut().reset(tokio::time::Instant::now() + (duration));
                             timer_active = true;
                             // 게임 시작 응답을 모든 클라이언트에게 전송
                             let _ = broadcast_tx.send(Arc::new(response.clone()));
@@ -262,15 +262,19 @@ pub async fn run_game_node<G: GameLogic>(
                     // 타이머가 계속 동작해야 하는 경우 (시간 감소만)
                     let duration = game.set_timer();
                     game_timer.as_mut().reset(tokio::time::Instant::now() + duration);
-                    let _ = broadcast_tx.send(Arc::new(response));
+                    let _ = broadcast_tx.send(Arc::new(response.clone()));
                 },
                 GameRoomResponse::GameOver => {
                     // 시간 초과로 게임 종료
-                    let _ = broadcast_tx.send(Arc::new(response));
+                    let duration = game.set_timer();
+                    game_timer.as_mut().reset(tokio::time::Instant::now() + duration);
+
+                    let _ = broadcast_tx.send(Arc::new(response.clone()));
                     break;
                 },
                 _ => {
-                    let _ = broadcast_tx.send(Arc::new(response));
+                    let _ = broadcast_tx.send(Arc::new(response.clone()));
+                    break;
                 }
             }
         }
@@ -285,7 +289,7 @@ pub async fn run_game_node<G: GameLogic>(
     let mut manager = room_manager.lock().await;
     manager.release_enter_code(enter_code);
 
-    #[cfg(debug_assertions)]
+    //#[cfg(debug_assertions)]
     println!("방 종료 성공");
 }
 
