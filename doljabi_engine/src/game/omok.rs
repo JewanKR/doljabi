@@ -246,7 +246,7 @@ pub struct Omok {
                     // 5개 검사
                     if set == 5 {
                         self.winner = Some(Color::Black);
-                        break;
+                        return Ok(());
                     }
                 }
             }
