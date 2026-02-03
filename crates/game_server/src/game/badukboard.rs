@@ -1,4 +1,3 @@
-use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -27,7 +26,7 @@ pub enum Color {
     Black,
     White,
     Free,
-    ColorError
+    ColorError,
 }
 impl Color {
     pub fn to_string(&self) -> String {
@@ -43,7 +42,7 @@ impl Color {
             Color::Black => Color::White,
             Color::White => Color::Black,
             Color::Free => Color::Free,
-            Color::ColorError => Color::ColorError
+            Color::ColorError => Color::ColorError,
         }
     }
 }
@@ -62,8 +61,8 @@ pub struct BadukBoard {
     black: [u64; 6],
     white: [u64; 6],
     turn: Color,
-
-} impl BadukBoard {
+}
+impl BadukBoard {
     /// BadukBoard::new(); 형식으로 사용.
     pub fn new(board_size: u16) -> Self {
         Self {
@@ -73,7 +72,7 @@ pub struct BadukBoard {
             turn: Color::Black,
         }
     }
-    
+
     // 내부 요소 출력 함수
     pub fn bitboard_black(&self) -> &[u64; 6] {
         &self.black
@@ -81,7 +80,7 @@ pub struct BadukBoard {
     pub fn bitboard_white(&self) -> &[u64; 6] {
         &self.white
     }
-    
+
     pub fn is_turn(&self) -> Color {
         self.turn.clone()
     }
@@ -102,7 +101,11 @@ pub struct BadukBoard {
 
     /// 좌표 값이 0 ~ 380인지 확인 (Out Board인지 확인)
     pub fn check_outboard_coordinate(&self, coordinate: u16) -> Result<(), BadukBoardError> {
-        if coordinate < (self.boardsize * self.boardsize) {Ok(())} else {Err(BadukBoardError::OutOfBoard)} 
+        if coordinate < (self.boardsize * self.boardsize) {
+            Ok(())
+        } else {
+            Err(BadukBoardError::OutOfBoard)
+        }
     }
 
     // 돌 확인 함수
@@ -121,7 +124,10 @@ pub struct BadukBoard {
     /// check_color 함수 사용 권장 (이 함수는 연산이 약 2배 많음)
     pub fn is_color(&self, coordinate: u16) -> Color {
         match (self.is_black(coordinate), self.is_white(coordinate)) {
-            (true, true) => {eprintln!("Error: overlap!"); Color::ColorError},
+            (true, true) => {
+                eprintln!("Error: overlap!");
+                Color::ColorError
+            }
             (true, false) => Color::Black,
             (false, true) => Color::White,
             (false, false) => Color::Free,
@@ -134,25 +140,40 @@ pub struct BadukBoard {
             Color::Black => self.is_black(coordinate),
             Color::White => self.is_white(coordinate),
             Color::Free => self.is_free(coordinate),
-            Color::ColorError => {eprintln!("Error: Check_color: 허용되지 않은 입력"); false}
+            Color::ColorError => {
+                eprintln!("Error: Check_color: 허용되지 않은 입력");
+                false
+            }
         }
     }
 
     /// 돌 집어 넣기
     pub fn push_stone(&mut self, coordinate: u16, color: Color) {
         match color {
-            Color::Black => {self.black[coordinate_index(coordinate)] |= coordinatde_value(coordinate)},
-            Color::White => {self.white[coordinate_index(coordinate)] |= coordinatde_value(coordinate)},
-            _ => {println!("Error: push_stone: 색 지정이 잘못 되었습니다.")},
+            Color::Black => {
+                self.black[coordinate_index(coordinate)] |= coordinatde_value(coordinate)
+            }
+            Color::White => {
+                self.white[coordinate_index(coordinate)] |= coordinatde_value(coordinate)
+            }
+            _ => {
+                println!("Error: push_stone: 색 지정이 잘못 되었습니다.")
+            }
         }
     }
 
     /// 돌 제거하기
     pub fn delete_stone(&mut self, coordinate: u16, color: Color) {
         match color {
-            Color::Black => {self.black[coordinate_index(coordinate)] &= !coordinatde_value(coordinate)},
-            Color::White => {self.white[coordinate_index(coordinate)] &= !coordinatde_value(coordinate)},
-            _ => {println!("Error: delete_stone: 색 지정이 잘못 되었습니다.")},
+            Color::Black => {
+                self.black[coordinate_index(coordinate)] &= !coordinatde_value(coordinate)
+            }
+            Color::White => {
+                self.white[coordinate_index(coordinate)] &= !coordinatde_value(coordinate)
+            }
+            _ => {
+                println!("Error: delete_stone: 색 지정이 잘못 되었습니다.")
+            }
         }
     }
 
@@ -162,7 +183,7 @@ pub struct BadukBoard {
     }
 }
 
-#[derive(Clone, Debug, Builder)]
+#[derive(Clone, Debug)]
 pub struct Player {
     user_id: u64,
 
@@ -174,8 +195,8 @@ pub struct Player {
     turn_start_time: tokio::time::Instant,
 
     draw_offer: bool,
-
-} impl Player {
+}
+impl Player {
     pub fn new(user_id: u64) -> Self {
         Self {
             user_id: user_id,
@@ -202,7 +223,9 @@ pub struct Player {
 
     // 남은 시간 계산
     pub fn sub_main_time(&mut self) {
-        self.main_time = self.main_time.saturating_sub((tokio::time::Instant::now() - self.turn_start_time).as_millis() as u64);
+        self.main_time = self.main_time.saturating_sub(
+            (tokio::time::Instant::now() - self.turn_start_time).as_millis() as u64,
+        );
     }
 
     pub fn sub_remain_overtime(&mut self) {
@@ -230,32 +253,61 @@ pub struct Player {
 
     // 유저 시간 출력
     pub fn player_status(&self) -> BadukBoardGameConfig {
-        BadukBoardGameConfig::new(self.main_time, self.fischer_time, self.remaining_overtime, self.overtime)
+        BadukBoardGameConfig::new(
+            self.main_time,
+            self.fischer_time,
+            self.remaining_overtime,
+            self.overtime,
+        )
     }
 
     // 무승부 요청
-    pub fn check_draw_offer(&self) -> bool {self.draw_offer}
-    pub fn draw_offer(&mut self) {self.draw_offer = true}
-    pub fn reset_draw_offer(&mut self) {self.draw_offer = false}
+    pub fn check_draw_offer(&self) -> bool {
+        self.draw_offer
+    }
+    pub fn draw_offer(&mut self) {
+        self.draw_offer = true
+    }
+    pub fn reset_draw_offer(&mut self) {
+        self.draw_offer = false
+    }
 }
 
-#[derive(Clone, Debug, Builder)]
+#[derive(Clone, Debug)]
 pub struct Players {
     pub(crate) black_player: Option<Player>,
     pub(crate) white_player: Option<Player>,
-} impl Players {
-    pub fn new() -> Self { Self { white_player: None, black_player: None } }
+}
+impl Players {
+    pub fn new() -> Self {
+        Self {
+            white_player: None,
+            black_player: None,
+        }
+    }
 
     // player 추가
     pub fn push_user(&mut self, user_id: u64) -> bool {
-        if self.black_player.as_ref().is_some_and(|p| p.user_id == user_id) {return false;}
-        if self.white_player.as_ref().is_some_and(|p| p.user_id == user_id) {return false;}
+        if self
+            .black_player
+            .as_ref()
+            .is_some_and(|p| p.user_id == user_id)
+        {
+            return false;
+        }
+        if self
+            .white_player
+            .as_ref()
+            .is_some_and(|p| p.user_id == user_id)
+        {
+            return false;
+        }
 
         if self.black_player.is_none() {
             self.black_player = Some(Player::new(user_id));
             return true;
         }
-        
+
         if self.white_player.is_none() {
             self.white_player = Some(Player::new(user_id));
             return true;
@@ -268,12 +320,20 @@ pub struct Players {
     pub fn pop_user(&mut self, user_id: u64) -> bool {
         let mut flag = false;
 
-        if self.black_player.as_ref().map_or(false, |p| p.user_id == user_id) {
+        if self
+            .black_player
+            .as_ref()
+            .map_or(false, |p| p.user_id == user_id)
+        {
             self.black_player = None;
             flag = true;
         }
 
-        if self.white_player.as_ref().map_or(false, |p| p.user_id == user_id) {
+        if self
+            .white_player
+            .as_ref()
+            .map_or(false, |p| p.user_id == user_id)
+        {
             self.white_player = None;
             flag = true;
         }
@@ -294,18 +354,24 @@ pub struct Players {
     }
 
     pub fn set_black_player(&mut self, config: &BadukBoardGameConfig) -> bool {
-        self.black_player.as_mut().map(|p| p.set_player(config)).is_some()
+        self.black_player
+            .as_mut()
+            .map(|p| p.set_player(config))
+            .is_some()
     }
 
     pub fn set_white_player(&mut self, config: &BadukBoardGameConfig) -> bool {
-        self.white_player.as_mut().map(|p| p.set_player(config)).is_some()
+        self.white_player
+            .as_mut()
+            .map(|p| p.set_player(config))
+            .is_some()
     }
 
     pub fn turn_player(&self, turn: Color) -> Option<&Player> {
         match turn {
             Color::Black => self.black_player.as_ref(),
             Color::White => self.white_player.as_ref(),
-            _ => None
+            _ => None,
         }
     }
 
@@ -321,14 +387,14 @@ pub struct Players {
     pub fn black_player_state(&self) -> Option<BadukBoardGameConfig> {
         match &self.black_player {
             Some(black) => Some(black.player_status()),
-            None => None
+            None => None,
         }
     }
 
     pub fn white_player_state(&self) -> Option<BadukBoardGameConfig> {
         match &self.white_player {
             Some(white) => Some(white.player_status()),
-            None => None
+            None => None,
         }
     }
 
@@ -341,8 +407,13 @@ pub struct Players {
     }
 
     pub fn check_draw(&self) -> bool {
-        self.black_player.as_ref().is_some_and(|p| p.check_draw_offer())
-        && self.white_player.as_ref().is_some_and(|p| p.check_draw_offer())
+        self.black_player
+            .as_ref()
+            .is_some_and(|p| p.check_draw_offer())
+            && self
+                .white_player
+                .as_ref()
+                .is_some_and(|p| p.check_draw_offer())
     }
 
     pub fn reset_draw_offer(&mut self) {
@@ -353,7 +424,9 @@ pub struct Players {
     pub fn switch_turn(&mut self, end_player: Color) -> bool {
         let (black_player, white_player) = match (&mut self.black_player, &mut self.white_player) {
             (Some(black), Some(white)) => (black, white),
-            _ => {return false;}
+            _ => {
+                return false;
+            }
         };
 
         match &end_player {
@@ -369,8 +442,8 @@ pub struct Players {
                 self.reset_draw_offer();
                 true
             }
-            _ => false
-        }        
+            _ => false,
+        }
     }
 
     // 색으로 id 확인
@@ -378,17 +451,21 @@ pub struct Players {
         match color {
             Color::Black => self.black_player.as_ref().map(|b| b.user_id()),
             Color::White => self.white_player.as_ref().map(|w| w.user_id()),
-            _ => None
+            _ => None,
         }
     }
 
     // id 로 색 확인
     pub fn check_id_to_color(&self, user_id: u64) -> Color {
         if let Some(player) = &self.black_player {
-            if player.user_id() == user_id{return Color::Black;}
+            if player.user_id() == user_id {
+                return Color::Black;
+            }
         }
         if let Some(player) = &self.white_player {
-            if player.user_id() == user_id {return Color::White;}
+            if player.user_id() == user_id {
+                return Color::White;
+            }
         }
         Color::Free
     }
@@ -400,32 +477,41 @@ pub struct BadukBoardGameConfig {
     fischer_time: u64,
     remaining_overtime: u8,
     overtime: u64,
-} impl BadukBoardGameConfig {
-    pub fn new(main_time: u64, fischer_time: u64, remaining_overtime: u8, overtime: u64) -> Self { Self {
-        main_time: main_time,
-        fischer_time: fischer_time,
-        remaining_overtime: remaining_overtime,
-        overtime: overtime,
-    }}
-    
-    pub fn make(config: (u64, u64, u8, u64)) -> Self{Self{
-        main_time: config.0,
-        fischer_time: config.1,
-        remaining_overtime: config.2,
-        overtime: config.3,
-    }}
+}
+impl BadukBoardGameConfig {
+    pub fn new(main_time: u64, fischer_time: u64, remaining_overtime: u8, overtime: u64) -> Self {
+        Self {
+            main_time: main_time,
+            fischer_time: fischer_time,
+            remaining_overtime: remaining_overtime,
+            overtime: overtime,
+        }
+    }
 
-    pub fn output(&self) -> (u64, u64, u8, u64) {(
-        self.main_time,
-        self.fischer_time,
-        self.remaining_overtime,
-        self.overtime
-    )}
+    pub fn make(config: (u64, u64, u8, u64)) -> Self {
+        Self {
+            main_time: config.0,
+            fischer_time: config.1,
+            remaining_overtime: config.2,
+            overtime: config.3,
+        }
+    }
 
-    pub fn empty() -> Self { Self {
-        main_time: 0,
-        fischer_time: 0,
-        remaining_overtime: 0,
-        overtime: 0,
-    }}
+    pub fn output(&self) -> (u64, u64, u8, u64) {
+        (
+            self.main_time,
+            self.fischer_time,
+            self.remaining_overtime,
+            self.overtime,
+        )
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            main_time: 0,
+            fischer_time: 0,
+            remaining_overtime: 0,
+            overtime: 0,
+        }
+    }
 }

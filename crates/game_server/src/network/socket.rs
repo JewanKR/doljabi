@@ -1,12 +1,23 @@
-use std::{sync::Arc, time::Duration};
-use axum::{extract::{Path, State, ws::{self, WebSocketUpgrade}}, response::IntoResponse, http::StatusCode};
+use axum::{
+    extract::{
+        Path, State,
+        ws::{self, WebSocketUpgrade},
+    },
+    http::StatusCode,
+    response::IntoResponse,
+};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
+use std::{sync::Arc, time::Duration};
 use tokio::sync::{broadcast, mpsc};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::{network::room_manager::RoomManager, proto::badukboardproto::{ClientToServerRequest, ServerToClientResponse}, soyul::session::SessionStore};
+use crate::{
+    network::room_manager::RoomManager,
+    proto::badukboardproto::{ClientToServerRequest, ServerToClientResponse},
+    soyul::session::SessionStore,
+};
 
 #[derive(Deserialize, Serialize, ToSchema)]
 pub enum EnterRoomErrorCode {
@@ -36,10 +47,14 @@ pub enum RoomCommunicationDataForm {
 pub async fn enter_room(
     ws: WebSocketUpgrade,
     Path((enter_code, session_key)): Path<(u16, String)>,
-    State((room_manager, session_store)): State<(RoomManager, SessionStore)>
+    State((room_manager, session_store)): State<(RoomManager, SessionStore)>,
 ) -> impl IntoResponse {
     let is_user_id = {
-        session_store.read().await.get(&session_key.to_string()).cloned()
+        session_store
+            .read()
+            .await
+            .get(&session_key.to_string())
+            .cloned()
     };
 
     let user_id = match is_user_id {
@@ -47,7 +62,7 @@ pub async fn enter_room(
             //#[cfg(debug_assertions)]
             println!("{} 유저 접속 성공", user_id);
             user_id
-        },
+        }
         None => {
             //#[cfg(debug_assertions)]
             println!("session store에 유저가 없음");
@@ -56,12 +71,17 @@ pub async fn enter_room(
     };
 
     let communication_channel = {
-        room_manager.lock().await.get_communication_channel(enter_code)
+        room_manager
+            .lock()
+            .await
+            .get_communication_channel(enter_code)
     };
 
     let (mpsc_tx, broadcast_rx) = match communication_channel {
         Some(channel) => channel,
-        None => {return StatusCode::NOT_FOUND.into_response();}
+        None => {
+            return StatusCode::NOT_FOUND.into_response();
+        }
     };
 
     ws.on_upgrade(move |socket| handle_websocket(socket, mpsc_tx, broadcast_rx, user_id))
@@ -73,22 +93,31 @@ async fn handle_websocket(
     mut broadcast_rx: broadcast::Receiver<Arc<ServerToClientResponse>>,
     user_id: u64,
 ) {
-    use ws::Message;
     use prost::Message as ProstMessage;
+    use ws::Message;
 
     let (mut ws_tx, mut ws_rx) = socket.split();
 
     // 방 접속 실패 시 종료
-    if let Err(_) = mpsc_tx.send(RoomCommunicationDataForm::UserEnter(user_id)).await {return ;}
+    if let Err(_) = mpsc_tx
+        .send(RoomCommunicationDataForm::UserEnter(user_id))
+        .await
+    {
+        return;
+    }
 
     let send_disconnect = mpsc_tx.clone();
 
     let send_task = tokio::spawn(async move {
-        while let Ok(Some(message)) = tokio::time::timeout(Duration::from_secs(10),ws_rx.next()).await {
+        while let Ok(Some(message)) =
+            tokio::time::timeout(Duration::from_secs(10), ws_rx.next()).await
+        {
             match message {
                 Ok(Message::Binary(data)) => {
                     if let Ok(request) = ClientToServerRequest::decode(&data[..]) {
-                        let _ = mpsc_tx.send(RoomCommunicationDataForm::Request((user_id, request))).await;
+                        let _ = mpsc_tx
+                            .send(RoomCommunicationDataForm::Request((user_id, request)))
+                            .await;
                     }
                 }
 
@@ -123,9 +152,10 @@ async fn handle_websocket(
         _ = recv_task => {},
     }
 
-    let _ = send_disconnect.send(RoomCommunicationDataForm::UserDisconnect(user_id)).await;
+    let _ = send_disconnect
+        .send(RoomCommunicationDataForm::UserDisconnect(user_id))
+        .await;
 }
-
 
 pub fn web_socket_upgrade_router() -> OpenApiRouter<(RoomManager, SessionStore)> {
     OpenApiRouter::new().routes(routes!(enter_room))
