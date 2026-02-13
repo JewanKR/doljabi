@@ -1,8 +1,7 @@
-use derive_builder::Builder;
+use crate::baduk_board::*;
 use std::collections::{HashMap, HashSet, VecDeque};
-use crate::game::badukboard::*;
 
-#[derive(Clone, Debug, Builder)]
+#[derive(Clone, Debug)]
 pub struct Baduk {
     pub(crate) board: BadukBoard,
 
@@ -13,7 +12,7 @@ pub struct Baduk {
 
     // 반복수 검사를 위한 이전 보드 상태 저장 (중국 규칙: 바로 이전 상태와 동일하면 금지)
     previous_board_state: Option<BoardState>,
-    
+
     // 패 해소를 위한 패 위치 저장 (정확히 1개의 돌을 잡았을 때 발생)
     ko_position: Option<u16>,
     pub(crate) winner: Option<Color>,
@@ -36,7 +35,7 @@ impl Baduk {
             white_linked_stone_set: HashMap::<u16, HashSet<u16>>::new(),
             black_caught_stone: 0,
             white_caught_stone: 0,
-            
+
             previous_board_state: None,
             ko_position: None,
 
@@ -50,7 +49,6 @@ impl Baduk {
 
     pub fn set_winner(&mut self, color: Color) {
         self.winner = Some(color);
-        
     }
 
     pub fn is_board(&self) -> &BadukBoard {
@@ -61,18 +59,18 @@ impl Baduk {
     fn get_board_state(&self) -> BoardState {
         let black_vec = self.board.bitboard_black().clone();
         let white_vec = self.board.bitboard_white().clone();
-        
+
         // Vec<u64>를 [u64; 6]으로 변환
         let mut black_array = [0u64; 6];
         let mut white_array = [0u64; 6];
-        
+
         for (i, &value) in black_vec.iter().take(6).enumerate() {
             black_array[i] = value;
         }
         for (i, &value) in white_vec.iter().take(6).enumerate() {
             white_array[i] = value;
         }
-        
+
         BoardState {
             black: black_array,
             white: white_array,
@@ -111,11 +109,7 @@ impl Baduk {
         result
     }
 
-    fn collect_group_state(
-        &self,
-        start: u16,
-        color: Color,
-    ) -> (HashSet<u16>, HashSet<u16>) {
+    fn collect_group_state(&self, start: u16, color: Color) -> (HashSet<u16>, HashSet<u16>) {
         let mut to_explore = VecDeque::from([start]);
         let mut explored = HashSet::new();
         explored.insert(start);
@@ -139,8 +133,6 @@ impl Baduk {
 
         (explored, liberties)
     }
-
-    
 
     fn remove_group(&mut self, stones: &HashSet<u16>, color: Color) {
         for &stone in stones {
@@ -218,7 +210,7 @@ impl Baduk {
             if opponent_liberties.is_empty() {
                 // 제거 전에 linked_stone_set에서도 삭제
                 self.remove_from_linked_stone_set(&opponent_group, opponent_color);
-                
+
                 // 패 위치 감지: 정확히 1개의 돌을 잡았을 때만 패 발생
                 if opponent_group.len() == 1 {
                     captured_single_stone_position = opponent_group.iter().next().copied();
@@ -228,12 +220,12 @@ impl Baduk {
                     captured_single_stone_position = None;
                     total_captured_stones += opponent_group.len();
                 }
-                
+
                 self.remove_group(&opponent_group, opponent_color);
                 captured_any = true;
             }
         }
-        
+
         // 패 위치 설정: 정확히 1개의 돌만 잡았을 때 패 발생
         if total_captured_stones == 1 {
             self.ko_position = captured_single_stone_position;
@@ -243,7 +235,7 @@ impl Baduk {
         }
 
         let (own_group, own_liberties) = self.collect_group_state(coordinate, color);
-        
+
         // 중국 규칙 자살수 검사: 상대 돌을 잡을 수 있으면 자살수 허용
         // 자유도가 없고 상대 돌도 잡지 못한 경우에만 자살수로 판단
         if own_liberties.is_empty() && !captured_any {
@@ -272,7 +264,7 @@ impl Baduk {
         while let Some(current) = to_explore.pop_front() {
             for neighbor in self.adjacent_coordinates(current) {
                 let neighbor_color = self.board.is_color(neighbor);
-                
+
                 if neighbor_color == Color::Free && !explored.contains(&neighbor) {
                     explored.insert(neighbor);
                     to_explore.push_back(neighbor);
@@ -304,11 +296,11 @@ impl Baduk {
             if self.board.is_free(coord) && !checked.contains(&coord) {
                 let (territory_group, territory_color) = self.identify_territory(coord);
                 checked.extend(&territory_group);
-                
+
                 match territory_color {
                     Some(Color::Black) => black_territory += territory_group.len() as u16,
                     Some(Color::White) => white_territory += territory_group.len() as u16,
-                    Some(_) => {},
+                    Some(_) => {}
                     None => {} // 공집은 집으로 계산하지 않음
                 }
             }
@@ -340,10 +332,10 @@ impl Baduk {
     pub fn calculate_score(&self) -> (u16, u16) {
         let (black_territory, white_territory) = self.calculate_territory();
         let (black_living_stones, white_living_stones) = self.count_living_stones();
-        
+
         (
             black_territory + black_living_stones + self.black_caught_stone,
-            white_territory + white_living_stones + self.white_caught_stone
+            white_territory + white_living_stones + self.white_caught_stone,
         )
     }
 
@@ -359,7 +351,7 @@ impl Baduk {
 
     /// 착수 시도 실패 시 Err 출력
     /// 중국 규칙 적용: 자살수는 상대 돌을 잡을 수 있으면 허용, 반복수는 금지, 패 해소 지원
-    pub fn chaksu(&mut self, coordinate: u16) -> Result<(),BadukBoardError> {
+    pub fn chaksu(&mut self, coordinate: u16) -> Result<(), BadukBoardError> {
         self.board.check_outboard_coordinate(coordinate)?;
 
         let color = self.board.is_turn();
@@ -380,7 +372,7 @@ impl Baduk {
 
         // 돌을 임시로 놓고 상태 확인
         self.board.push_stone(coordinate, color);
-        
+
         // 자살수 및 기타 규칙 검사 (돌을 놓은 상태에서 검사)
         if let Err(err) = self.resolve_after_move(coordinate, color) {
             // 에러 발생 시 돌 제거는 resolve_after_move에서 처리됨
@@ -389,7 +381,7 @@ impl Baduk {
 
         // 착수 후 보드 상태 확인 (반복수 검사용)
         let after_state = self.get_board_state();
-        
+
         // 반복수 검사: 착수 후 상태가 이전 턴 상태와 동일한지 확인
         // 중국 규칙: 바로 이전 턴의 보드 상태와 동일하면 금지
         if self.check_repetition(&after_state) {
@@ -413,7 +405,7 @@ impl Baduk {
 
         // 착수 성공 시 현재 보드 상태를 다음 턴의 이전 상태로 저장
         self.previous_board_state = Some(after_state);
-        
+
         self.board.switch_turn();
         Ok(())
     }
@@ -432,7 +424,7 @@ impl Baduk {
     /// 반환값: Some(Color) - 승자, None - 무승부
     pub fn determine_winner(&self) -> Color {
         let (black_score, white_score) = self.calculate_score();
-        
+
         if black_score > white_score {
             Color::Black
         } else if white_score > black_score {
@@ -442,7 +434,5 @@ impl Baduk {
         }
     }
 }
-
-
 
 // TODO: 수 넘김 처리

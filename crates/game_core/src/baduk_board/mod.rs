@@ -1,3 +1,6 @@
+pub mod baduk;
+pub mod omok;
+
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

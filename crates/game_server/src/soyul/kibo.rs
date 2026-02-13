@@ -1,6 +1,6 @@
 // kibo.rs
 
-use crate::game::badukboard::Color;
+use crate::geme_old::badukboard::Color;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Move {

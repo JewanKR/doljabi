@@ -31,8 +31,8 @@ pub struct BadukRoom {
         true
     }
 
-    pub fn baduk_board_state(&self) -> crate::proto::badukboardproto::BadukBoardState {
-        use crate::proto::badukboardproto::BadukBoardState;
+    pub fn baduk_board_state(&self) -> doljabiproto::badukboard::BadukBoardState {
+        use doljabiproto::badukboard::BadukBoardState;
         
         BadukBoardState {
             black: self.game.board.bitboard_black().to_vec(),
@@ -40,7 +40,7 @@ pub struct BadukRoom {
         }
     }
 
-    pub fn user_info(&self, color: Color) -> Option<crate::proto::badukboardproto::UserInfo> {
+    pub fn user_info(&self, color: Color) -> Option<doljabiproto::badukboard::UserInfo> {
         use rusqlite::Connection;
         use crate::soyul::soyul_login::get_user_profile_by_id;
 
@@ -67,8 +67,8 @@ pub struct BadukRoom {
         }
     }
 
-    pub fn black_player_time_info(&self) -> crate::proto::badukboardproto::PlayerTimeInfo {
-        use crate::proto::badukboardproto::PlayerTimeInfo;
+    pub fn black_player_time_info(&self) -> doljabiproto::badukboard::PlayerTimeInfo {
+        use doljabiproto::badukboard::PlayerTimeInfo;
 
         let player_state = match self.players.black_player_state() {
             Some(player) => player.output(),
@@ -83,8 +83,8 @@ pub struct BadukRoom {
         }
     }
 
-    pub fn white_player_time_info(&self) -> crate::proto::badukboardproto::PlayerTimeInfo {
-        use crate::proto::badukboardproto::PlayerTimeInfo;
+    pub fn white_player_time_info(&self) -> doljabiproto::badukboard::PlayerTimeInfo {
+        use doljabiproto::badukboard::PlayerTimeInfo;
 
         let player_state = match self.players.white_player_state() {
             Some(player) => player.output(),
@@ -99,8 +99,8 @@ pub struct BadukRoom {
         }
     }
 
-    pub fn badukboard_status(&self) -> crate::proto::badukboardproto::GameState {
-        crate::proto::badukboardproto::GameState {
+    pub fn badukboard_status(&self) -> doljabiproto::badukboard::GameState {
+        doljabiproto::badukboard::GameState {
             board: Some(self.baduk_board_state()),
             black_time: Some(self.black_player_time_info()),
             white_time: Some(self.white_player_time_info()),
@@ -145,8 +145,8 @@ impl GameLogic for BadukRoom {
     }
 
 
-    fn users_info(&self) -> crate::proto::badukboardproto::UsersInfo {
-        crate::proto::badukboardproto::UsersInfo {
+    fn users_info(&self) -> doljabiproto::badukboard::UsersInfo {
+        doljabiproto::badukboard::UsersInfo {
             black: self.user_info(Color::Black),
             white: self.user_info(Color::White),
         }
@@ -228,7 +228,7 @@ impl GameLogic for BadukRoom {
     }
 
     fn input_data(&mut self, input_data: (u64, ClientToServerRequest)) -> (GameRoomResponse, ServerToClientResponse) {
-        use crate::proto::badukboardproto::client_to_server_request::Payload;
+        use doljabiproto::badukboard::client_to_server_request::Payload;
 
         let (user_id, request) = input_data;
 
@@ -248,7 +248,7 @@ impl GameLogic for BadukRoom {
                 self.running = true;
                 self.set_players_time(&self.game_config.clone());
 
-                use crate::proto::badukboardproto::UsersInfo;
+                use doljabiproto::badukboard::UsersInfo;
                 response = (GameRoomResponse::GameStart, ServerToClientResponse{
                     response_type: true,
                     turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
@@ -265,7 +265,7 @@ impl GameLogic for BadukRoom {
 
         if self.running { match request.payload {
             Some(Payload::Coordinate(chaksu_request)) => {
-                use crate::proto::badukboardproto::ChaksuResponse;
+                use doljabiproto::badukboard::ChaksuResponse;
                 let turn =  self.game.is_board().is_turn();
                 let mut game_room_status = GameRoomResponse::None;
 
@@ -298,8 +298,8 @@ impl GameLogic for BadukRoom {
                     Err(_e) => {
                         #[cfg(debug_assertions)]
                         match _e {
-                            crate::game::badukboard::BadukBoardError::BannedChaksu => {println!("⛔ 착수 실패: 금수!");}
-                            crate::game::badukboard::BadukBoardError::OverLap => {println!("❌ 착수 실패: 이미 돌이 있음");}
+                            crate::geme_old::badukboard::BadukBoardError::BannedChaksu => {println!("⛔ 착수 실패: 금수!");}
+                            crate::geme_old::badukboard::BadukBoardError::OverLap => {println!("❌ 착수 실패: 이미 돌이 있음");}
                             _ => {println!("❌ 착수 실패: {:?}", _e);}
                         }
                         false
@@ -327,7 +327,7 @@ impl GameLogic for BadukRoom {
 
             // 기권 처리
             Some(Payload::Resign(_resign_request)) => {
-                use crate::proto::badukboardproto::ResignResponse;
+                use doljabiproto::badukboard::ResignResponse;
 
                 let winner = self.players.check_id_to_color(user_id).reverse();
                 self.game.set_winner(winner);
@@ -345,7 +345,7 @@ impl GameLogic for BadukRoom {
 
             // 무승부 신청
             Some(Payload::DrawOffer(_draw_request)) => {
-                use crate::proto::badukboardproto::DrawOfferResponse;
+                use doljabiproto::badukboard::DrawOfferResponse;
                 let mut winner = None;
                 let offer_player = self.players.check_id_to_color(user_id);
                 let mut game_room_status = GameRoomResponse::None;
@@ -378,7 +378,7 @@ impl GameLogic for BadukRoom {
 
             // 턴 넘김
             Some(Payload::PassTurn(_pass_request)) => {
-                use crate::proto::badukboardproto::PassTurnResponse;
+                use doljabiproto::badukboard::PassTurnResponse;
                 let turn = self.game.is_board().is_turn();
 
                 // 턴 넘김을 시도하는 사람의 턴인지 확인

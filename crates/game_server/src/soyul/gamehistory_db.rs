@@ -8,7 +8,7 @@ use argon2::password_hash::rand_core::{OsRng, RngCore};
 use base64::{engine::general_purpose, Engine as _};
 use rusqlite::{self, Connection, params};
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::game::badukboard::Color;
+use crate::geme_old::badukboard::Color;
 
 /// 게임방 고유 ID (랜덤 문자열)
 pub type GameId = String;

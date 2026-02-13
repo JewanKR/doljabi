@@ -1,44 +1,8 @@
-use crate::{
-    game_old::badukboard::BadukBoardGameConfig,
-    network::{baduk_room::BadukRoom, omok_room::OmokRoom, socket::RoomCommunicationDataForm},
-    proto::badukboardproto::{ClientToServerRequest, ServerToClientResponse},
-};
-use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
-use serde::{self, Deserialize, Serialize};
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    sync::Arc,
-    time::Duration,
-};
-use tokio::{
-    sync::{Mutex, broadcast, mpsc},
-    task::JoinHandle,
-};
-use utoipa::ToSchema;
-use utoipa_axum::{router::OpenApiRouter, routes};
+use game_core::GameLogic;
 
-pub fn convert_game2proto_color(
-    color: crate::game_old::badukboard::Color,
-) -> doljabiproto::badukboard::Color {
-    use crate::game_old::badukboard::Color as GameColor;
-    use doljabiproto::badukboard::Color as ProtoColor;
+pub mod baduk_board;
 
-    match color {
-        GameColor::Black => ProtoColor::Black,
-        GameColor::White => ProtoColor::White,
-        GameColor::Free => ProtoColor::Free,
-        GameColor::ColorError => ProtoColor::Error,
-    }
-}
-
-pub enum GameRoomResponse {
-    ChangeTurn,
-    GameOver,
-    GameStart,
-    None,
-}
-
-#[derive(Eq, Hash, PartialEq)]
+#[derive(Hash, PartialEq, Eq)]
 pub struct EnterCode {
     code: u16,
 }
@@ -145,16 +109,6 @@ impl RoomManagement {
 pub type RoomManager = Arc<Mutex<RoomManagement>>;
 
 #[derive(Deserialize, Serialize, ToSchema, Clone, Copy)]
-#[serde(tag = "game_type", content = "game_config")]
-pub enum CreateRoomRequestForm {
-    #[serde(rename = "baduk")]
-    Baduk(BadukBoardGameConfig),
-
-    #[serde(rename = "omok")]
-    Omok(BadukBoardGameConfig),
-}
-
-#[derive(Deserialize, Serialize, ToSchema, Clone, Copy)]
 pub struct CreateRoomResponseForm {
     enter_code: u16,
 }
@@ -166,44 +120,31 @@ impl CreateRoomResponseForm {
     }
 }
 
-pub trait GameLogic: Send + Sync {
-    fn input_data(
-        &mut self,
-        data: (u64, ClientToServerRequest),
-    ) -> (GameRoomResponse, ServerToClientResponse);
-    fn check_empty_room(&self) -> bool;
-
-    fn push_user(&mut self, user_id: u64) -> bool;
-    fn pop_user(&mut self, user_id: u64) -> bool;
-
-    fn users_info(&self) -> doljabiproto::badukboard::UsersInfo;
-
-    fn set_timer(&mut self) -> tokio::time::Duration;
-    fn timer_interrupt(&mut self) -> (GameRoomResponse, ServerToClientResponse);
-}
+// TODO: 총체적 난국...
+// GameLogic 을 이용해서 분리를 해야하는데...
+// 어디서 부터 해야히지?
+// 일단 외부로 출력하던 모든 데이터들을 GameLogic 의 Input, Output 형식으로 바꾸고
+// crate room reqeust 를 지금 만는 game_core 형식에 맞게 수정해야함.
+// 아마 그것 말고 해야하는게 더 있을 것 같음...
+// 내일의 나에게 맏긴다!
 
 pub async fn run_game_node<G: GameLogic>(
     mut game: G,
     enter_code: EnterCode,
     room_manager: RoomManager,
 
-    mut mpsc_rx: mpsc::Receiver<RoomCommunicationDataForm>,
-    broadcast_tx: broadcast::Sender<Arc<ServerToClientResponse>>,
+    mut mpsc_rx: mpsc::Receiver<G::Input>,
+    broadcast_tx: broadcast::Sender<Arc<G::Output>>,
     mpsc_tx: mpsc::Sender<RoomCommunicationDataForm>,
 ) {
-    // 타임 아웃 설정
-    let empty_room_timeout = tokio::time::sleep(Duration::from_secs(30));
-    tokio::pin!(empty_room_timeout);
-    let mut running = false;
-
-    // 게임 타이머 설정
-    let game_timer = tokio::time::sleep(Duration::from_secs(u64::MAX));
-    tokio::pin!(game_timer);
-    let mut timer_active = false;
-
     // 연결이 끊긴 플레이어 처리
     let mut disconnected_users = HashMap::<u64, JoinHandle<()>>::new();
 
+    while let Some(message) = mpsc_rx.recv() {
+        let _ = broadcast_tx.send(Arc::new(game.send(game::Input::from(message))));
+    }
+
+    /* 폐기 예정
     loop {
         tokio::select! {
             Some(data) = mpsc_rx.recv() => {
@@ -343,6 +284,7 @@ pub async fn run_game_node<G: GameLogic>(
             }
         }
     }
+    */
 
     let mut manager = room_manager.lock().await;
     manager.release_enter_code(enter_code);
@@ -361,7 +303,7 @@ pub async fn run_game_node<G: GameLogic>(
         (status = 500, description = "서버 오류"),
     )
 )]
-pub async fn create_room_request(
+pub async fn create_room_request<G: GameLogic>(
     State(room_manager): State<RoomManager>,
     Json(payload): Json<CreateRoomRequestForm>,
 ) -> impl IntoResponse {
@@ -431,29 +373,3 @@ pub async fn create_room_request(
 pub fn create_room_router() -> OpenApiRouter<RoomManager> {
     OpenApiRouter::new().routes(routes!(create_room_request))
 }
-
-/*
-pub async fn run_game_node<G: GameLogic>(
-    mut game: G,
-    enter_code: EnterCode,
-    room_manager: RoomManager,
-
-    mut set_timer: mpsc::UnboundedReceiver<TimeoutEvent>,
-) {
-    let mut deadline = Instant::now() + Duration::from_secs(3600);
-    loop {
-        if deadline <= Instant::now() {
-            deadline = Instant::now() + Duration::from_secs(3600);
-        }
-
-        tokio::select! {
-            Some(new_timer) = set_timer.recv() => {
-                deadline = new_timer.deadline;
-            }
-
-            _ = tokio::time::sleep_until(deadline) => {}
-        }
-    }
-}
-
-*/

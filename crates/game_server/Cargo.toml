@@ -4,8 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-derive_builder = "0.20"
-
 # 비동기 및 네트워크
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = "*"
@@ -22,7 +20,7 @@ utoipa = { version = "5", features = ["axum_extras"]}
 utoipa-axum = "0.2"
 base64 = "0.22"
 # utoipa-swagger-ui = { version = "9", features = ["axum"] }
-# prost = "0.14"
+
 
 # 오류 처리
 tracing = "0.1"
@@ -34,8 +32,9 @@ rusqlite = { version = "0.37.0", features = ["bundled"] }
 # 암호화
 argon2 = { version = "0.5", features = ["std"] }
 
+# 로컬
+game_core = { version = "0.1.0", path = "../game_core" }
+doljabiproto = { version = "0.1.0", path = "../doljabiproto" }
+
 [lib]
 path = "src/lib.rs"
-
-# [build-dependencies]
-# prost-build = "0.14.1"

@@ -51,8 +51,8 @@ pub struct UserProfile {
     // 나중에 필드 더 추가 가능 (예: created_at, bio 등)
 }
 impl UserProfile {
-    pub fn convert_session2proto(self) -> crate::proto::badukboardproto::UserInfo {
-        crate::proto::badukboardproto::UserInfo {
+    pub fn convert_session2proto(self) -> doljabiproto::badukboard::UserInfo {
+        doljabiproto::badukboard::UserInfo {
             user_name: match self.username {
                 Some(name) => name,
                 None => "".to_string(),

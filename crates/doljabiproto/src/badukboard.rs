@@ -19,9 +19,9 @@ pub struct PlayerTimeInfo {
     #[prost(uint64, tag = "4")]
     pub overtime: u64,
 }
-/// * 보드 시간 턴 정보
+/// * 보드, 시간, 턴 정보
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct GameState {
+pub struct BadukBoardData {
     #[prost(message, optional, tag = "1")]
     pub board: ::core::option::Option<BadukBoardState>,
     #[prost(message, optional, tag = "2")]
@@ -43,17 +43,14 @@ pub struct PassTurnRequest {}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GameStartRequest {}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct ClientToServerRequest {
+pub struct BadukClient {
     #[prost(string, tag = "1")]
     pub session_key: ::prost::alloc::string::String,
-    #[prost(
-        oneof = "client_to_server_request::Payload",
-        tags = "100, 101, 102, 103, 104"
-    )]
-    pub payload: ::core::option::Option<client_to_server_request::Payload>,
+    #[prost(oneof = "baduk_client::Payload", tags = "100, 101, 102, 103, 104")]
+    pub payload: ::core::option::Option<baduk_client::Payload>,
 }
-/// Nested message and enum types in `ClientToServerRequest`.
-pub mod client_to_server_request {
+/// Nested message and enum types in `BadukClient`.
+pub mod baduk_client {
     #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum Payload {
         #[prost(message, tag = "100")]
@@ -68,11 +65,22 @@ pub mod client_to_server_request {
         Gamestart(super::GameStartRequest),
     }
 }
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct ChaksuResponse {
-    #[prost(bool, tag = "1")]
-    pub success: bool,
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UserInfo {
+    #[prost(string, tag = "1")]
+    pub user_name: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "2")]
+    pub rating: u32,
 }
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UsersInfo {
+    #[prost(message, optional, tag = "1")]
+    pub black: ::core::option::Option<UserInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub white: ::core::option::Option<UserInfo>,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ChaksuResponse {}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ResignResponse {}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -83,41 +91,20 @@ pub struct DrawOfferResponse {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PassTurnResponse {}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct UserInfo {
-    #[prost(string, tag = "1")]
-    pub user_name: ::prost::alloc::string::String,
-    #[prost(uint32, tag = "2")]
-    pub rating: u32,
-}
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct GameStartResponse {}
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct UsersInfo {
-    #[prost(message, optional, tag = "1")]
-    pub black: ::core::option::Option<UserInfo>,
-    #[prost(message, optional, tag = "2")]
-    pub white: ::core::option::Option<UserInfo>,
-}
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct ServerToClientResponse {
-    #[prost(bool, tag = "1")]
-    pub response_type: bool,
-    #[prost(enumeration = "Color", tag = "2")]
+pub struct BadukServer {
+    #[prost(enumeration = "Color", tag = "1")]
     pub turn: i32,
     #[prost(enumeration = "Color", optional, tag = "3")]
     pub the_winner: ::core::option::Option<i32>,
     #[prost(message, optional, tag = "4")]
-    pub game_state: ::core::option::Option<GameState>,
+    pub game_state: ::core::option::Option<BadukBoardData>,
     #[prost(message, optional, tag = "5")]
     pub users_info: ::core::option::Option<UsersInfo>,
-    #[prost(
-        oneof = "server_to_client_response::Payload",
-        tags = "100, 101, 102, 103, 104"
-    )]
-    pub payload: ::core::option::Option<server_to_client_response::Payload>,
+    #[prost(oneof = "baduk_server::Payload", tags = "100, 101, 102, 103")]
+    pub payload: ::core::option::Option<baduk_server::Payload>,
 }
-/// Nested message and enum types in `ServerToClientResponse`.
-pub mod server_to_client_response {
+/// Nested message and enum types in `BadukServer`.
+pub mod baduk_server {
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum Payload {
         #[prost(message, tag = "100")]
@@ -128,8 +115,6 @@ pub mod server_to_client_response {
         DrawOffer(super::DrawOfferResponse),
         #[prost(message, tag = "103")]
         PassTurn(super::PassTurnResponse),
-        #[prost(message, tag = "104")]
-        GameStart(super::GameStartResponse),
     }
 }
 /// * 바둑판 턴 정보

@@ -4,4 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rkyv = "0.8.14"
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.49.0", default-features = false, features = ["sync", "time"] }
+utoipa = "5.4.0"
