@@ -1,8 +1,8 @@
+use argon2::password_hash::rand_core::{OsRng, RngCore};
+use base64::{Engine as _, engine::general_purpose};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use argon2::password_hash::rand_core::{OsRng, RngCore};
-use base64::{engine::general_purpose, Engine as _};
 
 pub type UserId = u64;
 
@@ -20,24 +20,18 @@ pub fn generate_session_key() -> String {
 
 /// 세션 추가: (session_key -> user_id)
 pub async fn insert_session(store: &SessionStore, session_key: String, user_id: UserId) {
-    let mut map = store
-        .write()
-        .await;
+    let mut map = store.write().await;
     map.insert(session_key, user_id);
 }
 
 /// 세션 조회: 세션키로 user_id 얻기
 pub async fn get_user_id_by_session(store: &SessionStore, session_key: &str) -> Option<UserId> {
-    let map = store
-        .read()
-        .await;
+    let map = store.read().await;
     map.get(session_key).copied()
 }
 
 /// 세션 삭제 (로그아웃용)
 pub async fn remove_session(store: &SessionStore, session_key: &str) {
-    let mut map = store
-        .write()
-        .await;
+    let mut map = store.write().await;
     map.remove(session_key);
 }

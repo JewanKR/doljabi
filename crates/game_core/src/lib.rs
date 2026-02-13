@@ -18,7 +18,8 @@ pub enum CommonMessage {
 }
 
 pub trait GameLogic: Send + Sync {
-    type Input: From<CommonMessage>;
+    type InputMessage;
+    type Input: From<CommonMessage> + From<Self::InputMessage>;
     type Output;
 
     fn send(&mut self, message: Self::Input) -> Self::Output;

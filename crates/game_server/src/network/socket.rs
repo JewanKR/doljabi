@@ -6,6 +6,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use doljabiproto::common::{ClientToServer, ServerToClient};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
@@ -13,11 +14,7 @@ use tokio::sync::{broadcast, mpsc};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::{
-    network::room_manager::RoomManager,
-    proto::badukboardproto::{ClientToServerRequest, ServerToClientResponse},
-    soyul::session::SessionStore,
-};
+use crate::{game_logic::RoomManager, soyul::session::SessionStore};
 
 #[derive(Deserialize, Serialize, ToSchema)]
 pub enum EnterRoomErrorCode {
@@ -26,7 +23,7 @@ pub enum EnterRoomErrorCode {
 }
 
 pub enum RoomCommunicationDataForm {
-    Request((u64, ClientToServerRequest)),
+    Request((u64, ClientToServer)),
     UserEnter(u64),
     UserDisconnect(u64),
 }
@@ -90,7 +87,7 @@ pub async fn enter_room(
 async fn handle_websocket(
     socket: ws::WebSocket,
     mpsc_tx: mpsc::Sender<RoomCommunicationDataForm>,
-    mut broadcast_rx: broadcast::Receiver<Arc<ServerToClientResponse>>,
+    mut broadcast_rx: broadcast::Receiver<Arc<ServerToClient>>,
     user_id: u64,
 ) {
     use prost::Message as ProstMessage;
@@ -114,7 +111,7 @@ async fn handle_websocket(
         {
             match message {
                 Ok(Message::Binary(data)) => {
-                    if let Ok(request) = ClientToServerRequest::decode(&data[..]) {
+                    if let Ok(request) = ClientToServer::decode(&data[..]) {
                         let _ = mpsc_tx
                             .send(RoomCommunicationDataForm::Request((user_id, request)))
                             .await;

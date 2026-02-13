@@ -15,7 +15,14 @@ message ServerToClient {
   bool game_state = 2;
   GameType game_type = 3;
   oneof game_date {
-    badukboard.BadukServer baduk = 101;
-    badukboard.BadukServer omok = 102;
+    badukboard.BadukBoardServer baduk = 101;
+    badukboard.BadukBoardServer omok = 102;
+  }
+}
+
+message ClientToServer {
+  oneof game_date {
+    badukboard.BadukBoardClient baduk = 101;
+    badukboard.BadukBoardClient omok = 102;
   }
 }

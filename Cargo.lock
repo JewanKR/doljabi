@@ -338,6 +338,7 @@ dependencies = [
  "futures-util",
  "game_core",
  "hyper",
+ "prost",
  "rusqlite",
  "serde",
  "serde_json",

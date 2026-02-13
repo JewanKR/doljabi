@@ -15,9 +15,24 @@ pub mod server_to_client {
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum GameDate {
         #[prost(message, tag = "101")]
-        Baduk(super::super::badukboard::BadukServer),
+        Baduk(super::super::badukboard::BadukBoardServer),
         #[prost(message, tag = "102")]
-        Omok(super::super::badukboard::BadukServer),
+        Omok(super::super::badukboard::BadukBoardServer),
+    }
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ClientToServer {
+    #[prost(oneof = "client_to_server::GameDate", tags = "101, 102")]
+    pub game_date: ::core::option::Option<client_to_server::GameDate>,
+}
+/// Nested message and enum types in `ClientToServer`.
+pub mod client_to_server {
+    #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum GameDate {
+        #[prost(message, tag = "101")]
+        Baduk(super::super::badukboard::BadukBoardClient),
+        #[prost(message, tag = "102")]
+        Omok(super::super::badukboard::BadukBoardClient),
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

@@ -39,8 +39,7 @@ message ResignRequest {}
 message PassTurnRequest {}
 message GameStartRequest {}
 
-message BadukClient {
-  string session_key = 1;
+message BadukBoardClient {
   oneof payload {
     ChaksuRequest coordinate = 100;
     ResignRequest resign = 101;
@@ -66,7 +65,7 @@ message DrawOfferResponse {
 }
 message PassTurnResponse {}
 
-message BadukServer {
+message BadukBoardServer {
   Color turn = 1;
   optional Color the_winner = 3;
   optional BadukBoardData game_state = 4;

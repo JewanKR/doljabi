@@ -1,7 +1,7 @@
 use crate::{
     game_old::badukboard::BadukBoardGameConfig,
     network::{baduk_room::BadukRoom, omok_room::OmokRoom, socket::RoomCommunicationDataForm},
-    proto::badukboardproto::{ClientToServerRequest, ServerToClientResponse},
+    proto::badukboardproto::{ClientToServer, ServerToClient},
 };
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::{self, Deserialize, Serialize};
@@ -53,7 +53,7 @@ impl EnterCode {
 
 pub type RoomCommunicationChannel = (
     mpsc::Sender<RoomCommunicationDataForm>,
-    broadcast::Sender<Arc<ServerToClientResponse>>,
+    broadcast::Sender<Arc<ServerToClient>>,
 );
 
 pub struct EnterCodeManagement {
@@ -130,7 +130,7 @@ impl RoomManagement {
         enter_code: u16,
     ) -> Option<(
         mpsc::Sender<RoomCommunicationDataForm>,
-        broadcast::Receiver<Arc<ServerToClientResponse>>,
+        broadcast::Receiver<Arc<ServerToClient>>,
     )> {
         let (mpsc_tx, broadcast_tx) = match self.room_communication_channel_map.get(&enter_code) {
             Some(channel) => channel,
@@ -167,10 +167,7 @@ impl CreateRoomResponseForm {
 }
 
 pub trait GameLogic: Send + Sync {
-    fn input_data(
-        &mut self,
-        data: (u64, ClientToServerRequest),
-    ) -> (GameRoomResponse, ServerToClientResponse);
+    fn input_data(&mut self, data: (u64, ClientToServer)) -> (GameRoomResponse, ServerToClient);
     fn check_empty_room(&self) -> bool;
 
     fn push_user(&mut self, user_id: u64) -> bool;
@@ -179,7 +176,7 @@ pub trait GameLogic: Send + Sync {
     fn users_info(&self) -> doljabiproto::badukboard::UsersInfo;
 
     fn set_timer(&mut self) -> tokio::time::Duration;
-    fn timer_interrupt(&mut self) -> (GameRoomResponse, ServerToClientResponse);
+    fn timer_interrupt(&mut self) -> (GameRoomResponse, ServerToClient);
 }
 
 pub async fn run_game_node<G: GameLogic>(
@@ -188,7 +185,7 @@ pub async fn run_game_node<G: GameLogic>(
     room_manager: RoomManager,
 
     mut mpsc_rx: mpsc::Receiver<RoomCommunicationDataForm>,
-    broadcast_tx: broadcast::Sender<Arc<ServerToClientResponse>>,
+    broadcast_tx: broadcast::Sender<Arc<ServerToClient>>,
     mpsc_tx: mpsc::Sender<RoomCommunicationDataForm>,
 ) {
     // 타임 아웃 설정
@@ -209,7 +206,7 @@ pub async fn run_game_node<G: GameLogic>(
             Some(data) = mpsc_rx.recv() => {
                 #[cfg(debug_assertions)]
                 println!("데이터 수신!");
-                let response: ServerToClientResponse = match data {
+                let response: ServerToClient = match data {
                     RoomCommunicationDataForm::Request(input_data) => {
                         let (room_response, response) = game.input_data(input_data);
 
@@ -252,7 +249,7 @@ pub async fn run_game_node<G: GameLogic>(
                         }
 
                         if game.push_user(user_id) {
-                            ServerToClientResponse {
+                            ServerToClient {
                                 response_type: true,
                                 turn: doljabiproto::badukboard::Color::Free as i32,
                                 the_winner: None,
@@ -261,7 +258,7 @@ pub async fn run_game_node<G: GameLogic>(
                                 payload: None,
                             }
                         } else {
-                            ServerToClientResponse {
+                            ServerToClient {
                                 response_type: false,
                                 turn: doljabiproto::badukboard::Color::Free as i32,
                                 the_winner: None,
@@ -282,7 +279,7 @@ pub async fn run_game_node<G: GameLogic>(
                                 let _ = tx_clone.send(
                                     RoomCommunicationDataForm::Request((
                                         user_id,
-                                        ClientToServerRequest{
+                                        ClientToServer{
                                             session_key: "".to_string(),
                                             payload: Some(Payload::Resign(ResignRequest{})),
                                         }
@@ -295,7 +292,7 @@ pub async fn run_game_node<G: GameLogic>(
                             // 게임 시작 전 > 방 나가기
                             game.pop_user(user_id);
                             if game.check_empty_room() {break;}
-                            ServerToClientResponse {
+                            ServerToClient {
                                 response_type: true,
                                 turn: doljabiproto::badukboard::Color::Free as i32,
                                 the_winner: None,
@@ -366,7 +363,7 @@ pub async fn create_room_request(
     Json(payload): Json<CreateRoomRequestForm>,
 ) -> impl IntoResponse {
     let (mpsc_tx, mpsc_rx) = mpsc::channel::<RoomCommunicationDataForm>(16);
-    let (broadcast_tx, _) = broadcast::channel::<Arc<ServerToClientResponse>>(16);
+    let (broadcast_tx, _) = broadcast::channel::<Arc<ServerToClient>>(16);
 
     let tx_clone = mpsc_tx.clone();
 

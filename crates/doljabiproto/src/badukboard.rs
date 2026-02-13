@@ -42,15 +42,13 @@ pub struct ResignRequest {}
 pub struct PassTurnRequest {}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GameStartRequest {}
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BadukClient {
-    #[prost(string, tag = "1")]
-    pub session_key: ::prost::alloc::string::String,
-    #[prost(oneof = "baduk_client::Payload", tags = "100, 101, 102, 103, 104")]
-    pub payload: ::core::option::Option<baduk_client::Payload>,
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BadukBoardClient {
+    #[prost(oneof = "baduk_board_client::Payload", tags = "100, 101, 102, 103, 104")]
+    pub payload: ::core::option::Option<baduk_board_client::Payload>,
 }
-/// Nested message and enum types in `BadukClient`.
-pub mod baduk_client {
+/// Nested message and enum types in `BadukBoardClient`.
+pub mod baduk_board_client {
     #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum Payload {
         #[prost(message, tag = "100")]
@@ -91,7 +89,7 @@ pub struct DrawOfferResponse {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PassTurnResponse {}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BadukServer {
+pub struct BadukBoardServer {
     #[prost(enumeration = "Color", tag = "1")]
     pub turn: i32,
     #[prost(enumeration = "Color", optional, tag = "3")]
@@ -100,11 +98,11 @@ pub struct BadukServer {
     pub game_state: ::core::option::Option<BadukBoardData>,
     #[prost(message, optional, tag = "5")]
     pub users_info: ::core::option::Option<UsersInfo>,
-    #[prost(oneof = "baduk_server::Payload", tags = "100, 101, 102, 103")]
-    pub payload: ::core::option::Option<baduk_server::Payload>,
+    #[prost(oneof = "baduk_board_server::Payload", tags = "100, 101, 102, 103")]
+    pub payload: ::core::option::Option<baduk_board_server::Payload>,
 }
-/// Nested message and enum types in `BadukServer`.
-pub mod baduk_server {
+/// Nested message and enum types in `BadukBoardServer`.
+pub mod baduk_board_server {
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum Payload {
         #[prost(message, tag = "100")]
