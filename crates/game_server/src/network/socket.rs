@@ -8,24 +8,22 @@ use axum::{
 };
 use doljabiproto::common::{ClientToServer, ServerToClient};
 use futures_util::{SinkExt, StreamExt};
+use game_core::UserID;
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
 use tokio::sync::{broadcast, mpsc};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::{game_logic::RoomManager, soyul::session::SessionStore};
+use crate::{
+    game_logic::{InputMessage, RoomManager, SystemEvent},
+    soyul::session::SessionStore,
+};
 
 #[derive(Deserialize, Serialize, ToSchema)]
 pub enum EnterRoomErrorCode {
     EnterCodeError,
     IncorrectSessionKey,
-}
-
-pub enum RoomCommunicationDataForm {
-    Request((u64, ClientToServer)),
-    UserEnter(u64),
-    UserDisconnect(u64),
 }
 
 #[utoipa::path(
@@ -58,7 +56,7 @@ pub async fn enter_room(
         Some(user_id) => {
             //#[cfg(debug_assertions)]
             println!("{} 유저 접속 성공", user_id);
-            user_id
+            UserID::from(user_id)
         }
         None => {
             //#[cfg(debug_assertions)]
@@ -67,12 +65,7 @@ pub async fn enter_room(
         }
     };
 
-    let communication_channel = {
-        room_manager
-            .lock()
-            .await
-            .get_communication_channel(enter_code)
-    };
+    let communication_channel = { room_manager.lock().await.get_channels(enter_code) };
 
     let (mpsc_tx, broadcast_rx) = match communication_channel {
         Some(channel) => channel,
@@ -86,23 +79,24 @@ pub async fn enter_room(
 
 async fn handle_websocket(
     socket: ws::WebSocket,
-    mpsc_tx: mpsc::Sender<RoomCommunicationDataForm>,
+    mpsc_tx: mpsc::Sender<InputMessage>,
     mut broadcast_rx: broadcast::Receiver<Arc<ServerToClient>>,
-    user_id: u64,
+    user_id: UserID,
 ) {
     use prost::Message as ProstMessage;
     use ws::Message;
 
     let (mut ws_tx, mut ws_rx) = socket.split();
 
-    // 방 접속 실패 시 종료
+    // 방 접속 시도 -> 실패 시 종료
     if let Err(_) = mpsc_tx
-        .send(RoomCommunicationDataForm::UserEnter(user_id))
+        .send(InputMessage::System(SystemEvent::EnterUser(user_id)))
         .await
     {
         return;
     }
 
+    // 종료 후 종료 신호 보내기 위한 채널 확보
     let send_disconnect = mpsc_tx.clone();
 
     let send_task = tokio::spawn(async move {
@@ -113,7 +107,7 @@ async fn handle_websocket(
                 Ok(Message::Binary(data)) => {
                     if let Ok(request) = ClientToServer::decode(&data[..]) {
                         let _ = mpsc_tx
-                            .send(RoomCommunicationDataForm::Request((user_id, request)))
+                            .send(InputMessage::Request((user_id, request)))
                             .await;
                     }
                 }
@@ -150,7 +144,7 @@ async fn handle_websocket(
     }
 
     let _ = send_disconnect
-        .send(RoomCommunicationDataForm::UserDisconnect(user_id))
+        .send(InputMessage::System(SystemEvent::LeaveUser(user_id)))
         .await;
 }
 

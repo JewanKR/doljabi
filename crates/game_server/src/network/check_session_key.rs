@@ -1,18 +1,20 @@
-use axum::{extract::FromRequestParts, http::{StatusCode, request::Parts}, response::{IntoResponse, Response}};
+use axum::{
+    extract::FromRequestParts,
+    http::{StatusCode, request::Parts},
+    response::{IntoResponse, Response},
+};
 
+#[derive(Clone, PartialEq, Eq)]
 pub struct SessionKey(pub String);
 
-impl <S> FromRequestParts <S> for SessionKey 
-where 
+impl<S> FromRequestParts<S> for SessionKey
+where
     S: Send + Sync,
 {
     type Rejection = SessionKeyError;
 
     // http 요청에서 세션키 추출
-    async fn from_request_parts(
-            parts: &mut Parts,
-            _state: &S,
-        ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let session_key = parts
             .headers
             .get("x-session-key")

@@ -123,8 +123,8 @@ impl OmokRoom {
         }
     }
 
-    pub fn badukboard_status(&self) -> doljabiproto::badukboard::GameState {
-        doljabiproto::badukboard::GameState {
+    pub fn badukboard_status(&self) -> doljabiproto::badukboard::BadukBoardDate {
+        doljabiproto::badukboard::BadukBoardDate {
             board: Some(self.baduk_board_state()),
             black_time: Some(self.black_player_time_info()),
             white_time: Some(self.white_player_time_info()),

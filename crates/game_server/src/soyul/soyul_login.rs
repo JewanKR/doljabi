@@ -1,18 +1,26 @@
-use axum::{Json, extract::{Path, State}, http::StatusCode, response::IntoResponse};
+use argon2::{
+    Argon2,
+    password_hash::{
+        self, PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng,
+    },
+};
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
+use game_core::UserID;
+use rusqlite::{self, Connection, params};
 use serde::{Deserialize, Serialize};
 #[cfg(debug_assertions)]
 use serde_json;
-use rusqlite::{self, params, Connection};
-use argon2::{
-    password_hash::{
-        self, rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
-    },
-    Argon2,
-};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::soyul::session::{get_user_id_by_session, generate_session_key, insert_session, remove_session, SessionStore};
+use crate::soyul::session::{
+    SessionStore, generate_session_key, get_user_id_by_session, insert_session, remove_session,
+};
 
 //
 // 공통 에러 타입
@@ -29,7 +37,9 @@ fn argon2_hash(input: &str) -> std::result::Result<String, password_hash::Error>
     let salt = SaltString::generate(&mut OsRng);
     let algorithm = Argon2::default();
 
-    Ok(algorithm.hash_password(input.as_bytes(), &salt)?.to_string())
+    Ok(algorithm
+        .hash_password(input.as_bytes(), &salt)?
+        .to_string())
 }
 
 fn verify_argon2(input: &str, hashed: &str) -> std::result::Result<bool, password_hash::Error> {
@@ -57,7 +67,7 @@ impl UserProfile {
                 Some(name) => name,
                 None => "".to_string(),
             },
-            rating: self.rating as u32
+            rating: self.rating as u32,
         }
     }
 }
@@ -65,7 +75,7 @@ impl UserProfile {
 /// user_id로 유저 프로필 가져오기
 pub fn get_user_profile_by_id(
     conn: &Connection,
-    user_id: u64,
+    user_id: UserID,
 ) -> rusqlite::Result<Option<UserProfile>> {
     let mut stmt = conn.prepare(
         "SELECT username, rating
@@ -73,7 +83,7 @@ pub fn get_user_profile_by_id(
          WHERE id = ?1",
     )?;
 
-    let result = stmt.query_row([user_id as i64], |row| {
+    let result = stmt.query_row([i64::from(user_id)], |row| {
         Ok(UserProfile {
             username: row.get(0)?,
             rating: row.get(1)?,
@@ -128,11 +138,7 @@ fn login_db(
     match row {
         Ok((user_id, stored_hash)) => {
             let ok = verify_argon2(password_plain, &stored_hash).unwrap_or(false);
-            if ok {
-                Ok(Some(user_id))
-            } else {
-                Ok(None)
-            }
+            if ok { Ok(Some(user_id)) } else { Ok(None) }
         }
         // 해당 login_id 없음
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
@@ -315,7 +321,7 @@ pub async fn login(
             let session_key = generate_session_key();
 
             // 2) 서버 메모리 SessionStore에 (세션키 -> user_id) 저장
-            insert_session(&session_store, session_key.clone(), user_id).await;
+            insert_session(&session_store, session_key.clone(), UserID(user_id)).await;
 
             // 3) 응답 JSON 생성
             let resp = LoginResponse {
@@ -446,11 +452,16 @@ pub async fn get_user_profile_handler(
 
     let user_id = match user_id_opt {
         Some(id) => id,
-        _ => {return (StatusCode::INTERNAL_SERVER_ERROR, Json(UserProfileResponse{
-            success: false,
-            message: "유효하지 않은 세션키".into(),
-            user: None,
-        }));},
+        _ => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(UserProfileResponse {
+                    success: false,
+                    message: "유효하지 않은 세션키".into(),
+                    user: None,
+                }),
+            );
+        }
     };
 
     match get_user_profile_by_id(&conn, user_id) {
@@ -534,10 +545,15 @@ pub async fn update_username(
 
     let user_id = match user_id_opt {
         Some(id) => id,
-        _ => {return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse{
-            success: false,
-            message: "유효하지 않은 세션키".into(),
-        }));},
+        _ => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: "유효하지 않은 세션키".into(),
+                }),
+            );
+        }
     };
 
     let conn = match Connection::open("mydb.db") {
@@ -556,10 +572,13 @@ pub async fn update_username(
 
     match conn.execute(
         "UPDATE users SET username = ?1 WHERE id = ?2",
-        params![form.new_username, user_id as i64],
+        params![form.new_username, i64::from(user_id)],
     ) {
         Ok(_) => {
-            println!("✅ 닉네임 변경 성공: user_id={}, new_username={}", user_id, form.new_username);
+            println!(
+                "✅ 닉네임 변경 성공: user_id={}, new_username={}",
+                user_id, form.new_username
+            );
             (
                 StatusCode::OK,
                 Json(ApiResponse {
@@ -610,10 +629,15 @@ pub async fn update_password(
 
     let user_id = match user_id_opt {
         Some(id) => id,
-        _ => {return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse{
-            success: false,
-            message: "유효하지 않은 세션키".into(),
-        }));},
+        _ => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: "유효하지 않은 세션키".into(),
+                }),
+            );
+        }
     };
 
     let conn = match Connection::open("mydb.db") {
@@ -645,7 +669,7 @@ pub async fn update_password(
         }
     };
 
-    let stored_hash: String = match stmt.query_row([user_id as i64], |row| row.get(0)) {
+    let stored_hash: String = match stmt.query_row([i64::from(user_id)], |row| row.get(0)) {
         Ok(hash) => hash,
         Err(e) => {
             eprintln!("❌ 유저 조회 실패: {}", e);
@@ -689,7 +713,7 @@ pub async fn update_password(
     // 비밀번호 업데이트
     match conn.execute(
         "UPDATE users SET password_hash = ?1 WHERE id = ?2",
-        params![new_hash, user_id as i64],
+        params![new_hash, i64::from(user_id)],
     ) {
         Ok(_) => {
             println!("✅ 비밀번호 변경 성공: user_id={}", user_id);
@@ -744,10 +768,15 @@ pub async fn delete_user(
 
     let user_id = match user_id_opt {
         Some(id) => id,
-        _ => {return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse{
-            success: false,
-            message: "유효하지 않은 세션키".into(),
-        }));},
+        _ => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: "유효하지 않은 세션키".into(),
+                }),
+            );
+        }
     };
 
     remove_session(&session_store, &form.session_key).await;
@@ -767,10 +796,16 @@ pub async fn delete_user(
     };
 
     // DB에서 유저 정보 삭제
-    match conn.execute("DELETE FROM users WHERE id = ?1", params![user_id as i64]) {
+    match conn.execute(
+        "DELETE FROM users WHERE id = ?1",
+        params![i64::from(user_id)],
+    ) {
         Ok(rows_affected) => {
             if rows_affected == 0 {
-                eprintln!("❌ 유저 삭제 실패: 해당 유저를 찾을 수 없음 (user_id={})", user_id);
+                eprintln!(
+                    "❌ 유저 삭제 실패: 해당 유저를 찾을 수 없음 (user_id={})",
+                    user_id
+                );
                 return (
                     StatusCode::NOT_FOUND,
                     Json(ApiResponse {
@@ -804,7 +839,7 @@ pub async fn delete_user(
 }
 
 /// 게임 승리 기록: user_id의 win 컬럼을 1 증가
-pub fn record_game_win(user_id: u64) -> rusqlite::Result<()> {
+pub fn record_game_win(user_id: UserID) -> rusqlite::Result<()> {
     let conn = match Connection::open("mydb.db") {
         Ok(conn) => conn,
         Err(e) => {
@@ -815,7 +850,7 @@ pub fn record_game_win(user_id: u64) -> rusqlite::Result<()> {
 
     conn.execute(
         "UPDATE users SET win = win + 1 WHERE id = ?1",
-        params![user_id as i64],
+        params![i64::from(user_id)],
     )?;
 
     println!("✅ 승리 기록 성공: user_id={}", user_id);
@@ -823,7 +858,7 @@ pub fn record_game_win(user_id: u64) -> rusqlite::Result<()> {
 }
 
 /// 게임 패배 기록: user_id의 lose 컬럼을 1 증가
-pub fn record_game_lose(user_id: u64) -> rusqlite::Result<()> {
+pub fn record_game_lose(user_id: UserID) -> rusqlite::Result<()> {
     let conn = match Connection::open("mydb.db") {
         Ok(conn) => conn,
         Err(e) => {
@@ -834,7 +869,7 @@ pub fn record_game_lose(user_id: u64) -> rusqlite::Result<()> {
 
     conn.execute(
         "UPDATE users SET lose = lose + 1 WHERE id = ?1",
-        params![user_id as i64],
+        params![i64::from(user_id)],
     )?;
 
     println!("✅ 패배 기록 성공: user_id={}", user_id);
@@ -842,7 +877,7 @@ pub fn record_game_lose(user_id: u64) -> rusqlite::Result<()> {
 }
 
 /// 게임 무승부 기록: user_id의 draw 컬럼을 1 증가
-pub fn record_game_draw(user_id: u64) -> rusqlite::Result<()> {
+pub fn record_game_draw(user_id: UserID) -> rusqlite::Result<()> {
     let conn = match Connection::open("mydb.db") {
         Ok(conn) => conn,
         Err(e) => {
@@ -853,7 +888,7 @@ pub fn record_game_draw(user_id: u64) -> rusqlite::Result<()> {
 
     conn.execute(
         "UPDATE users SET draw = draw + 1 WHERE id = ?1",
-        params![user_id as i64],
+        params![i64::from(user_id)],
     )?;
 
     println!("✅ 무승부 기록 성공: user_id={}", user_id);
@@ -863,7 +898,7 @@ pub fn record_game_draw(user_id: u64) -> rusqlite::Result<()> {
 /// user_id로 게임 결과(win, lose, draw) 조회
 pub fn get_game_result_by_id(
     conn: &Connection,
-    user_id: u64,
+    user_id: UserID,
 ) -> rusqlite::Result<Option<GameResultInformationFrom>> {
     let mut stmt = conn.prepare(
         "SELECT win, lose, draw
@@ -871,7 +906,7 @@ pub fn get_game_result_by_id(
          WHERE id = ?1",
     )?;
 
-    let result = stmt.query_row([user_id as i64], |row| {
+    let result = stmt.query_row([i64::from(user_id)], |row| {
         Ok(GameResultInformationFrom {
             win: row.get(0)?,
             lose: row.get(1)?,
@@ -935,8 +970,10 @@ pub async fn get_game_result(
 
     match get_game_result_by_id(&conn, user_id) {
         Ok(Some(result)) => {
-            println!("✅ 게임 결과 조회 성공: user_id={}, win={}, lose={}, draw={}", 
-                user_id, result.win, result.lose, result.draw);
+            println!(
+                "✅ 게임 결과 조회 성공: user_id={}, win={}, lose={}, draw={}",
+                user_id, result.win, result.lose, result.draw
+            );
             (StatusCode::OK, Json(result)).into_response()
         }
         Ok(None) => {
@@ -949,7 +986,6 @@ pub async fn get_game_result(
         }
     }
 }
-
 
 pub fn login_router() -> OpenApiRouter<SessionStore> {
     OpenApiRouter::new()

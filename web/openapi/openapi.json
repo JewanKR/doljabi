@@ -1,0 +1,754 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "doljabi",
+    "description": "doljabi project REST API를 정의한 문서입니다.",
+    "contact": {
+      "name": "Doljabi Team",
+      "email": "doljabi2025@gmail.com"
+    },
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/admin/openapi": {
+      "get": {
+        "tags": [
+          "openapi"
+        ],
+        "operationId": "swagger_ui_page",
+        "responses": {
+          "200": {
+            "description": "Swagger UI 페이지"
+          }
+        }
+      }
+    },
+    "/api/admin/openapi/openapi.json": {
+      "get": {
+        "tags": [
+          "openapi"
+        ],
+        "summary": "OpenAPI JSON 스펙을 반환하는 엔드포인트",
+        "operationId": "get_openapi_spec",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 스펙 반환 성공"
+          },
+          "500": {
+            "description": "서버 오류"
+          }
+        }
+      }
+    },
+    "/api/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "로그인 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "아이디 또는 비밀번호가 틀림",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/room/create": {
+      "post": {
+        "operationId": "create_room_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRoomRequestForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "방 생성 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRoomResponseForm"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "잘못된 요청"
+          },
+          "500": {
+            "description": "서버 오류"
+          }
+        }
+      }
+    },
+    "/api/session_check": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "session_check",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionCheckForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "세션 존재 여부 확인"
+          },
+          "400": {
+            "description": "세션 키가 올바르지 않음"
+          }
+        }
+      }
+    },
+    "/api/signup": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "signup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "유저 생성 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "이미 존재하는 아이디 또는 잘못된 요청",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user/delete": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "operationId": "delete_user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionCheckForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "유저 정보 삭제 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "세션 키가 올바르지 않음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user/game_result_info/session/{session_key}": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "operationId": "get_game_result",
+        "parameters": [
+          {
+            "name": "session_key",
+            "in": "path",
+            "description": "세션 키",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "게임 결과 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameResultInformationFrom"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "세션 키가 올바르지 않음"
+          },
+          "404": {
+            "description": "해당 유저 없음"
+          },
+          "500": {
+            "description": "서버 내부 오류"
+          }
+        }
+      }
+    },
+    "/api/user/profile": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "operationId": "get_user_profile_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionCheckForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "유저 정보 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "해당 유저 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user/update-password": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "operationId": "update_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePasswordForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "비밀번호 변경 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "현재 비밀번호가 올바르지 않음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user/update-username": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "operationId": "update_username",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUsernameForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "닉네임 변경 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "잘못된 요청 또는 이미 사용 중인 닉네임",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "서버 내부 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ws/room/{enter_code}/session/{session_key}": {
+      "get": {
+        "operationId": "enter_room",
+        "parameters": [
+          {
+            "name": "enter_code",
+            "in": "path",
+            "description": "방 입장 코드",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "session_key",
+            "in": "path",
+            "description": "세션 키",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "WebSocket 연결 성공: 방 입장 성공"
+          },
+          "400": {
+            "description": "유효하지 않은 세션 키"
+          },
+          "404": {
+            "description": "존재하지 않는 방"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BadukBoardGameConfig": {
+        "type": "object",
+        "required": [
+          "main_time",
+          "fischer_time",
+          "remaining_overtime",
+          "overtime"
+        ],
+        "properties": {
+          "fischer_time": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "main_time": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "overtime": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "remaining_overtime": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "CreateRoomRequestForm": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "game_config",
+              "game_type"
+            ],
+            "properties": {
+              "game_config": {
+                "$ref": "#/components/schemas/BadukBoardGameConfig"
+              },
+              "game_type": {
+                "type": "string",
+                "enum": [
+                  "baduk"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "game_config",
+              "game_type"
+            ],
+            "properties": {
+              "game_config": {
+                "$ref": "#/components/schemas/BadukBoardGameConfig"
+              },
+              "game_type": {
+                "type": "string",
+                "enum": [
+                  "omok"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "CreateRoomResponseForm": {
+        "type": "object",
+        "required": [
+          "enter_code"
+        ],
+        "properties": {
+          "enter_code": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "GameResultInformationFrom": {
+        "type": "object",
+        "required": [
+          "win",
+          "lose",
+          "draw"
+        ],
+        "properties": {
+          "draw": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lose": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "win": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "LoginForm": {
+        "type": "object",
+        "required": [
+          "login_id",
+          "password"
+        ],
+        "properties": {
+          "login_id": {
+            "type": "string",
+            "description": "로그인에 사용할 아이디"
+          },
+          "password": {
+            "type": "string",
+            "description": "평문 비밀번호"
+          }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "session_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "success": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SessionCheckForm": {
+        "type": "object",
+        "required": [
+          "session_key"
+        ],
+        "properties": {
+          "session_key": {
+            "type": "string"
+          }
+        }
+      },
+      "SignupForm": {
+        "type": "object",
+        "required": [
+          "login_id",
+          "password",
+          "username"
+        ],
+        "properties": {
+          "login_id": {
+            "type": "string",
+            "description": "로그인에 사용할 아이디"
+          },
+          "password": {
+            "type": "string",
+            "description": "평문 비밀번호"
+          },
+          "username": {
+            "type": "string",
+            "description": "사용자 이름 (닉네임)"
+          }
+        }
+      },
+      "UpdatePasswordForm": {
+        "type": "object",
+        "required": [
+          "session_key",
+          "current_password",
+          "new_password"
+        ],
+        "properties": {
+          "current_password": {
+            "type": "string"
+          },
+          "new_password": {
+            "type": "string"
+          },
+          "session_key": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateUsernameForm": {
+        "type": "object",
+        "required": [
+          "session_key",
+          "new_username"
+        ],
+        "properties": {
+          "new_username": {
+            "type": "string"
+          },
+          "session_key": {
+            "type": "string"
+          }
+        }
+      },
+      "UserProfile": {
+        "type": "object",
+        "required": [
+          "rating"
+        ],
+        "properties": {
+          "rating": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "UserProfileResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "user": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserProfile"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

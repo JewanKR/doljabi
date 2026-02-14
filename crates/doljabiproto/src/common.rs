@@ -3,17 +3,17 @@
 pub struct ServerToClient {
     #[prost(bool, tag = "1")]
     pub response_type: bool,
-    #[prost(bool, tag = "2")]
-    pub game_state: bool,
+    #[prost(bool, optional, tag = "2")]
+    pub running: ::core::option::Option<bool>,
     #[prost(enumeration = "GameType", tag = "3")]
     pub game_type: i32,
-    #[prost(oneof = "server_to_client::GameDate", tags = "101, 102")]
-    pub game_date: ::core::option::Option<server_to_client::GameDate>,
+    #[prost(oneof = "server_to_client::GameData", tags = "101, 102")]
+    pub game_data: ::core::option::Option<server_to_client::GameData>,
 }
 /// Nested message and enum types in `ServerToClient`.
 pub mod server_to_client {
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
-    pub enum GameDate {
+    pub enum GameData {
         #[prost(message, tag = "101")]
         Baduk(super::super::badukboard::BadukBoardServer),
         #[prost(message, tag = "102")]
@@ -22,13 +22,13 @@ pub mod server_to_client {
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ClientToServer {
-    #[prost(oneof = "client_to_server::GameDate", tags = "101, 102")]
-    pub game_date: ::core::option::Option<client_to_server::GameDate>,
+    #[prost(oneof = "client_to_server::GameData", tags = "101, 102")]
+    pub game_data: ::core::option::Option<client_to_server::GameData>,
 }
 /// Nested message and enum types in `ClientToServer`.
 pub mod client_to_server {
     #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Oneof)]
-    pub enum GameDate {
+    pub enum GameData {
         #[prost(message, tag = "101")]
         Baduk(super::super::badukboard::BadukBoardClient),
         #[prost(message, tag = "102")]

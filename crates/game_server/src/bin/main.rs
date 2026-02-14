@@ -1,14 +1,8 @@
-fn main() {
-    println!("protobuf 생성 완료!");
-}
-/*
 // 실행 방법: cargo run --bin main
 use axum::Router;
 use game_server::{
-    network::{
-        room_manager::{RoomManagement, create_room_router},
-        socket::web_socket_upgrade_router,
-    },
+    game_logic::{RoomManagement, create_room_router, timer::ServerTimer},
+    network::socket::web_socket_upgrade_router,
     soyul::{session::SessionStore, soyul_login::login_router},
     utility::admin_page::admin_page_router,
 };
@@ -37,11 +31,12 @@ fn add_openapi_info(openapi_doc: &mut OpenApi) {
 async fn main() {
     let session_manager = SessionStore::default();
     let room_manager = Arc::new(Mutex::new(RoomManagement::new()));
+    let timer_manager = ServerTimer::run();
 
     // 최종 라우터 생성
     let router_list = OpenApiRouter::new()
         .merge(login_router().with_state(session_manager.clone()))
-        .merge(create_room_router().with_state(room_manager.clone()))
+        .merge(create_room_router().with_state((room_manager.clone(), timer_manager.clone())))
         .merge(
             web_socket_upgrade_router().with_state((room_manager.clone(), session_manager.clone())),
         )
@@ -57,7 +52,8 @@ async fn main() {
     let openapi_json = openapi_doc
         .to_pretty_json()
         .expect("Failed to convert openapi doc to json");
-    fs::write("./src/openapi.json", openapi_json).expect("Failed to save openapi doc to json");
+    fs::write("./web/openapi/openapi.json", openapi_json)
+        .expect("Failed to save openapi doc to json");
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -75,4 +71,3 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
- */

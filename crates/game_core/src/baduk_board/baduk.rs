@@ -3,19 +3,19 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Clone, Debug)]
 pub struct Baduk {
-    pub(crate) board: BadukBoard,
+    pub board: BadukBoard,
 
-    pub(crate) black_linked_stone_set: HashMap<u16, HashSet<u16>>,
-    pub(crate) white_linked_stone_set: HashMap<u16, HashSet<u16>>,
-    pub(crate) black_caught_stone: u16,
-    pub(crate) white_caught_stone: u16,
+    pub black_linked_stone_set: HashMap<u16, HashSet<u16>>,
+    pub white_linked_stone_set: HashMap<u16, HashSet<u16>>,
+    pub black_caught_stone: u16,
+    pub white_caught_stone: u16,
 
     // 반복수 검사를 위한 이전 보드 상태 저장 (중국 규칙: 바로 이전 상태와 동일하면 금지)
     previous_board_state: Option<BoardState>,
 
     // 패 해소를 위한 패 위치 저장 (정확히 1개의 돌을 잡았을 때 발생)
     ko_position: Option<u16>,
-    pub(crate) winner: Option<Color>,
+    pub winner: Option<Color>,
 }
 
 /// 보드 상태를 저장하기 위한 구조체 (반복수 검사용)

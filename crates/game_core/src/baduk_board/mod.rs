@@ -1,8 +1,10 @@
-pub mod baduk;
-pub mod omok;
-
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+
+use crate::UserID;
+
+pub mod baduk;
+pub mod omok;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BoardType {
@@ -188,7 +190,7 @@ impl BadukBoard {
 
 #[derive(Clone, Debug)]
 pub struct Player {
-    user_id: u64,
+    user_id: UserID,
 
     main_time: u64,
     fischer_time: u64,
@@ -200,7 +202,7 @@ pub struct Player {
     draw_offer: bool,
 }
 impl Player {
-    pub fn new(user_id: u64) -> Self {
+    pub fn new(user_id: UserID) -> Self {
         Self {
             user_id: user_id,
             main_time: 7200000,
@@ -236,7 +238,7 @@ impl Player {
     }
 
     // user_id 반환
-    pub fn user_id(&self) -> u64 {
+    pub fn user_id(&self) -> UserID {
         self.user_id
     }
 
@@ -278,8 +280,8 @@ impl Player {
 
 #[derive(Clone, Debug)]
 pub struct Players {
-    pub(crate) black_player: Option<Player>,
-    pub(crate) white_player: Option<Player>,
+    pub black_player: Option<Player>,
+    pub white_player: Option<Player>,
 }
 impl Players {
     pub fn new() -> Self {
@@ -290,7 +292,7 @@ impl Players {
     }
 
     // player 추가
-    pub fn push_user(&mut self, user_id: u64) -> bool {
+    pub fn push_user(&mut self, user_id: UserID) -> bool {
         if self
             .black_player
             .as_ref()
@@ -320,7 +322,7 @@ impl Players {
     }
 
     // player 제거
-    pub fn pop_user(&mut self, user_id: u64) -> bool {
+    pub fn pop_user(&mut self, user_id: UserID) -> bool {
         let mut flag = false;
 
         if self
@@ -450,7 +452,7 @@ impl Players {
     }
 
     // 색으로 id 확인
-    pub fn user_id(&self, color: Color) -> Option<u64> {
+    pub fn user_id(&self, color: Color) -> Option<UserID> {
         match color {
             Color::Black => self.black_player.as_ref().map(|b| b.user_id()),
             Color::White => self.white_player.as_ref().map(|w| w.user_id()),
@@ -459,7 +461,7 @@ impl Players {
     }
 
     // id 로 색 확인
-    pub fn check_id_to_color(&self, user_id: u64) -> Color {
+    pub fn check_id_to_color(&self, user_id: UserID) -> Color {
         if let Some(player) = &self.black_player {
             if player.user_id() == user_id {
                 return Color::Black;

@@ -4,18 +4,21 @@ use std::{
 };
 
 use axum::{Json, extract::State, response::IntoResponse};
-use doljabiproto::common::ServerToClient;
-use game_core::{GameLogic, baduk_board::BadukBoardGameConfig};
+use doljabiproto::common::{ClientToServer, ServerToClient};
+use game_core::{UserID, baduk_board::BadukBoardGameConfig};
 use hyper::StatusCode;
 use serde::{Deserialize, Serialize};
-use tokio::{
-    sync::{Mutex, broadcast, mpsc},
-    task::JoinHandle,
-};
+use tokio::sync::{Mutex, broadcast, mpsc};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::network::socket::RoomCommunicationDataForm;
+use crate::game_logic::{
+    baduk_board::baduk_room::BadukRoom,
+    timer::{GameTimer, TimerManager},
+};
+
+pub mod baduk_board;
+pub mod timer;
 
 #[derive(Hash, PartialEq, Eq)]
 pub struct EnterCode {
@@ -30,10 +33,39 @@ impl EnterCode {
     }
 }
 
-pub type RoomCommunicationChannel = (
-    mpsc::Sender<RoomCommunicationDataForm>,
-    broadcast::Sender<Arc<ServerToClient>>,
-);
+#[derive(Clone)]
+pub enum SystemEvent {
+    TimerInterrupt,
+    EnterUser(UserID),
+    LeaveUser(UserID),
+    GameStart,
+}
+
+#[derive(Clone)]
+pub enum InputMessage {
+    System(SystemEvent),
+    Request((UserID, ClientToServer)),
+}
+
+pub trait GameLogic: Send + Sync {
+    fn send(&mut self, message: InputMessage) -> ServerToClient;
+}
+
+pub struct RoomChannels {
+    input: mpsc::Sender<InputMessage>,
+    output: broadcast::Sender<Arc<ServerToClient>>,
+}
+
+impl From<RoomChannels>
+    for (
+        mpsc::Sender<InputMessage>,
+        broadcast::Sender<Arc<ServerToClient>>,
+    )
+{
+    fn from(value: RoomChannels) -> Self {
+        (value.input, value.output)
+    }
+}
 
 pub struct EnterCodeManagement {
     counter: u16,
@@ -75,13 +107,13 @@ impl EnterCodeManagement {
 
 pub struct RoomManagement {
     enter_code_management: EnterCodeManagement,
-    room_communication_channel_map: HashMap<u16, RoomCommunicationChannel>,
+    room_channels_list: HashMap<u16, RoomChannels>,
 }
 impl RoomManagement {
     pub fn new() -> Self {
         Self {
             enter_code_management: EnterCodeManagement::new(),
-            room_communication_channel_map: HashMap::<u16, RoomCommunicationChannel>::new(),
+            room_channels_list: HashMap::<u16, RoomChannels>::new(),
         }
     }
 
@@ -89,35 +121,26 @@ impl RoomManagement {
         self.enter_code_management.get()
     }
 
-    pub fn register_room(
-        &mut self,
-        enter_code: u16,
-        room_communication_channel: RoomCommunicationChannel,
-    ) {
-        self.room_communication_channel_map
-            .insert(enter_code, room_communication_channel);
+    pub fn register_room(&mut self, enter_code: u16, room_channels: RoomChannels) {
+        self.room_channels_list.insert(enter_code, room_channels);
     }
 
     pub fn release_enter_code(&mut self, enter_code: EnterCode) {
-        self.room_communication_channel_map
-            .remove(&enter_code.as_u16());
+        self.room_channels_list.remove(&enter_code.as_u16());
         self.enter_code_management.release(enter_code);
     }
 
-    pub fn get_communication_channel(
+    pub fn get_channels(
         &self,
         enter_code: u16,
     ) -> Option<(
-        mpsc::Sender<RoomCommunicationDataForm>,
+        mpsc::Sender<InputMessage>,
         broadcast::Receiver<Arc<ServerToClient>>,
     )> {
-        let (mpsc_tx, broadcast_tx) = match self.room_communication_channel_map.get(&enter_code) {
-            Some(channel) => channel,
-            None => {
-                return None;
-            }
-        };
-        Some((mpsc_tx.clone(), broadcast_tx.subscribe()))
+        match self.room_channels_list.get(&enter_code) {
+            Some(channel) => Some((channel.input.clone(), channel.output.subscribe())),
+            None => None,
+        }
     }
 }
 
@@ -145,27 +168,16 @@ impl CreateRoomResponseForm {
     }
 }
 
-// TODO: 총체적 난국...
-// GameLogic 을 이용해서 분리를 해야하는데...
-// 어디서 부터 해야히지?
-// 일단 외부로 출력하던 모든 데이터들을 GameLogic 의 Input, Output 형식으로 바꾸고
-// crate room reqeust 를 지금 만는 game_core 형식에 맞게 수정해야함.
-// 아마 그것 말고 해야하는게 더 있을 것 같음...
-// 내일의 나에게 맏긴다!
-
 pub async fn run_game_node<G: GameLogic>(
     mut game: G,
     enter_code: EnterCode,
     room_manager: RoomManager,
 
-    mut mpsc_rx: mpsc::Receiver<G::InputMessage>,
-    broadcast_tx: broadcast::Sender<Arc<G::Output>>,
+    mut mpsc_rx: mpsc::Receiver<InputMessage>,
+    broadcast_tx: broadcast::Sender<Arc<ServerToClient>>,
 ) {
-    // 연결이 끊긴 플레이어 처리
-    let mut disconnected_users = HashMap::<u64, JoinHandle<()>>::new();
-
     while let Some(message) = mpsc_rx.recv().await {
-        let _ = broadcast_tx.send(Arc::new(game.send(G::Input::from(message))));
+        let _ = broadcast_tx.send(Arc::new(game.send(message)));
     }
 
     let mut manager = room_manager.lock().await;
@@ -185,62 +197,51 @@ pub async fn run_game_node<G: GameLogic>(
         (status = 500, description = "서버 오류"),
     )
 )]
-pub async fn create_room_request<G: GameLogic>(
-    State(room_manager): State<RoomManager>,
+pub async fn create_room_request(
+    State((room_manager, timer_manager)): State<(RoomManager, TimerManager)>,
     Json(payload): Json<CreateRoomRequestForm>,
 ) -> impl IntoResponse {
-    let (mpsc_tx, mpsc_rx) = mpsc::channel::<RoomCommunicationDataForm>(16);
-    let (broadcast_tx, _) = broadcast::channel::<Arc<ServerToClient>>(16);
+    let (mpsc_tx, mpsc_rx) = mpsc::channel::<InputMessage>(32);
+    let (broadcast_tx, _) = broadcast::channel::<Arc<ServerToClient>>(32);
 
-    let tx_clone = mpsc_tx.clone();
+    let game_timer = GameTimer {
+        sender: timer_manager.clone(),
+        receiver: mpsc_tx.clone(),
+    };
 
     let (enter_code_u16, enter_code) = {
         let mut manager = room_manager.lock().await;
         let enter_code = match manager.get_enter_code() {
             Some(code) => code,
             None => {
-                println!("방 생성 실패: EnterCode 생성 실패");
+                eprintln!("방 생성 실패: EnterCode 생성 실패");
                 return StatusCode::INTERNAL_SERVER_ERROR.into_response();
             }
         };
-        manager.register_room(enter_code.as_u16(), (mpsc_tx, broadcast_tx.clone()));
+        manager.register_room(
+            enter_code.as_u16(),
+            RoomChannels {
+                input: mpsc_tx,
+                output: broadcast_tx.clone(),
+            },
+        );
         (enter_code.as_u16(), enter_code)
     };
 
     let manager = room_manager.clone();
 
-    match payload {
-        CreateRoomRequestForm::Baduk(config) => {
-            // 초를 밀리초로 변환 (프론트엔드는 초 단위로 보냄)
-            let (main_time, fischer_time, remaining_overtime, overtime) = config.output();
-            let config_ms =
-                BadukBoardGameConfig::new(main_time, fischer_time, remaining_overtime, overtime);
-            let game = BadukRoom::new(config_ms);
-            tokio::spawn(run_game_node(
-                game,
-                enter_code,
-                manager,
-                mpsc_rx,
-                broadcast_tx,
-                tx_clone,
-            ));
-        }
-        CreateRoomRequestForm::Omok(config) => {
-            // 초를 밀리초로 변환 (프론트엔드는 초 단위로 보냄)
-            let (main_time, fischer_time, remaining_overtime, overtime) = config.output();
-            let config_ms =
-                BadukBoardGameConfig::new(main_time, fischer_time, remaining_overtime, overtime);
-            let game = OmokRoom::new(config_ms);
-            tokio::spawn(run_game_node(
-                game,
-                enter_code,
-                manager,
-                mpsc_rx,
-                broadcast_tx,
-                tx_clone,
-            ));
-        }
+    let game = match payload {
+        CreateRoomRequestForm::Baduk(config) => BadukRoom::new(config, game_timer),
+        CreateRoomRequestForm::Omok(config) => BadukRoom::new(config, game_timer),
     };
+
+    tokio::spawn(run_game_node(
+        game,
+        enter_code,
+        manager,
+        mpsc_rx,
+        broadcast_tx,
+    ));
 
     #[cfg(debug_assertions)]
     println!("{}: 방 생성 성공", enter_code_u16);
@@ -252,6 +253,6 @@ pub async fn create_room_request<G: GameLogic>(
         .into_response()
 }
 
-pub fn create_room_router() -> OpenApiRouter<RoomManager> {
+pub fn create_room_router() -> OpenApiRouter<(RoomManager, TimerManager)> {
     OpenApiRouter::new().routes(routes!(create_room_request))
 }
