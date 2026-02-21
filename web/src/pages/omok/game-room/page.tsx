@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { Color } from "../../../ts-proto/badukboard";
 import {
     ClientToServer,
     ServerToClient,
     GameState,
-    Color,
-} from "../../../ts-proto/badukboard";
+} from "../../../ts-proto/common";
 import { SessionManager } from "../../../api/axios-instance";
 import { loadRoomConfig } from "./enter-room-config";
 import {

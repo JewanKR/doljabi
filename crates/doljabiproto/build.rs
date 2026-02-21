@@ -1,12 +1,12 @@
 use std::io::{Result, Write};
 
-const PROTO_DIR: &str = "assets/doljabiproto";
+const PROTO_DIR: &str = "doljabiproto";
 const OUT_DIR: &str = "src";
 
 fn main() -> Result<()> {
     // `GENERATE_PROTO` 환경 변수가 설정되어 있을 때만 .proto 파일을 컴파일합니다.
     if std::env::var("GENERATE_PROTO").is_ok() {
-        //println!("cargo:rerun-if-changed=assets/doljabiproto/"); // .proto 파일이 변경되면 다시 실행
+        println!("cargo:rerun-if-changed=doljabiproto/"); // .proto 파일이 변경되면 다시 실행
 
         // 출력 디렉토리 생성
         std::fs::create_dir_all(OUT_DIR)?;

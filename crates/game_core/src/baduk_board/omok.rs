@@ -22,9 +22,9 @@ impl Direction {
 
 #[derive(Clone, Debug)]
 pub struct Omok {
-    pub(crate) board: BadukBoard,
+    pub board: BadukBoard,
     // 게임 사항 None 이면 진행중
-    pub(crate) winner: Option<Color>,
+    pub winner: Option<Color>,
 }
 impl Omok {
     pub fn new() -> Self {

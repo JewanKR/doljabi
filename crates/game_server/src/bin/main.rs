@@ -52,8 +52,7 @@ async fn main() {
     let openapi_json = openapi_doc
         .to_pretty_json()
         .expect("Failed to convert openapi doc to json");
-    fs::write("./web/openapi/openapi.json", openapi_json)
-        .expect("Failed to save openapi doc to json");
+    fs::write("./web/openapi.json", openapi_json).expect("Failed to save openapi doc to json");
 
     let cors = CorsLayer::new()
         .allow_origin(Any)

@@ -10,6 +10,8 @@ lerna-debug.log*
 api-doc/
 node_modules/
 orval.config.ts
+pnpm-lock.yaml
+pnpm-workspace.yaml
 dist
 dist-ssr
 *.local

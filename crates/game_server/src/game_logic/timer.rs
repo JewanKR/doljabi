@@ -110,9 +110,9 @@ impl From<GameTimer>
 }
 
 impl GameTimer {
-    pub fn register(&self, time: Duration) {
+    pub fn register(&self, duration: Duration) {
         let _ = self.sender.send(TimeoutEvent {
-            deadline: Instant::now() + time,
+            deadline: Instant::now() + duration,
             tx: self.receiver.clone(),
         });
     }

@@ -1,9 +1,15 @@
-use crate::game_logic::{GameLogic, InputMessage, SystemEvent, UserID, timer::GameTimer};
-use doljabiproto::common::ServerToClient;
+use crate::game_logic::{
+    GameLogic, UserID, baduk_board::convert_game2proto_color, timer::GameTimer,
+};
+use doljabiproto::{
+    badukboard::BadukBoardServer,
+    common::{ClientToServer, ServerToClient, server_to_client::GameData},
+};
 use game_core::baduk_board::{BadukBoardGameConfig, Color, Players, baduk::Baduk};
 
+const GAME_TYPE_BADUK: i32 = doljabiproto::common::GameType::Baduk as i32;
+
 pub struct BadukRoom {
-    running: bool,
     game: Baduk,
     game_config: BadukBoardGameConfig,
     players: Players,
@@ -13,12 +19,10 @@ pub struct BadukRoom {
 impl BadukRoom {
     pub fn new(game_config: BadukBoardGameConfig, game_timer: GameTimer) -> Self {
         Self {
-            running: false,
             game: Baduk::new(),
             game_config: game_config,
             players: Players::new(),
             pass_turn: false,
-
             timer: game_timer,
         }
     }
@@ -84,6 +88,28 @@ impl BadukRoom {
                 }
             }
             _ => None,
+        }
+    }
+
+    fn users_info(&self) -> doljabiproto::badukboard::UsersInfo {
+        doljabiproto::badukboard::UsersInfo {
+            black: self.user_info(Color::Black),
+            white: self.user_info(Color::White),
+        }
+    }
+    fn user_io(&self, result: bool) -> ServerToClient {
+        let running = if result { Some(false) } else { None };
+        ServerToClient {
+            response_type: result,
+            running: running,
+            game_type: GAME_TYPE_BADUK,
+            game_data: Some(GameData::Baduk(BadukBoardServer {
+                turn: doljabiproto::badukboard::Color::Free as i32,
+                the_winner: None,
+                game_state: None,
+                users_info: Some(self.users_info()),
+                payload: None,
+            })),
         }
     }
 
@@ -159,26 +185,8 @@ impl BadukRoom {
             _ => {}
         }
     }
-}
 
-impl GameLogic for BadukRoom {
-    /*
-    fn push_user(&mut self, user_id: u64) -> bool {
-        self.players.push_user(user_id)
-    }
-
-    fn pop_user(&mut self, user_id: u64) -> bool {
-        self.players.pop_user(user_id)
-    }
-
-    fn users_info(&self) -> doljabiproto::badukboard::UsersInfo {
-        doljabiproto::badukboard::UsersInfo {
-            black: self.user_info(Color::Black),
-            white: self.user_info(Color::White),
-        }
-    }
-
-    fn set_timer(&mut self) -> tokio::time::Duration {
+    fn set_timer_time(&mut self) -> tokio::time::Duration {
         use tokio::time::Duration;
         let turn_player = self.players.turn_player(self.game.board.is_turn());
 
@@ -197,48 +205,90 @@ impl GameLogic for BadukRoom {
         }
     }
 
-    fn timer_interrupt(&mut self) -> (GameRoomResponse, ServerToClient) {
+
+}
+
+impl GameLogic for BadukRoom {
+    fn enter_user(&mut self, user_id: UserID) -> ServerToClient {
+        let result = self.players.push_user(user_id);
+        self.user_io(result)
+    }
+
+    fn leave_user(&mut self, user_id: UserID) -> ServerToClient {
+        let result = self.players.pop_user(user_id);
+        self.user_io(result)
+    }
+
+    fn game_start(&mut self) -> ServerToClient {
+        self.set_players_time(&self.game_config.clone());
+
+        let duration = self.set_timer_time();
+        self.timer.register(duration);
+
+        ServerToClient {
+            response_type: true,
+            running: Some(true),
+            game_type: GAME_TYPE_BADUK,
+            game_data: Some(GameData::Baduk(BadukBoardServer {
+                turn: convert_game2proto_color(self.game.board.is_turn()) as i32,
+                the_winner: None,
+                game_state: Some(self.badukboard_status()),
+                users_info: Some(self.users_info()),
+                payload: None,
+            })),
+        }
+    }
+
+    fn timer_interrupt(&mut self) -> ServerToClient {
         let turn_player = self.players.turn_player_mut(self.game.board.is_turn());
 
         match turn_player {
             Some(p) => {
                 if p.main_time() > 0 {
                     p.sub_main_time();
-                    self.set_timer();
-                    (
-                        GameRoomResponse::None,
-                        ServerToClient {
-                            response_type: true,
+                    let time = self.set_timer_time();
+                    self.timer.register(time);
+
+                    ServerToClient {
+                        response_type: true,
+                        running: Some(true),
+                        game_type: GAME_TYPE_BADUK,
+                        game_data: Some(GameData::Baduk(BadukBoardServer {
                             turn: convert_game2proto_color(self.game.board.is_turn()) as i32,
                             the_winner: None,
                             game_state: Some(self.badukboard_status()),
                             users_info: None,
                             payload: None,
-                        },
-                    )
+                        })),
+                    }
                 } else if p.remain_time() > 1 {
                     p.sub_remain_overtime();
-                    self.set_timer();
-                    (
-                        GameRoomResponse::None,
-                        ServerToClient {
-                            response_type: true,
+                    let time = self.set_timer_time();
+                    self.timer.register(time);
+
+                    ServerToClient {
+                        response_type: true,
+                        running: Some(true),
+                        game_type: GAME_TYPE_BADUK,
+                        game_data: Some(GameData::Baduk(BadukBoardServer {
                             turn: convert_game2proto_color(self.game.board.is_turn()) as i32,
                             the_winner: None,
                             game_state: Some(self.badukboard_status()),
                             users_info: None,
                             payload: None,
-                        },
-                    )
+                        })),
+                    }
                 } else {
                     self.game.set_winner(self.game.board.is_turn().reverse());
                     self.record_winner(self.game.board.is_turn().reverse());
-                    self.set_timer();
+                    let time = self.set_timer_time();
+                    self.timer.register(time);
 
-                    (
-                        GameRoomResponse::GameOver,
-                        ServerToClient {
-                            response_type: true,
+                    ServerToClient {
+                        response_type: true,
+                        running: Some(false),
+                        game_type: GAME_TYPE_BADUK,
+                        game_data: Some(GameData::Baduk(BadukBoardServer {
                             turn: convert_game2proto_color(self.game.board.is_turn()) as i32,
                             the_winner: self
                                 .game
@@ -247,290 +297,241 @@ impl GameLogic for BadukRoom {
                             game_state: Some(self.badukboard_status()),
                             users_info: None,
                             payload: None,
-                        },
-                    )
+                        })),
+                    }
                 }
             }
-            None => (
-                GameRoomResponse::None,
-                ServerToClient {
-                    response_type: false,
+            None => ServerToClient {
+                response_type: false,
+                running: None,
+                game_type: GAME_TYPE_BADUK,
+                game_data: Some(GameData::Baduk(BadukBoardServer {
                     turn: convert_game2proto_color(self.game.board.is_turn()) as i32,
                     game_state: None,
                     users_info: None,
                     the_winner: None,
                     payload: None,
-                },
-            ),
+                })),
+            },
         }
     }
-    */
 
-    fn send(&mut self, message: InputMessage) -> ServerToClient {
-        use doljabiproto::{
-            badukboard::BadukBoardServer,
-            common::{
-                GameType, client_to_server::GameData as GameDataForClient,
-                server_to_client::GameData as GameDataForServer,
-            },
-        };
+    fn send(&mut self, user_id: UserID, message: ClientToServer) -> ServerToClient {
+        use doljabiproto::badukboard::baduk_board_client::Payload as PayloadForClient;
+        use doljabiproto::badukboard::baduk_board_server::Payload;
+        use doljabiproto::common::client_to_server::GameData as GameDataForClient;
 
         let mut response = ServerToClient {
             response_type: false,
             running: None,
-            game_type: i32::from(GameType::Baduk),
+            game_type: GAME_TYPE_BADUK,
             game_data: None,
         };
 
-        match message {
-            InputMessage::System(system_message) => {
-                match system_message {
-                    SystemEvent
-                }
-            }
+        if let Some(GameDataForClient::Baduk(message)) = message.game_data {
+            match message.payload {
+                Some(PayloadForClient::Coordinate(chaksu_request)) => {
+                    use doljabiproto::badukboard::ChaksuResponse;
+                    let turn = self.game.is_board().is_turn();
 
-            InputMessage::Request(input_data) => {
-                let (user_id, request) = input_data;
+                    #[cfg(debug_assertions)]
+                    println!(
+                        "🎯 착수 요청: user_id={}, coordinate={}, 현재 턴={:?}",
+                        user_id, chaksu_request.coordinate, turn
+                    );
 
-                /*
-                // 게임 시작 요청 처리
-                if let Some(Payload::Gamestart(_)) = &request.payload {
-                    // 플레이어가 모두 접속 중인지 확인
-                    if self.players.full_players() {
-                        self.running = true;
-                        self.set_players_time(&self.game_config.clone());
+                    // 착수를 시도하는 사람의 턴인지 확인
+                    let player_color = self.players.check_id_to_color(user_id);
+                    #[cfg(debug_assertions)]
+                    println!("플레이어 색상: {:?}, 현재 턴: {:?}", player_color, turn);
 
-                        use doljabiproto::badukboard::UsersInfo;
-                        response = (
-                            GameRoomResponse::GameStart,
-                            ServerToClient {
-                                response_type: true,
-                                turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
-                                the_winner: None,
-                                game_state: Some(self.badukboard_status()),
-                                users_info: Some(UsersInfo {
-                                    black: self.user_info(Color::Black),
-                                    white: self.user_info(Color::White),
-                                }),
-                                payload: Some(server_to_client_response::Payload::GameStart(
-                                    GameStartResponse {},
-                                )),
-                            },
-                        )
+                    if player_color != turn {
+                        #[cfg(debug_assertions)]
+                        println!("❌ 차례가 아닙니다!");
+                        return response;
+                    }
+
+                    // 착수 시도
+                    let success = match self.game.chaksu(chaksu_request.coordinate as u16) {
+                        Ok(_) => {
+                            self.pass_turn = false;
+                            self.players
+                                .switch_turn(self.game.board.is_turn().reverse());
+
+                            let duration = self.set_timer_time();
+                            self.timer.register(duration);
+
+                            #[cfg(debug_assertions)]
+                            println!("✅ 착수 성공! 턴 변경됨");
+                            true
+                        }
+                        Err(_e) => {
+                            #[cfg(debug_assertions)]
+                            match _e {
+                                game_core::baduk_board::BadukBoardError::BannedChaksu => {
+                                    println!("⛔ 착수 실패: 금수!");
+                                }
+                                game_core::baduk_board::BadukBoardError::OverLap => {
+                                    println!("❌ 착수 실패: 이미 돌이 있음");
+                                }
+                                _ => {
+                                    println!("❌ 착수 실패: {:?}", _e);
+                                }
+                            }
+                            false
+                        }
+                    };
+
+                    let the_winner = match self.game.winner() {
+                        Some(color) => {
+                            self.record_winner(color);
+                            Some(convert_game2proto_color(color) as i32)
+                        }
+                        None => None,
+                    };
+
+                    response = ServerToClient {
+                        response_type: true,
+                        running: Some(true),
+                        game_type: GAME_TYPE_BADUK,
+                        game_data: Some(GameData::Baduk(BadukBoardServer {
+                            turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
+                            the_winner: the_winner,
+                            game_state: Some(self.badukboard_status()),
+                            users_info: None,
+                            payload: Some(Payload::Coordinate(ChaksuResponse { success: success })),
+                        })),
                     }
                 }
 
-                if self.running {
-                    match request.payload {
-                        Some(Payload::Coordinate(chaksu_request)) => {
-                            use doljabiproto::badukboard::ChaksuResponse;
-                            let turn = self.game.is_board().is_turn();
-                            let mut game_room_status = GameRoomResponse::None;
+                // 기권 처리
+                Some(PayloadForClient::Resign(_resign_request)) => {
+                    use doljabiproto::badukboard::ResignResponse;
 
-                            #[cfg(debug_assertions)]
-                            println!(
-                                "🎯 착수 요청: user_id={}, coordinate={}, 현재 턴={:?}",
-                                user_id, chaksu_request.coordinate, turn
-                            );
+                    let winner = self.players.check_id_to_color(user_id).reverse();
+                    self.game.set_winner(winner);
+                    self.record_winner(winner);
 
-                            // 착수를 시도하는 사람의 턴인지 확인
-                            let player_color = self.players.check_id_to_color(user_id);
-                            #[cfg(debug_assertions)]
-                            println!("플레이어 색상: {:?}, 현재 턴: {:?}", player_color, turn);
+                    response = ServerToClient {
+                        response_type: true,
+                        running: Some(true),
+                        game_type: GAME_TYPE_BADUK,
+                        game_data: Some(GameData::Baduk(BadukBoardServer {
+                            turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
+                            the_winner: Some(convert_game2proto_color(winner) as i32),
+                            game_state: Some(self.badukboard_status()),
+                            users_info: None,
+                            payload: Some(Payload::Resign(ResignResponse {})),
+                        })),
+                    }
+                }
 
-                            if player_color != turn {
-                                #[cfg(debug_assertions)]
-                                println!("❌ 차례가 아닙니다!");
-                                return response;
-                            }
+                // 무승부 신청
+                Some(PayloadForClient::DrawOffer(_draw_request)) => {
+                    use doljabiproto::badukboard::DrawOfferResponse;
+                    let mut winner = None;
+                    let offer_player = self.players.check_id_to_color(user_id);
 
-                            // 착수 시도
-                            let success = match self.game.chaksu(chaksu_request.coordinate as u16) {
-                                Ok(_) => {
-                                    game_room_status = GameRoomResponse::ChangeTurn;
-
-                                    self.pass_turn = false;
-                                    self.players
-                                        .switch_turn(self.game.board.is_turn().reverse());
-
-                                    #[cfg(debug_assertions)]
-                                    println!("✅ 착수 성공! 턴 변경됨");
-                                    true
-                                }
-                                Err(_e) => {
-                                    #[cfg(debug_assertions)]
-                                    match _e {
-                                        crate::geme_old::badukboard::BadukBoardError::BannedChaksu => {
-                                            println!("⛔ 착수 실패: 금수!");
-                                        }
-                                        crate::geme_old::badukboard::BadukBoardError::OverLap => {
-                                            println!("❌ 착수 실패: 이미 돌이 있음");
-                                        }
-                                        _ => {
-                                            println!("❌ 착수 실패: {:?}", _e);
-                                        }
-                                    }
-                                    false
-                                }
-                            };
-
-                            let the_winner = match self.game.winner() {
-                                Some(color) => {
-                                    game_room_status = GameRoomResponse::GameOver;
-                                    self.record_winner(color);
-                                    Some(convert_game2proto_color(color) as i32)
-                                }
-                                None => None,
-                            };
-
-                            response = (
-                                game_room_status,
-                                ServerToClient {
-                                    response_type: true,
-                                    turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
-                                    the_winner: the_winner,
-                                    game_state: Some(self.badukboard_status()),
-                                    users_info: None,
-                                    payload: Some(server_to_client_response::Payload::Coordinate(
-                                        ChaksuResponse { success: success },
-                                    )),
-                                },
-                            );
+                    match &offer_player {
+                        Color::Black => {
+                            self.players.black_player.as_mut().map(|p| p.draw_offer());
                         }
-
-                        // 기권 처리
-                        Some(Payload::Resign(_resign_request)) => {
-                            use doljabiproto::badukboard::ResignResponse;
-
-                            let winner = self.players.check_id_to_color(user_id).reverse();
-                            self.game.set_winner(winner);
-                            self.record_winner(winner);
-
-                            response = (
-                                GameRoomResponse::GameOver,
-                                ServerToClient {
-                                    response_type: true,
-                                    turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
-                                    the_winner: Some(convert_game2proto_color(winner) as i32),
-                                    game_state: Some(self.badukboard_status()),
-                                    users_info: None,
-                                    payload: Some(server_to_client_response::Payload::Resign(
-                                        ResignResponse {},
-                                    )),
-                                },
-                            );
+                        Color::White => {
+                            self.players.white_player.as_mut().map(|p| p.draw_offer());
                         }
+                        _ => {}
+                    }
 
-                        // 무승부 신청
-                        Some(Payload::DrawOffer(_draw_request)) => {
-                            use doljabiproto::badukboard::DrawOfferResponse;
-                            let mut winner = None;
-                            let offer_player = self.players.check_id_to_color(user_id);
-                            let mut game_room_status = GameRoomResponse::None;
+                    // 둘 다 무승부 요청을 하면 비김
+                    if self.players.check_draw() {
+                        self.game.set_winner(Color::Free);
+                        self.record_winner(Color::Free);
+                        winner = Some(convert_game2proto_color(Color::Free) as i32);
+                    }
 
-                            match &offer_player {
-                                Color::Black => {
-                                    self.players.black_player.as_mut().map(|p| p.draw_offer());
-                                }
-                                Color::White => {
-                                    self.players.white_player.as_mut().map(|p| p.draw_offer());
-                                }
-                                _ => {}
-                            }
+                    let draw_offer_response = DrawOfferResponse {
+                        user_name: format!("{} player", offer_player.to_string()),
+                    };
 
-                            // 둘 다 무승부 요청을 하면 비김
-                            if self.players.check_draw() {
-                                game_room_status = GameRoomResponse::GameOver;
-                                self.game.set_winner(Color::Free);
-                                self.record_winner(Color::Free);
-                                winner = Some(convert_game2proto_color(Color::Free) as i32);
-                            }
+                    response = ServerToClient {
+                        response_type: true,
+                        running: Some(true),
+                        game_type: GAME_TYPE_BADUK,
+                        game_data: Some(GameData::Baduk(BadukBoardServer {
+                            turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
+                            the_winner: winner,
+                            game_state: Some(self.badukboard_status()),
+                            users_info: None,
+                            payload: Some(Payload::DrawOffer(draw_offer_response)),
+                        })),
+                    }
+                }
 
-                            let draw_offer_response = DrawOfferResponse {
-                                user_name: format!("{} player", offer_player.to_string()),
-                            };
+                // 턴 넘김
+                Some(PayloadForClient::PassTurn(_pass_request)) => {
+                    use doljabiproto::badukboard::PassTurnResponse;
+                    let turn = self.game.is_board().is_turn();
 
-                            response = (
-                                game_room_status,
-                                ServerToClient {
-                                    response_type: true,
-                                    turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
-                                    the_winner: winner,
-                                    game_state: Some(self.badukboard_status()),
-                                    users_info: None,
-                                    payload: Some(server_to_client_response::Payload::DrawOffer(
-                                        draw_offer_response,
-                                    )),
-                                },
-                            );
-                        }
+                    // 턴 넘김을 시도하는 사람의 턴인지 확인
+                    if self.players.check_id_to_color(user_id) != turn {
+                        #[cfg(debug_assertions)]
+                        println!(
+                            "무승부 신청 유저 색 {:?}\n현제 턴 {:?}",
+                            self.players.check_id_to_color(user_id),
+                            turn
+                        );
 
-                        // 턴 넘김
-                        Some(Payload::PassTurn(_pass_request)) => {
-                            use doljabiproto::badukboard::PassTurnResponse;
-                            let turn = self.game.is_board().is_turn();
+                        return response;
+                    }
 
-                            // 턴 넘김을 시도하는 사람의 턴인지 확인
-                            if self.players.check_id_to_color(user_id) != turn {
-                                #[cfg(debug_assertions)]
-                                println!(
-                                    "무승부 신청 유저 색 {:?}\n현제 턴 {:?}",
-                                    self.players.check_id_to_color(user_id),
-                                    turn
-                                );
+                    if self.pass_turn {
+                        let determined_winner = self.game.determine_winner();
+                        self.game.set_winner(determined_winner);
+                        self.record_winner(determined_winner);
 
-                                return response;
-                            }
+                        response = ServerToClient {
+                            response_type: true,
+                            running: Some(true),
+                            game_type: GAME_TYPE_BADUK,
+                            game_data: Some(GameData::Baduk(BadukBoardServer {
+                                turn: convert_game2proto_color(self.game.is_board().is_turn())
+                                    as i32,
+                                the_winner: Some(convert_game2proto_color(determined_winner) as i32),
+                                game_state: Some(self.badukboard_status()),
+                                users_info: None,
+                                payload: Some(Payload::PassTurn(PassTurnResponse {})),
+                            })),
+                        };
 
-                            if self.pass_turn {
-                                let determined_winner = self.game.determine_winner();
-                                self.game.set_winner(determined_winner);
-                                self.record_winner(determined_winner);
+                        return response;
+                    } else {
+                        self.pass_turn = true;
+                    }
 
-                                response = (
-                                    GameRoomResponse::GameOver,
-                                    ServerToClient {
-                                        response_type: true,
-                                        turn: convert_game2proto_color(self.game.is_board().is_turn())
-                                            as i32,
-                                        the_winner: Some(convert_game2proto_color(determined_winner) as i32),
-                                        game_state: Some(self.badukboard_status()),
-                                        users_info: None,
-                                        payload: Some(server_to_client_response::Payload::PassTurn(
-                                            PassTurnResponse {},
-                                        )),
-                                    },
-                                );
+                    // turn 변경
+                    self.players.switch_turn(turn);
+                    self.game.board.switch_turn();
 
-                                return response;
-                            } else {
-                                self.pass_turn = true;
-                            }
+                    let duration = self.set_timer_time();
+                    self.timer.register(duration);
 
-                            // turn 변경
-                            self.players.switch_turn(turn);
-                            self.game.board.switch_turn();
+                    response = ServerToClient {
+                        response_type: true,
+                        running: None,
+                        game_type: GAME_TYPE_BADUK,
+                        game_data: Some(GameData::Baduk(BadukBoardServer {
+                            turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
+                            the_winner: None,
+                            game_state: Some(self.badukboard_status()),
+                            users_info: None,
+                            payload: Some(Payload::PassTurn(PassTurnResponse {})),
+                        })),
+                    };
+                }
 
-                            response = (
-                                GameRoomResponse::ChangeTurn,
-                                ServerToClient {
-                                    response_type: true,
-                                    turn: convert_game2proto_color(self.game.is_board().is_turn()) as i32,
-                                    the_winner: None,
-                                    game_state: Some(self.badukboard_status()),
-                                    users_info: None,
-                                    payload: Some(server_to_client_response::Payload::PassTurn(
-                                        PassTurnResponse {},
-                                    )),
-                                },
-                            );
-
-                        }
-                },
-                */
+                _ => {}
             }
         }
-
         response
     }
 }

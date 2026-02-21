@@ -78,7 +78,10 @@ pub struct UsersInfo {
     pub white: ::core::option::Option<UserInfo>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct ChaksuResponse {}
+pub struct ChaksuResponse {
+    #[prost(bool, tag = "1")]
+    pub success: bool,
+}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ResignResponse {}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]

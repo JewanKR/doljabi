@@ -58,7 +58,9 @@ message UsersInfo {
   optional UserInfo white = 2;
 }
 
-message ChaksuResponse {}
+message ChaksuResponse {
+  bool success = 1;
+}
 message ResignResponse {}
 message DrawOfferResponse {
   string user_name = 1;

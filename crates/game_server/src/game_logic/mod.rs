@@ -48,7 +48,11 @@ pub enum InputMessage {
 }
 
 pub trait GameLogic: Send + Sync {
-    fn send(&mut self, message: InputMessage) -> ServerToClient;
+    fn send(&mut self, user_id: UserID, message: ClientToServer) -> ServerToClient;
+    fn enter_user(&mut self, user_id: UserID) -> ServerToClient;
+    fn leave_user(&mut self, user_id: UserID) -> ServerToClient;
+    fn timer_interrupt(&mut self) -> ServerToClient;
+    fn game_start(&mut self) -> ServerToClient;
 }
 
 pub struct RoomChannels {
@@ -176,8 +180,14 @@ pub async fn run_game_node<G: GameLogic>(
     mut mpsc_rx: mpsc::Receiver<InputMessage>,
     broadcast_tx: broadcast::Sender<Arc<ServerToClient>>,
 ) {
-    while let Some(message) = mpsc_rx.recv().await {
-        let _ = broadcast_tx.send(Arc::new(game.send(message)));
+    while let Some(input_message) = mpsc_rx.recv().await {
+        let _ = broadcast_tx.send(Arc::new(match input_message {
+            InputMessage::System(SystemEvent::EnterUser(user_id)) => game.enter_user(user_id),
+            InputMessage::System(SystemEvent::LeaveUser(user_id)) => game.leave_user(user_id),
+            InputMessage::System(SystemEvent::TimerInterrupt) => game.timer_interrupt(),
+            InputMessage::System(SystemEvent::GameStart) => game.game_start(),
+            InputMessage::Request((user_id, message)) => game.send(user_id, message),
+        }));
     }
 
     let mut manager = room_manager.lock().await;
