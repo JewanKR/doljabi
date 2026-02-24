@@ -31,7 +31,7 @@ fn add_openapi_info(openapi_doc: &mut OpenApi) {
 async fn main() {
     let session_manager = SessionStore::default();
     let room_manager = Arc::new(Mutex::new(RoomManagement::new()));
-    let timer_manager = ServerTimer::run();
+    let timer_manager = ServerTimer::run().await;
 
     // 최종 라우터 생성
     let router_list = OpenApiRouter::new()

@@ -1,6 +1,7 @@
 use std::{
     cmp::{Ordering, Reverse},
     collections::BinaryHeap,
+    sync::{Arc, atomic::AtomicU16},
     time::Duration,
 };
 
@@ -11,13 +12,19 @@ use crate::game_logic::{InputMessage, SystemEvent};
 pub struct TimeoutEvent {
     pub deadline: Instant,
     tx: mpsc::Sender<InputMessage>,
+    event: Arc<AtomicU16>,
 }
 
 impl TimeoutEvent {
-    fn send(self) {
-        let _ = self
-            .tx
-            .send(InputMessage::System(SystemEvent::TimerInterrupt));
+    async fn send(self) {
+        if self.event.load(std::sync::atomic::Ordering::Relaxed) != 0 {
+            let _ = self
+                .tx
+                .send(InputMessage::System(SystemEvent::TimerInterrupt(
+                    self.event,
+                )))
+                .await;
+        }
     }
 }
 
@@ -50,18 +57,18 @@ impl ServerTimer {
         self.list.push(Reverse(timeout_event));
     }
 
-    fn check(&mut self) {
+    async fn check(&mut self) {
         while let Some(is_timer) = self.list.peek() {
             if is_timer.0.deadline <= Instant::now() {
                 let time_over = self.list.pop().unwrap();
-                time_over.0.send();
+                time_over.0.send().await;
             } else {
                 break;
             }
         }
     }
 
-    pub fn run() -> mpsc::UnboundedSender<TimeoutEvent> {
+    pub async fn run() -> mpsc::UnboundedSender<TimeoutEvent> {
         let (tx, mut set_timer) = mpsc::unbounded_channel::<TimeoutEvent>();
 
         let mut server_timer = Self {
@@ -70,7 +77,7 @@ impl ServerTimer {
 
         tokio::spawn(async move {
             loop {
-                server_timer.check();
+                server_timer.check().await;
 
                 let deadline = if let Some(is_timer) = server_timer.list.peek() {
                     is_timer.0.deadline.clone()
@@ -93,28 +100,34 @@ impl ServerTimer {
 }
 
 #[derive(Clone)]
-pub struct GameTimer {
+pub struct GameInterrupter {
     pub sender: mpsc::UnboundedSender<TimeoutEvent>,
     pub receiver: mpsc::Sender<InputMessage>,
 }
 
-impl From<GameTimer>
-    for (
-        mpsc::UnboundedSender<TimeoutEvent>,
-        mpsc::Sender<InputMessage>,
-    )
-{
-    fn from(value: GameTimer) -> Self {
-        (value.sender, value.receiver)
-    }
-}
-
-impl GameTimer {
-    pub fn register(&self, duration: Duration) {
+impl GameInterrupter {
+    pub fn register(&self, duration: Duration, event: u16) -> Arc<AtomicU16> {
+        let atomic_u16 = Arc::new(AtomicU16::new(event));
         let _ = self.sender.send(TimeoutEvent {
             deadline: Instant::now() + duration,
             tx: self.receiver.clone(),
+            event: atomic_u16.clone(),
         });
+        atomic_u16
+    }
+    fn send_system_message(&self, system_event: SystemEvent) {
+        use tokio::sync::mpsc::error::TrySendError;
+        let message = InputMessage::System(system_event);
+
+        if let Err(TrySendError::Full(returned)) = self.receiver.try_send(message) {
+            let sender = self.receiver.clone();
+            tokio::spawn(async move {
+                let _ = sender.send(returned).await;
+            });
+        }
+    }
+    pub fn game_closer(&self) {
+        self.send_system_message(SystemEvent::Close);
     }
 }
 

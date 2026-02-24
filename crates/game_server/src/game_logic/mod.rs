@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    sync::Arc,
+    sync::{Arc, atomic::AtomicU16},
 };
 
 use axum::{Json, extract::State, response::IntoResponse};
@@ -14,7 +14,7 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::game_logic::{
     baduk_board::baduk_room::BadukRoom,
-    timer::{GameTimer, TimerManager},
+    timer::{GameInterrupter, TimerManager},
 };
 
 pub mod baduk_board;
@@ -33,15 +33,15 @@ impl EnterCode {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum SystemEvent {
-    TimerInterrupt,
+    TimerInterrupt(Arc<AtomicU16>),
     EnterUser(UserID),
     LeaveUser(UserID),
-    GameStart,
+    Close,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum InputMessage {
     System(SystemEvent),
     Request((UserID, ClientToServer)),
@@ -51,8 +51,7 @@ pub trait GameLogic: Send + Sync {
     fn send(&mut self, user_id: UserID, message: ClientToServer) -> ServerToClient;
     fn enter_user(&mut self, user_id: UserID) -> ServerToClient;
     fn leave_user(&mut self, user_id: UserID) -> ServerToClient;
-    fn timer_interrupt(&mut self) -> ServerToClient;
-    fn game_start(&mut self) -> ServerToClient;
+    fn timer_interrupt(&mut self, event: u16) -> ServerToClient;
 }
 
 pub struct RoomChannels {
@@ -60,21 +59,11 @@ pub struct RoomChannels {
     output: broadcast::Sender<Arc<ServerToClient>>,
 }
 
-impl From<RoomChannels>
-    for (
-        mpsc::Sender<InputMessage>,
-        broadcast::Sender<Arc<ServerToClient>>,
-    )
-{
-    fn from(value: RoomChannels) -> Self {
-        (value.input, value.output)
-    }
-}
-
 pub struct EnterCodeManagement {
     counter: u16,
     released_number: VecDeque<u16>,
 }
+
 impl EnterCodeManagement {
     fn new() -> Self {
         Self {
@@ -181,19 +170,26 @@ pub async fn run_game_node<G: GameLogic>(
     broadcast_tx: broadcast::Sender<Arc<ServerToClient>>,
 ) {
     while let Some(input_message) = mpsc_rx.recv().await {
+        #[cfg(debug_assertions)]
+        println!("{:#?}", input_message);
         let _ = broadcast_tx.send(Arc::new(match input_message {
+            InputMessage::Request((user_id, message)) => game.send(user_id, message),
             InputMessage::System(SystemEvent::EnterUser(user_id)) => game.enter_user(user_id),
             InputMessage::System(SystemEvent::LeaveUser(user_id)) => game.leave_user(user_id),
-            InputMessage::System(SystemEvent::TimerInterrupt) => game.timer_interrupt(),
-            InputMessage::System(SystemEvent::GameStart) => game.game_start(),
-            InputMessage::Request((user_id, message)) => game.send(user_id, message),
+            InputMessage::System(SystemEvent::TimerInterrupt(event_id)) => {
+                match event_id.load(std::sync::atomic::Ordering::Relaxed) {
+                    0 => continue,
+                    event => game.timer_interrupt(event),
+                }
+            }
+            InputMessage::System(SystemEvent::Close) => break,
         }));
     }
 
     let mut manager = room_manager.lock().await;
     manager.release_enter_code(enter_code);
 
-    //#[cfg(debug_assertions)]
+    #[cfg(debug_assertions)]
     println!("방 종료 성공");
 }
 
@@ -214,7 +210,7 @@ pub async fn create_room_request(
     let (mpsc_tx, mpsc_rx) = mpsc::channel::<InputMessage>(32);
     let (broadcast_tx, _) = broadcast::channel::<Arc<ServerToClient>>(32);
 
-    let game_timer = GameTimer {
+    let game_timer = GameInterrupter {
         sender: timer_manager.clone(),
         receiver: mpsc_tx.clone(),
     };

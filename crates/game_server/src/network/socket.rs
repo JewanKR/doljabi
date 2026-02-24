@@ -54,12 +54,12 @@ pub async fn enter_room(
 
     let user_id = match is_user_id {
         Some(user_id) => {
-            //#[cfg(debug_assertions)]
+            #[cfg(debug_assertions)]
             println!("{} 유저 접속 성공", user_id);
             UserID::from(user_id)
         }
         None => {
-            //#[cfg(debug_assertions)]
+            #[cfg(debug_assertions)]
             println!("session store에 유저가 없음");
             return StatusCode::BAD_REQUEST.into_response();
         }
@@ -113,13 +113,13 @@ async fn handle_websocket(
                 }
 
                 Ok(Message::Close(_)) => {
-                    //#[cfg(debug_assertions)]
+                    #[cfg(debug_assertions)]
                     println!("websocket 종료 신호 수신");
                     break;
                 }
 
                 Err(_) => {
-                    //#[cfg(debug_assertions)]
+                    #[cfg(debug_assertions)]
                     eprintln!("web socket: 데이터 전송 에러");
                     break;
                 }
@@ -131,6 +131,8 @@ async fn handle_websocket(
 
     let recv_task = tokio::spawn(async move {
         while let Ok(response) = broadcast_rx.recv().await {
+            #[cfg(debug_assertions)]
+            println!("{:#?}", response);
             let mut buf = Vec::new();
             if response.encode(&mut buf).is_ok() {
                 let _ = ws_tx.send(Message::Binary(buf.into())).await;

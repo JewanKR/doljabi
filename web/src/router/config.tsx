@@ -8,12 +8,13 @@ const UserProfile = lazy(() => import('../pages/user-profile/page'));
 // Baduk pages
 const BadukCreateRoom = lazy(() => import('../pages/baduk/create-room/page'));
 const BadukJoinRoom = lazy(() => import('../pages/baduk/join-room/page'));
-const BadukGameRoom = lazy(() => import('../pages/baduk/game-room/page'));
 
 // Omok pages
 const OmokCreateRoom = lazy(() => import('../pages/omok/create-room/page'));
 const OmokJoinRoom = lazy(() => import('../pages/omok/join-room/page'));
-const OmokGameRoom = lazy(() => import('../pages/omok/game-room/page'));
+
+// Game page (Unified)
+const GameRoom = lazy(() => import('../pages/game/page'));
 
 const routes: RouteObject[] = [
   {
@@ -41,10 +42,6 @@ const routes: RouteObject[] = [
     element: <BadukJoinRoom />,
   },
   {
-    path: '/baduk/game-room',
-    element: <BadukGameRoom />,
-  },
-  {
     path: '/omok/create-room',
     element: <OmokCreateRoom />,
   },
@@ -53,8 +50,16 @@ const routes: RouteObject[] = [
     element: <OmokJoinRoom />,
   },
   {
+    path: '/game-room',
+    element: <GameRoom />,
+  },
+  {
+    path: '/baduk/game-room',
+    element: <GameRoom />, // fallback
+  },
+  {
     path: '/omok/game-room',
-    element: <OmokGameRoom />,
+    element: <GameRoom />, // fallback
   },
   {
     path: '*',
