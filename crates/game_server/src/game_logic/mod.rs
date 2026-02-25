@@ -13,7 +13,7 @@ use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::game_logic::{
-    baduk_board::baduk_room::BadukRoom,
+    baduk_board::{baduk_room::BadukRoom, omok_room::OmokRoom},
     timer::{GameInterrupter, TimerManager},
 };
 
@@ -236,18 +236,26 @@ pub async fn create_room_request(
 
     let manager = room_manager.clone();
 
-    let game = match payload {
-        CreateRoomRequestForm::Baduk(config) => BadukRoom::new(config, game_timer),
-        CreateRoomRequestForm::Omok(config) => BadukRoom::new(config, game_timer),
-    };
+    macro_rules! spawn_node {
+        ($game: expr) => {
+            tokio::spawn(run_game_node(
+                $game,
+                enter_code,
+                manager,
+                mpsc_rx,
+                broadcast_tx,
+            ));
+        };
+    }
 
-    tokio::spawn(run_game_node(
-        game,
-        enter_code,
-        manager,
-        mpsc_rx,
-        broadcast_tx,
-    ));
+    match payload {
+        CreateRoomRequestForm::Baduk(config) => {
+            spawn_node!(BadukRoom::new(config, game_timer));
+        }
+        CreateRoomRequestForm::Omok(config) => {
+            spawn_node!(OmokRoom::new(config, game_timer));
+        }
+    };
 
     #[cfg(debug_assertions)]
     println!("{}: 방 생성 성공", enter_code_u16);

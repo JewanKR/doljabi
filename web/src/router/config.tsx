@@ -55,11 +55,11 @@ const routes: RouteObject[] = [
   },
   {
     path: '/baduk/game-room',
-    element: <GameRoom />, // fallback
+    element: <GameRoom />,
   },
   {
     path: '/omok/game-room',
-    element: <GameRoom />, // fallback
+    element: <GameRoom />,
   },
   {
     path: '*',

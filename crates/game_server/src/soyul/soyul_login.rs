@@ -249,6 +249,7 @@ pub async fn signup(Json(form): Json<SignupForm>) -> (StatusCode, Json<ApiRespon
 
     match signup_db(&conn, &form.login_id, &form.password, &form.username) {
         Ok(user_id) => {
+            #[cfg(debug_assertions)]
             println!("✅ 회원가입 성공, user_id = {}", user_id);
             (
                 StatusCode::CREATED,
@@ -315,6 +316,7 @@ pub async fn login(
     match login_db(&conn, &form.login_id, &form.password) {
         // 🔹 로그인 성공 + user_id 확보
         Ok(Some(user_id)) => {
+            #[cfg(debug_assertions)]
             println!("✅ 로그인 성공, user_id = {}", user_id);
 
             // 1) 세션키 생성
@@ -466,6 +468,7 @@ pub async fn get_user_profile_handler(
 
     match get_user_profile_by_id(&conn, user_id) {
         Ok(Some(profile)) => {
+            #[cfg(debug_assertions)]
             println!("✅ 유저 정보 조회 성공: {:?}", profile);
             (
                 StatusCode::OK,
@@ -575,6 +578,7 @@ pub async fn update_username(
         params![form.new_username, i64::from(user_id)],
     ) {
         Ok(_) => {
+            #[cfg(debug_assertions)]
             println!(
                 "✅ 닉네임 변경 성공: user_id={}, new_username={}",
                 user_id, form.new_username
@@ -716,6 +720,7 @@ pub async fn update_password(
         params![new_hash, i64::from(user_id)],
     ) {
         Ok(_) => {
+            #[cfg(debug_assertions)]
             println!("✅ 비밀번호 변경 성공: user_id={}", user_id);
             (
                 StatusCode::OK,
@@ -815,6 +820,7 @@ pub async fn delete_user(
                 );
             }
 
+            #[cfg(debug_assertions)]
             println!("✅ 유저 정보 삭제 성공: user_id={}", user_id);
 
             (
@@ -853,6 +859,7 @@ pub fn record_game_win(user_id: UserID) -> rusqlite::Result<()> {
         params![i64::from(user_id)],
     )?;
 
+    #[cfg(debug_assertions)]
     println!("✅ 승리 기록 성공: user_id={}", user_id);
     Ok(())
 }
@@ -872,6 +879,7 @@ pub fn record_game_lose(user_id: UserID) -> rusqlite::Result<()> {
         params![i64::from(user_id)],
     )?;
 
+    #[cfg(debug_assertions)]
     println!("✅ 패배 기록 성공: user_id={}", user_id);
     Ok(())
 }
@@ -891,6 +899,7 @@ pub fn record_game_draw(user_id: UserID) -> rusqlite::Result<()> {
         params![i64::from(user_id)],
     )?;
 
+    #[cfg(debug_assertions)]
     println!("✅ 무승부 기록 성공: user_id={}", user_id);
     Ok(())
 }
@@ -970,6 +979,7 @@ pub async fn get_game_result(
 
     match get_game_result_by_id(&conn, user_id) {
         Ok(Some(result)) => {
+            #[cfg(debug_assertions)]
             println!(
                 "✅ 게임 결과 조회 성공: user_id={}, win={}, lose={}, draw={}",
                 user_id, result.win, result.lose, result.draw

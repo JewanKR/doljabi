@@ -111,7 +111,7 @@ impl OmokRoom {
             response_type: result,
             running: running,
             game_type: GAME_TYPE_OMOK,
-            game_data: Some(GameData::Baduk(BadukBoardServer {
+            game_data: Some(GameData::Omok(BadukBoardServer {
                 turn: doljabiproto::badukboard::Color::Free as i32,
                 the_winner: None,
                 game_state: None,
@@ -234,7 +234,7 @@ impl OmokRoom {
             response_type: true,
             running: Some(true),
             game_type: GAME_TYPE_OMOK,
-            game_data: Some(GameData::Baduk(BadukBoardServer {
+            game_data: Some(GameData::Omok(BadukBoardServer {
                 turn: color_i32(self.game.board.is_turn()),
                 the_winner: None,
                 game_state: Some(self.badukboard_status()),
@@ -291,7 +291,7 @@ impl GameLogic for OmokRoom {
                                 response_type: true,
                                 running: Some(true),
                                 game_type: GAME_TYPE_OMOK,
-                                game_data: Some(GameData::Baduk(BadukBoardServer {
+                                game_data: Some(GameData::Omok(BadukBoardServer {
                                     turn: is_turn,
                                     the_winner: None,
                                     game_state: Some(self.badukboard_status()),
@@ -307,7 +307,7 @@ impl GameLogic for OmokRoom {
                                 response_type: true,
                                 running: Some(true),
                                 game_type: GAME_TYPE_OMOK,
-                                game_data: Some(GameData::Baduk(BadukBoardServer {
+                                game_data: Some(GameData::Omok(BadukBoardServer {
                                     turn: is_turn,
                                     the_winner: None,
                                     game_state: Some(self.badukboard_status()),
@@ -324,7 +324,7 @@ impl GameLogic for OmokRoom {
                                 response_type: true,
                                 running: Some(false),
                                 game_type: GAME_TYPE_OMOK,
-                                game_data: Some(GameData::Baduk(BadukBoardServer {
+                                game_data: Some(GameData::Omok(BadukBoardServer {
                                     turn: is_turn,
                                     the_winner: self.game.winner().map(|w| color_i32(w.clone())),
                                     game_state: Some(self.badukboard_status()),
@@ -338,7 +338,7 @@ impl GameLogic for OmokRoom {
                         response_type: false,
                         running: None,
                         game_type: GAME_TYPE_OMOK,
-                        game_data: Some(GameData::Baduk(BadukBoardServer {
+                        game_data: Some(GameData::Omok(BadukBoardServer {
                             turn: color_i32(self.game.board.is_turn()),
                             game_state: None,
                             users_info: None,
@@ -364,7 +364,7 @@ impl GameLogic for OmokRoom {
             game_data: None,
         };
 
-        if let Some(GameDataForClient::Baduk(message)) = message.game_data {
+        if let Some(GameDataForClient::Omok(message)) = message.game_data {
             match message.payload {
                 Some(PayloadForClient::Coordinate(chaksu_request)) => {
                     use doljabiproto::badukboard::ChaksuResponse;
@@ -429,7 +429,7 @@ impl GameLogic for OmokRoom {
                         response_type: true,
                         running: Some(true),
                         game_type: GAME_TYPE_OMOK,
-                        game_data: Some(GameData::Baduk(BadukBoardServer {
+                        game_data: Some(GameData::Omok(BadukBoardServer {
                             turn: color_i32(self.game.is_board().is_turn()),
                             the_winner: the_winner,
                             game_state: Some(self.badukboard_status()),
@@ -452,7 +452,7 @@ impl GameLogic for OmokRoom {
                         response_type: true,
                         running: Some(true),
                         game_type: GAME_TYPE_OMOK,
-                        game_data: Some(GameData::Baduk(BadukBoardServer {
+                        game_data: Some(GameData::Omok(BadukBoardServer {
                             turn: color_i32(self.game.is_board().is_turn()),
                             the_winner: Some(color_i32(winner)),
                             game_state: Some(self.badukboard_status()),
@@ -494,7 +494,7 @@ impl GameLogic for OmokRoom {
                         response_type: true,
                         running: Some(true),
                         game_type: GAME_TYPE_OMOK,
-                        game_data: Some(GameData::Baduk(BadukBoardServer {
+                        game_data: Some(GameData::Omok(BadukBoardServer {
                             turn: color_i32(self.game.is_board().is_turn()),
                             the_winner: winner,
                             game_state: Some(self.badukboard_status()),
@@ -524,7 +524,7 @@ impl GameLogic for OmokRoom {
                         response_type: true,
                         running: None,
                         game_type: GAME_TYPE_OMOK,
-                        game_data: Some(GameData::Baduk(BadukBoardServer {
+                        game_data: Some(GameData::Omok(BadukBoardServer {
                             turn: color_i32(self.game.is_board().is_turn()),
                             the_winner: None,
                             game_state: Some(self.badukboard_status()),

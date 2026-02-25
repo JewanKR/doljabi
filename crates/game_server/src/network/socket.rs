@@ -106,6 +106,8 @@ async fn handle_websocket(
             match message {
                 Ok(Message::Binary(data)) => {
                     if let Ok(request) = ClientToServer::decode(&data[..]) {
+                        #[cfg(debug_assertions)]
+                        println!("{:#?}", request);
                         let _ = mpsc_tx
                             .send(InputMessage::Request((user_id, request)))
                             .await;
