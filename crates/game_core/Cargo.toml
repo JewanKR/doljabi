@@ -1,7 +1,10 @@
 [package]
 name = "game_core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
+
+[lib]
+path = "src/game_core.rs"
 
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
