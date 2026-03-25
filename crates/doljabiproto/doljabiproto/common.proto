@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package common;
+
+import "badukboard.proto";
+
+enum GameType {
+  GAME_TYPE_UNSPECIFIED = 0;
+  GAME_TYPE_BADUK = 1;
+  GAME_TYPE_OMOK = 2;
+}
+
+message ServerToClient {
+  bool response_type = 1;
+  optional bool running = 2;
+  GameType game_type = 3;
+  oneof game_data {
+    badukboard.BadukBoardServer baduk = 101;
+    badukboard.BadukBoardServer omok = 102;
+  }
+}
+
+message ClientToServer {
+  oneof game_data {
+    badukboard.BadukBoardClient baduk = 101;
+    badukboard.BadukBoardClient omok = 102;
+  }
+}

@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = ["crates/game_server", "crates/game_core", "crates/doljabiproto"]
+
+[profile.release]
+opt-level = 3
+lto = true
+# debug-assertions = true

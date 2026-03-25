@@ -1,0 +1,12 @@
+[package]
+name = "game_core"
+version = "0.2.0"
+edition = "2024"
+
+[lib]
+path = "src/game_core.rs"
+
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.49.0", default-features = false, features = ["sync", "time"] }
+utoipa = "5.4.0"
