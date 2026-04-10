@@ -16,6 +16,7 @@ bun.lock
 dist
 dist-ssr
 *.local
+out/
 
 # Editor directories and files
 .vscode/*
