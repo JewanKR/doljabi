@@ -12,8 +12,6 @@ node_modules/
 orval.config.ts
 pnpm-lock.yaml
 pnpm-workspace.yaml
-bun.lock
-deno.lock
 dist
 dist-ssr
 *.local
