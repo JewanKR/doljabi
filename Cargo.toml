@@ -4,5 +4,6 @@ members = ["crates/game_server", "crates/game_core", "crates/doljabiproto"]
 
 [profile.release]
 opt-level = 3
+codegen-units = 1
 lto = true
 # debug-assertions = true

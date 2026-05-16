@@ -9,4 +9,7 @@ private/
 **/target/
 **/out/
 
+*.onnx
+*.onnx.data
+
 Cargo.lock
