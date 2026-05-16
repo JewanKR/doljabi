@@ -38,5 +38,5 @@ rusqlite = { version = "0.37.0", features = ["bundled"] }
 argon2 = { version = "0.5", features = ["std"] }
 
 # 로컬
-game_core = { version = "0.1.0", path = "../game_core" }
-doljabiproto = { version = "0.1.0", path = "../doljabiproto" }
+game_core = { version = "0.2.0", path = "../game_core" }
+doljabiproto = { version = "0.2.0", path = "../doljabiproto" }
