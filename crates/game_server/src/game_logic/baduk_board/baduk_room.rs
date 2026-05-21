@@ -41,11 +41,11 @@ impl BadukRoom {
         self.players.user_id(color)
     }
 
-    pub fn set_players_time(&mut self, config: &BadukBoardGameConfig) -> bool {
+    pub fn set_players_time(&mut self, config: BadukBoardGameConfig) -> bool {
         if !self.players.full_players() {
             return false;
         }
-        self.players.set_players(&config);
+        self.players.set_players(config);
 
         true
     }
@@ -229,7 +229,7 @@ impl BadukRoom {
     }
 
     fn game_start(&mut self) -> ServerToClient {
-        self.set_players_time(&self.game_config.clone());
+        self.set_players_time(self.game_config);
         self.set_timer(PLAYER_TIMEOUT);
 
         ServerToClient {

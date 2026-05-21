@@ -243,7 +243,7 @@ impl Player {
     }
 
     // 유저 전체 시간 설정
-    pub fn set_player(&mut self, config: &BadukBoardGameConfig) {
+    pub fn set_player(&mut self, config: BadukBoardGameConfig) {
         let (main_time, fischer_time, remaining_overtime, overtime) = config.output();
         self.main_time = main_time;
         self.fischer_time = fischer_time;
@@ -352,20 +352,20 @@ impl Players {
     }
 
     // 플레이어 시간 설정
-    pub fn set_players(&mut self, config: &BadukBoardGameConfig) -> bool {
+    pub fn set_players(&mut self, config: BadukBoardGameConfig) -> bool {
         let black_success = self.set_black_player(config);
         let white_success = self.set_white_player(config);
         black_success && white_success
     }
 
-    pub fn set_black_player(&mut self, config: &BadukBoardGameConfig) -> bool {
+    pub fn set_black_player(&mut self, config: BadukBoardGameConfig) -> bool {
         self.black_player
             .as_mut()
             .map(|p| p.set_player(config))
             .is_some()
     }
 
-    pub fn set_white_player(&mut self, config: &BadukBoardGameConfig) -> bool {
+    pub fn set_white_player(&mut self, config: BadukBoardGameConfig) -> bool {
         self.white_player
             .as_mut()
             .map(|p| p.set_player(config))

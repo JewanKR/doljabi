@@ -38,7 +38,7 @@ impl Eq for TimeoutEvent {}
 
 impl PartialOrd for TimeoutEvent {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
+        Some(self.deadline.cmp(&other.deadline))
     }
 }
 
@@ -108,11 +108,13 @@ pub struct GameInterrupter {
 impl GameInterrupter {
     pub fn register(&self, duration: Duration, event: u16) -> Arc<AtomicU16> {
         let atomic_u16 = Arc::new(AtomicU16::new(event));
-        let _ = self.sender.send(TimeoutEvent {
+        if let Err(e) = self.sender.send(TimeoutEvent {
             deadline: Instant::now() + duration,
             tx: self.receiver.clone(),
             event: atomic_u16.clone(),
-        });
+        }) {
+            eprintln!("{}", e);
+        };
         atomic_u16
     }
     fn send_system_message(&self, system_event: SystemEvent) {

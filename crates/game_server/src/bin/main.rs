@@ -12,6 +12,8 @@ use tower_http::cors::{Any, CorsLayer};
 use utoipa::openapi::{ContactBuilder, OpenApi, OpenApiVersion};
 use utoipa_axum::router::OpenApiRouter;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn add_openapi_info(openapi_doc: &mut OpenApi) {
     openapi_doc.openapi = OpenApiVersion::Version31;
     openapi_doc.info.title = "doljabi".to_string();
@@ -65,6 +67,7 @@ async fn main() {
     // 서버 주소 설정
     let addr = "127.0.0.1:27000";
     println!("🚀 서버 실행중: {}", addr);
+    println!("버전: {}", VERSION);
 
     // 서버 실행
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
