@@ -223,7 +223,7 @@ impl OmokRoom {
             &mut self.timeout_event,
             self.interrupter.register(duration, event),
         );
-        drop_timer.store(0, std::sync::atomic::Ordering::Relaxed);
+        drop_timer.store(NONE, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn game_start(&mut self) -> ServerToClient {
@@ -250,7 +250,17 @@ impl GameLogic for OmokRoom {
         use std::sync::atomic::Ordering::Relaxed;
         let result = self.players.push_user(user_id);
         match self.timeout_event.load(Relaxed) {
-            1 => self.timeout_event.store(NONE, Relaxed),
+            BRACK_GAME => {
+                self.timeout_event.store(NONE, Relaxed);
+                #[cfg(debug_assertions)]
+                {
+                    println!("방 진입 후: Brack_Game 인식");
+                    println!(
+                        "timeout_event None 으로 변경 시도: {}",
+                        self.timeout_event.load(Relaxed)
+                    );
+                }
+            }
             _ => {}
         }
         self.user_io(result)
@@ -259,6 +269,8 @@ impl GameLogic for OmokRoom {
     fn leave_user(&mut self, user_id: UserID) -> ServerToClient {
         let result = self.players.pop_user(user_id);
         if self.players.check_empty_room() {
+            #[cfg(debug_assertions)]
+            println!("빈 방 제거 요청 보내기");
             self.interrupter.game_closer();
         }
         self.user_io(result)
