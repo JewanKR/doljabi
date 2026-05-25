@@ -1,0 +1,73 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  darkMode: 'class',
+  content: [
+    "./index.html",
+    "./src/**/*.{js,jsx,ts,tsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        "inverse-on-surface": "var(--inverse-on-surface)",
+        "tertiary-fixed": "var(--tertiary-fixed)",
+        "on-primary-container": "var(--on-primary-container)",
+        "on-secondary-fixed": "var(--on-secondary-fixed)",
+        "secondary-fixed": "var(--secondary-fixed)",
+        background: "var(--background)",
+        "surface-variant": "var(--surface-variant)",
+        outline: "var(--outline)",
+        "surface-container": "var(--surface-container)",
+        "on-error": "var(--on-error)",
+        "inverse-primary": "var(--inverse-primary)",
+        "on-tertiary-fixed-variant": "var(--on-tertiary-fixed-variant)",
+        "on-tertiary-fixed": "var(--on-tertiary-fixed)",
+        "secondary-fixed-dim": "var(--secondary-fixed-dim)",
+        "primary-fixed": "var(--primary-fixed)",
+        "primary-fixed-dim": "var(--primary-fixed-dim)",
+        "tertiary-container": "var(--tertiary-container)",
+        "surface-dim": "var(--surface-dim)",
+        "outline-variant": "var(--outline-variant)",
+        "surface-tint": "var(--surface-tint)",
+        "on-secondary-fixed-variant": "var(--on-secondary-fixed-variant)",
+        "on-surface": "var(--on-surface)",
+        "inverse-surface": "var(--inverse-surface)",
+        "surface-container-high": "var(--surface-container-high)",
+        "on-surface-variant": "var(--on-surface-variant)",
+        "on-tertiary": "var(--on-tertiary)",
+        primary: "var(--primary)",
+        "on-secondary-container": "var(--on-secondary-container)",
+        surface: "var(--surface)",
+        "primary-container": "var(--primary-container)",
+        "on-background": "var(--on-background)",
+        "on-tertiary-container": "var(--on-tertiary-container)",
+        "on-primary": "var(--on-primary)",
+        "surface-container-low": "var(--surface-container-low)",
+        secondary: "var(--secondary)",
+        "surface-container-lowest": "var(--surface-container-lowest)",
+        error: "var(--error)",
+        "on-error-container": "var(--on-error-container)",
+        "on-primary-fixed-variant": "var(--on-primary-fixed-variant)",
+        tertiary: "var(--tertiary)",
+        "secondary-container": "var(--secondary-container)",
+        "error-container": "var(--error-container)",
+        "tertiary-fixed-dim": "var(--tertiary-fixed-dim)",
+        "surface-container-highest": "var(--surface-container-highest)",
+        "surface-bright": "var(--surface-bright)",
+        "on-secondary": "var(--on-secondary)",
+        "on-primary-fixed": "var(--on-primary-fixed)"
+      },
+      borderRadius: {
+        DEFAULT: "0.25rem",
+        lg: "0.5rem",
+        xl: "0.75rem",
+        full: "9999px"
+      },
+      fontFamily: {
+        headline: ["Inter", "sans-serif"],
+        body: ["Inter", "sans-serif"],
+        label: ["Inter", "sans-serif"]
+      }
+    },
+  },
+  plugins: [],
+}
