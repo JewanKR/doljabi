@@ -6,4 +6,3 @@ members = ["crates/game_server", "crates/game_core", "crates/doljabiproto"]
 opt-level = 3
 codegen-units = 1
 lto = true
-# debug-assertions = true

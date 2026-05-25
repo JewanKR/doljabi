@@ -37,6 +37,7 @@ function App() {
   });
   const [gameHistory, setGameHistory] = useState([]);
   const wsRef = useRef(null);
+  const heartbeatRef = useRef(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -89,14 +90,26 @@ function App() {
     const sessionKey = SessionManager.getSessionKey();
     if (!code || !sessionKey) return;
     if (wsRef.current && wsRef.current.readyState < 2) wsRef.current.close();
+    if (heartbeatRef.current) clearInterval(heartbeatRef.current);
     const ws = new WebSocket(
       `${WS_BASE_URL}/ws/room/${code}/session/${sessionKey}`,
     );
     ws.binaryType = "arraybuffer";
     wsRef.current = ws;
+    heartbeatRef.current = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) ws.send("ping");
+      else if (ws.readyState >= 2) {
+        clearInterval(heartbeatRef.current);
+        heartbeatRef.current = null;
+      }
+    }, 5000);
   };
 
   const closeWs = () => {
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    }
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
