@@ -10,14 +10,14 @@ pub struct BadukBoardState {
 /// * 플레이어 시간 정보
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PlayerTimeInfo {
-    #[prost(uint64, tag = "1")]
-    pub main_time: u64,
-    #[prost(uint64, tag = "2")]
-    pub fischer_time: u64,
+    #[prost(uint32, tag = "1")]
+    pub main_time: u32,
+    #[prost(uint32, tag = "2")]
+    pub fischer_time: u32,
     #[prost(uint32, tag = "3")]
     pub remaining_overtime: u32,
-    #[prost(uint64, tag = "4")]
-    pub overtime: u64,
+    #[prost(uint32, tag = "4")]
+    pub overtime: u32,
 }
 /// * 보드, 시간, 턴 정보
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
