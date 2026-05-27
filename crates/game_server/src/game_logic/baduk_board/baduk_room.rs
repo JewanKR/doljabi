@@ -203,9 +203,9 @@ impl BadukRoom {
         match turn_player {
             Some(p) => {
                 if p.main_time() > 0 {
-                    Duration::from_millis(p.main_time())
+                    Duration::from_millis(p.main_time() as u64)
                 } else if p.remain_time() > 0 {
-                    Duration::from_millis(p.overtime())
+                    Duration::from_millis(p.overtime() as u64)
                 } else {
                     self.game.set_winner(self.game.board.is_turn().reverse());
                     self.interrupter.game_closer();
