@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SGF 저장 테스트</title>
+<style>
+  :root {
+    --bg: #1f1d1a;
+    --panel: #2a2724;
+    --panel2: #34302b;
+    --line: rgba(255,255,255,0.12);
+    --text: #f1ece4;
+    --muted: #b0a89c;
+    --accent: #d4a373;
+    --board: #ffdcc3;
+    --board-line: rgba(58,42,16,0.75);
+    --black: #1a1a1a;
+    --white: #ffffff;
+    --ok: #6dbf5b;
+    --warn: #d97757;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, "Noto Sans KR", sans-serif; }
+  header { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 18px; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  main { display: grid; grid-template-columns: minmax(420px, 1fr) 360px; gap: 20px; padding: 20px; align-items: start; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row + .row { margin-top: 8px; }
+  label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; flex: 1 1 140px; }
+  input, select, textarea { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; }
+  textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; min-height: 140px; resize: vertical; }
+  button { background: var(--accent); color: #1a1308; border: none; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; }
+  button.secondary { background: var(--panel2); color: var(--text); border: 1px solid var(--line); }
+  button.danger { background: var(--warn); color: white; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .board-wrap { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+  svg.board { width: 100%; max-width: 560px; height: auto; display: block; background: var(--board); border-radius: 8px; }
+  .legend { display: flex; gap: 12px; align-items: center; color: var(--muted); font-size: 12px; flex-wrap: wrap; justify-content: center; }
+  .swatch { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .dot.b { background: var(--black); }
+  .dot.w { background: var(--white); border: 1px solid #888; }
+  .history { max-height: 200px; overflow: auto; background: var(--panel2); border-radius: 8px; padding: 4px; font-size: 12px; }
+  .history div { display: grid; grid-template-columns: 32px 28px 1fr; gap: 8px; padding: 4px 8px; border-radius: 4px; }
+  .history div:nth-child(odd) { background: rgba(255,255,255,0.03); }
+  .status { font-size: 12px; color: var(--muted); }
+  .status.ok { color: var(--ok); }
+  .status.err { color: var(--warn); }
+  details { background: var(--panel2); border-radius: 8px; padding: 8px 12px; margin-top: 8px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: rgba(255,255,255,0.06); padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>SGF 저장 테스트</h1>
+    <div class="sub">실제 <code>src/utils/sgf.js</code> 모듈을 직접 import해서 검증합니다.</div>
+  </div>
+  <div class="status" id="moduleStatus">모듈 로딩 중...</div>
+</header>
+
+<main>
+  <!-- LEFT: board + actions -->
+  <section class="card board-wrap">
+    <h2 style="align-self:flex-start">바둑판 (클릭하여 착수)</h2>
+    <svg id="board" class="board" viewBox="0 0 560 560" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="legend">
+      <span class="swatch"><span class="dot b"></span> 흑 차례 = <span id="turnLabel">흑</span></span>
+      <span>· 총 <span id="moveCount">0</span>수</span>
+      <span id="lastMove">· -</span>
+    </div>
+
+    <div class="row" style="justify-content:center">
+      <button id="passBtn" class="secondary">패스</button>
+      <button id="undoBtn" class="secondary">한 수 무르기</button>
+      <button id="resetBtn" class="danger">초기화</button>
+      <button id="sampleBtn" class="secondary">샘플 기보 로드</button>
+    </div>
+  </section>
+
+  <!-- RIGHT: metadata + history -->
+  <aside class="card">
+    <h2>대국 메타데이터</h2>
+    <div class="row">
+      <label>흑 (PB) <input id="meta-pb" type="text" value="Kuro_Knight" /></label>
+      <label>백 (PW) <input id="meta-pw" type="text" value="Shiro_Master" /></label>
+    </div>
+    <div class="row">
+      <label>흑 단급 (BR) <input id="meta-br" type="text" value="5d" /></label>
+      <label>백 단급 (WR) <input id="meta-wr" type="text" value="4d" /></label>
+    </div>
+    <div class="row">
+      <label>덤 (KM) <input id="meta-km" type="number" step="0.5" value="6.5" /></label>
+      <label>호선 (HA) <input id="meta-ha" type="number" min="0" value="0" /></label>
+    </div>
+    <div class="row">
+      <label>규칙 (RU)
+        <select id="meta-ru">
+          <option>Korean</option><option>Japanese</option><option>Chinese</option><option>AGA</option><option value="">(없음)</option>
+        </select>
+      </label>
+      <label>제한시간 초 (TM) <input id="meta-tm" type="number" value="600" /></label>
+    </div>
+    <div class="row">
+      <label>대회명 (EV) <input id="meta-ev" type="text" value="돌잡이 친선전" /></label>
+      <label>날짜 (DT) <input id="meta-dt" type="date" /></label>
+    </div>
+    <div class="row">
+      <label>결과 (RE)
+        <select id="meta-result">
+          <option value="">(미정)</option>
+          <option value="B+R">흑 불계승 (B+R)</option>
+          <option value="W+R">백 불계승 (W+R)</option>
+          <option value="B+T">흑 시간승 (B+T)</option>
+          <option value="W+T">백 시간승 (W+T)</option>
+          <option value="B+5.5">흑 5.5점승</option>
+          <option value="W+0.5">백 0.5점승</option>
+          <option value="0">무승부 (0)</option>
+        </select>
+      </label>
+    </div>
+
+    <h2 style="margin-top:18px">착수 기록</h2>
+    <div class="history" id="historyList"><div style="color:var(--muted); padding:12px; text-align:center">아직 기보가 없습니다</div></div>
+  </aside>
+
+  <!-- BOTTOM: SGF preview + parse test (spans 2 cols) -->
+  <section class="card" style="grid-column: 1 / -1">
+    <h2>SGF 미리보기 / 다운로드</h2>
+    <div class="row" style="margin-bottom:8px">
+      <button id="downloadBtn">SGF 다운로드</button>
+      <button id="copyBtn" class="secondary">클립보드에 복사</button>
+      <span id="saveStatus" class="status"></span>
+    </div>
+    <textarea id="sgfOut" readonly></textarea>
+
+    <details open style="margin-top:14px">
+      <summary>라운드트립 검증 — SGF를 다시 파싱해서 보드를 복원</summary>
+      <div class="row" style="margin-top:10px">
+        <button id="parseBtn" class="secondary">현재 SGF를 파싱하여 보드 복원</button>
+        <button id="pasteParseBtn" class="secondary">아래 입력란의 SGF로 보드 교체</button>
+        <span id="parseStatus" class="status"></span>
+      </div>
+      <textarea id="sgfIn" placeholder="여기에 SGF를 붙여넣고 '아래 입력란의 SGF로 보드 교체'를 누르면 보드가 복원됩니다."></textarea>
+    </details>
+  </section>
+</main>
+
+<script type="module">
+  // 진짜 프로젝트 모듈을 그대로 사용합니다.
+  import {
+    buildSgf,
+    parseSgf,
+    downloadSgf,
+    defaultSgfFilename,
+    formatResult,
+  } from './src/utils/sgf.js';
+
+  const moduleStatus = document.getElementById('moduleStatus');
+  moduleStatus.textContent = '✓ sgf.js 모듈 로드됨';
+  moduleStatus.classList.add('ok');
+
+  // ---------- 보드 렌더링 ----------
+  const SIZE = 19;
+  const COLS = 'ABCDEFGHJKLMNOPQRST';
+  const CELL = 28;
+  const ML = 28, MT = 22;
+  const BOARD_PX = (SIZE - 1) * CELL;
+  const STARS = [[3,3],[3,9],[3,15],[9,3],[9,9],[9,15],[15,3],[15,9],[15,15]];
+  const cx = c => ML + c * CELL;
+  const cy = r => MT + r * CELL;
+
+  // 게임 상태
+  const state = {
+    history: [],      // [{col,row,color,pass?}]
+    turn: 'black',
+  };
+
+  const svg = document.getElementById('board');
+  const ns = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs = {}, children = []) {
+    const n = document.createElementNS(ns, tag);
+    for (const [k,v] of Object.entries(attrs)) n.setAttribute(k, v);
+    for (const c of children) n.appendChild(c);
+    return n;
+  }
+
+  function renderBoard() {
+    svg.innerHTML = '';
+    const W = BOARD_PX + ML + 14;
+    const H = BOARD_PX + MT + 14;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+    // 격자
+    for (let i = 0; i < SIZE; i++) {
+      svg.appendChild(el('line', { x1: cx(0), y1: cy(i), x2: cx(SIZE-1), y2: cy(i), stroke: 'rgba(58,42,16,0.75)', 'stroke-width': 1 }));
+      svg.appendChild(el('line', { x1: cx(i), y1: cy(0), x2: cx(i), y2: cy(SIZE-1), stroke: 'rgba(58,42,16,0.75)', 'stroke-width': 1 }));
+    }
+    // 화점
+    STARS.forEach(([c,r]) => svg.appendChild(el('circle', { cx: cx(c), cy: cy(r), r: 3, fill: 'rgba(58,42,16,0.75)' })));
+    // 좌표
+    for (let i = 0; i < SIZE; i++) {
+      const tx = document.createElementNS(ns,'text');
+      tx.setAttribute('x', cx(i)); tx.setAttribute('y', MT-7); tx.setAttribute('text-anchor','middle');
+      tx.setAttribute('font-size','10'); tx.setAttribute('fill','rgba(58,42,16,0.85)'); tx.setAttribute('font-weight','bold');
+      tx.textContent = COLS[i]; svg.appendChild(tx);
+      const ty = document.createElementNS(ns,'text');
+      ty.setAttribute('x', ML-6); ty.setAttribute('y', cy(i)+4); ty.setAttribute('text-anchor','end');
+      ty.setAttribute('font-size','10'); ty.setAttribute('fill','rgba(58,42,16,0.85)'); ty.setAttribute('font-weight','bold');
+      ty.textContent = String(SIZE - i); svg.appendChild(ty);
+    }
+    // 클릭 영역
+    const occupied = new Set(state.history.filter(s => !s.pass).map(s => `${s.col},${s.row}`));
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        const rect = el('rect', {
+          x: cx(c) - CELL/2, y: cy(r) - CELL/2,
+          width: CELL, height: CELL,
+          fill: 'transparent',
+          style: occupied.has(`${c},${r}`) ? 'cursor:default' : 'cursor:pointer',
+        });
+        if (!occupied.has(`${c},${r}`)) {
+          rect.addEventListener('click', () => placeStone(c, r));
+        }
+        svg.appendChild(rect);
+      }
+    }
+    // 돌
+    state.history.forEach((m, idx) => {
+      if (m.pass) return;
+      const stone = el('circle', {
+        cx: cx(m.col), cy: cy(m.row), r: 12,
+        fill: m.color === 'black' ? '#1a1a1a' : '#fff',
+        stroke: m.color === 'black' ? 'rgba(255,255,255,0.15)' : 'rgba(58,42,16,0.3)',
+        'stroke-width': 1,
+      });
+      svg.appendChild(stone);
+      // 수번
+      const isLast = idx === state.history.length - 1;
+      if (isLast) {
+        const txt = document.createElementNS(ns,'text');
+        txt.setAttribute('x', cx(m.col)); txt.setAttribute('y', cy(m.row)+3);
+        txt.setAttribute('text-anchor','middle');
+        txt.setAttribute('font-size','10');
+        txt.setAttribute('font-weight','bold');
+        txt.setAttribute('fill', m.color === 'black' ? '#ffb86b' : '#d97757');
+        txt.textContent = String(idx + 1);
+        svg.appendChild(txt);
+      }
+    });
+  }
+
+  function placeStone(col, row) {
+    state.history.push({ col, row, color: state.turn });
+    state.turn = state.turn === 'black' ? 'white' : 'black';
+    refresh();
+  }
+
+  function pass() {
+    state.history.push({ col: -1, row: -1, color: state.turn, pass: true });
+    state.turn = state.turn === 'black' ? 'white' : 'black';
+    refresh();
+  }
+
+  function undo() {
+    if (state.history.length === 0) return;
+    const last = state.history.pop();
+    state.turn = last.color; // 무른 수의 차례로 되돌림
+    refresh();
+  }
+
+  function reset() {
+    state.history = [];
+    state.turn = 'black';
+    refresh();
+  }
+
+  function loadSample() {
+    // 화점 + 소목 정석 비슷한 샘플
+    state.history = [
+      { col: 15, row: 3, color: 'black' },
+      { col: 3, row: 15, color: 'white' },
+      { col: 15, row: 15, color: 'black' },
+      { col: 3, row: 3, color: 'white' },
+      { col: 16, row: 5, color: 'black' },
+      { col: 5, row: 2, color: 'white' },
+      { col: 13, row: 2, color: 'black' },
+      { col: 2, row: 13, color: 'white' },
+    ];
+    state.turn = 'black';
+    refresh();
+  }
+
+  // ---------- 메타데이터 수집 ----------
+  function getMeta() {
+    const v = id => document.getElementById(id).value;
+    const num = id => { const n = Number(v(id)); return Number.isFinite(n) ? n : undefined; };
+    const meta = {
+      blackName: v('meta-pb') || undefined,
+      whiteName: v('meta-pw') || undefined,
+      blackRank: v('meta-br') || undefined,
+      whiteRank: v('meta-wr') || undefined,
+      komi: v('meta-km') !== '' ? num('meta-km') : undefined,
+      handicap: num('meta-ha') >= 2 ? num('meta-ha') : undefined,
+      ruleset: v('meta-ru') || undefined,
+      timeLimit: v('meta-tm') !== '' ? num('meta-tm') : undefined,
+      event: v('meta-ev') || undefined,
+      date: v('meta-dt') || new Date(),
+      result: v('meta-result') || undefined,
+    };
+    return meta;
+  }
+
+  // ---------- UI 새로고침 ----------
+  function refresh() {
+    renderBoard();
+    document.getElementById('turnLabel').textContent = state.turn === 'black' ? '흑' : '백';
+    document.getElementById('moveCount').textContent = state.history.length;
+    const last = state.history[state.history.length - 1];
+    document.getElementById('lastMove').textContent = last
+      ? `· 마지막: ${last.pass ? '패스' : `${COLS[last.col]}${SIZE - last.row}`} (${last.color === 'black' ? '흑' : '백'})`
+      : '· -';
+
+    // 기보 리스트
+    const hl = document.getElementById('historyList');
+    if (state.history.length === 0) {
+      hl.innerHTML = '<div style="color:var(--muted); padding:12px; text-align:center">아직 기보가 없습니다</div>';
+    } else {
+      hl.innerHTML = '';
+      state.history.forEach((m, i) => {
+        const row = document.createElement('div');
+        row.innerHTML = `<span>${String(i+1).padStart(2,'0')}</span><span>${m.color === 'black' ? '흑' : '백'}</span><span>${m.pass ? '패스' : `${COLS[m.col]}${SIZE - m.row}`}</span>`;
+        hl.appendChild(row);
+      });
+      hl.scrollTop = hl.scrollHeight;
+    }
+
+    // SGF 미리보기
+    const sgf = buildSgf(state.history, getMeta());
+    document.getElementById('sgfOut').value = sgf;
+  }
+
+  // ---------- 버튼 핸들러 ----------
+  document.getElementById('passBtn').onclick = pass;
+  document.getElementById('undoBtn').onclick = undo;
+  document.getElementById('resetBtn').onclick = () => { if (confirm('보드를 초기화할까요?')) reset(); };
+  document.getElementById('sampleBtn').onclick = loadSample;
+
+  document.getElementById('downloadBtn').onclick = () => {
+    const meta = getMeta();
+    const sgf = buildSgf(state.history, meta);
+    const filename = defaultSgfFilename(meta);
+    downloadSgf(sgf, filename);
+    const status = document.getElementById('saveStatus');
+    status.textContent = `✓ ${filename} 다운로드됨 (${state.history.length}수)`;
+    status.className = 'status ok';
+  };
+
+  document.getElementById('copyBtn').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(document.getElementById('sgfOut').value);
+      const status = document.getElementById('saveStatus');
+      status.textContent = '✓ 클립보드에 복사됨';
+      status.className = 'status ok';
+    } catch (e) {
+      const status = document.getElementById('saveStatus');
+      status.textContent = '✗ 복사 실패: ' + e.message;
+      status.className = 'status err';
+    }
+  };
+
+  document.getElementById('parseBtn').onclick = () => {
+    const sgf = document.getElementById('sgfOut').value;
+    try {
+      const parsed = parseSgf(sgf);
+      const status = document.getElementById('parseStatus');
+      status.className = 'status ok';
+      status.textContent = `✓ 파싱 성공 — SZ=${parsed.size}, 수순=${parsed.history.length}, 속성=${Object.keys(parsed.properties).length}개. (보드는 변경 안 함)`;
+      console.log('[parseSgf]', parsed);
+    } catch (e) {
+      const status = document.getElementById('parseStatus');
+      status.className = 'status err';
+      status.textContent = '✗ 파싱 실패: ' + e.message;
+    }
+  };
+
+  document.getElementById('pasteParseBtn').onclick = () => {
+    const sgf = document.getElementById('sgfIn').value.trim();
+    if (!sgf) {
+      const status = document.getElementById('parseStatus');
+      status.className = 'status err';
+      status.textContent = '✗ 입력란이 비어있습니다';
+      return;
+    }
+    try {
+      const parsed = parseSgf(sgf);
+      // 보드 교체
+      state.history = parsed.history.map(m => ({
+        col: m.col, row: m.row, color: m.color, pass: m.pass,
+      }));
+      state.turn = (state.history.length > 0 && state.history[state.history.length-1].color === 'black') ? 'white' : 'black';
+      refresh();
+      const status = document.getElementById('parseStatus');
+      status.className = 'status ok';
+      status.textContent = `✓ ${parsed.history.length}수 복원 완료`;
+    } catch (e) {
+      const status = document.getElementById('parseStatus');
+      status.className = 'status err';
+      status.textContent = '✗ 파싱 실패: ' + e.message;
+    }
+  };
+
+  // 메타데이터 변경 → SGF 미리보기 갱신
+  document.querySelectorAll('#meta-pb,#meta-pw,#meta-br,#meta-wr,#meta-km,#meta-ha,#meta-ru,#meta-tm,#meta-ev,#meta-dt,#meta-result')
+    .forEach(el => el.addEventListener('input', refresh));
+
+  // 오늘 날짜로 초기화
+  document.getElementById('meta-dt').value = new Date().toISOString().slice(0, 10);
+
+  // 첫 렌더
+  refresh();
+</script>
+</body>
+</html>

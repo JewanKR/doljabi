@@ -1,0 +1,15 @@
+# 개인 파일
+private/
+.vscode
+.zed
+.cursor
+.cargo
+
+*.db
+**/target/
+**/out/
+
+*.onnx
+*.onnx.data
+
+Cargo.lock
