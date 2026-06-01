@@ -179,16 +179,28 @@ impl OmokRoom {
 
         match color {
             Color::Black => {
-                let _ = record_game_win(black_player_id);
-                let _ = record_game_lose(white_player_id);
+                if let Err(e) = record_game_win(black_player_id) {
+                    eprintln!("DB 저장 에러: {}", e);
+                };
+                if let Err(e) = record_game_lose(white_player_id) {
+                    eprintln!("DB 저장 에러: {}", e);
+                };
             }
             Color::White => {
-                let _ = record_game_lose(black_player_id);
-                let _ = record_game_win(white_player_id);
+                if let Err(e) = record_game_lose(black_player_id) {
+                    eprintln!("DB 저장 에러: {}", e);
+                };
+                if let Err(e) = record_game_win(white_player_id) {
+                    eprintln!("DB 저장 에러: {}", e);
+                };
             }
             Color::Free => {
-                let _ = record_game_draw(black_player_id);
-                let _ = record_game_draw(white_player_id);
+                if let Err(e) = record_game_draw(black_player_id) {
+                    eprintln!("DB 저장 에러: {}", e);
+                };
+                if let Err(e) = record_game_draw(white_player_id) {
+                    eprintln!("DB 저장 에러: {}", e);
+                };
             }
             _ => {}
         }
