@@ -18,10 +18,10 @@ message BadukBoardState {
 
 /** 플레이어 시간 정보 */
 message PlayerTimeInfo {
-  uint64 main_time = 1;
-  uint64 fischer_time = 2;
+  uint32 main_time = 1;
+  uint32 fischer_time = 2;
   uint32 remaining_overtime = 3;
-  uint64 overtime = 4;
+  uint32 overtime = 4;
 }
 
 /** 보드, 시간, 턴 정보 */

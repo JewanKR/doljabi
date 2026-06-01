@@ -23,6 +23,9 @@ fn main() -> Result<()> {
     // 3. 스키마 동기화 실행
     sync_users_schema(&mut conn)?;
 
+    // 4. games 테이블 생성 (없으면) + 조회용 인덱스 (soyul_db와 동일 정의 재사용)
+    game_server::soyul::soyul_db::init_games_table(&conn)?;
+
     println!("DB Schema synchronized successfully.");
     Ok(())
 }

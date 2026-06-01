@@ -4,6 +4,7 @@ private/
 .zed
 .cursor
 .cargo
+.claude
 
 *.db
 **/target/

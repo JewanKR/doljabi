@@ -1,51 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { SideNav } from './SideNav';
+import { GoBoard } from './GoBoard';
+import { replay } from '../utils/goRules';
 import { historyToSgf, downloadSgf } from '../utils/sgf';
 
 const COLS_LABEL = 'ABCDEFGHJKLMNOPQRST';
 
 export const AiAnalysis = ({ onNavigate, gameType = 'go', currentUser, history = [] }) => {
   const [step, setStep] = useState(history.length);
-  const [svgContent, setSvgContent] = useState('');
-  const [wasmReady, setWasmReady] = useState(false);
-  const renderSgfRef = useRef(null);
   const size = gameType === 'omok' ? 15 : 19;
 
-  // WASM 초기화
-  useEffect(() => {
-    let cancelled = false;
-    import('../demo-wasm/pkg/sgf_render.js').then(async (mod) => {
-      await mod.default();
-      mod._start();
-      if (!cancelled) {
-        renderSgfRef.current = mod.renderSgf;
-        setWasmReady(true);
-      }
-    }).catch(console.error);
-    return () => { cancelled = true; };
-  }, []);
-
-  // step 또는 WASM 준비 시 SVG 렌더링
-  useEffect(() => {
-    if (!wasmReady || !renderSgfRef.current || history.length === 0) return;
-    try {
-      const partial = history.slice(0, step);
-      const sgf = historyToSgf(partial, size);
-      let svg = renderSgfRef.current(sgf, {});
-      console.log('[SGF SVG 원본 태그]', svg.slice(0, 200));
-      // 고정 width/height 제거 후 100%로 교체해 컨테이너에 맞게 확장
-      svg = svg.replace(/<svg([^>]*)width="[^"]*"/, '<svg$1width="100%"');
-      svg = svg.replace(/<svg([^>]*)height="[^"]*"/, '<svg$1height="100%"');
-      // viewBox 없으면 추가 (스케일 기준점)
-      if (!svg.includes('viewBox')) {
-        svg = svg.replace('<svg', '<svg viewBox="0 0 800 800"');
-      }
-      setSvgContent(svg);
-    } catch (e) {
-      console.error('SGF 렌더링 오류:', e);
-    }
-  }, [step, wasmReady, history, size]);
-
+  // 현재 step까지의 판 모양 (바둑은 따냄 적용, 오목은 단순 누적)
+  const stones = replay(history, step, size, gameType);
   const sgf = history.length > 0 ? historyToSgf(history, size) : null;
 
   const handleDownload = () => {
@@ -60,20 +26,13 @@ export const AiAnalysis = ({ onNavigate, gameType = 'go', currentUser, history =
       <main className="md:ml-64 min-h-screen flex flex-col lg:flex-row pt-14 md:pt-0">
         {/* 보드 */}
         <div className="flex-grow flex flex-col items-center bg-surface-container-lowest rounded-3xl p-6 m-6 gap-6">
-          <div className="w-full max-w-[580px]" style={{ aspectRatio: '1 / 1' }}>
+          <div className="w-full max-w-[580px]">
             {history.length === 0 ? (
-              <div className="w-full h-full flex items-center justify-center text-sm text-on-surface-variant">
+              <div className="w-full aspect-square flex items-center justify-center text-sm text-on-surface-variant">
                 게임 기록이 없습니다. 게임을 마친 후 AI 분석을 이용해주세요.
               </div>
-            ) : svgContent ? (
-              <div
-                className="w-full h-full overflow-hidden"
-                dangerouslySetInnerHTML={{ __html: svgContent }}
-              />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-sm text-on-surface-variant">
-                렌더링 중...
-              </div>
+              <GoBoard size={size} stones={stones} />
             )}
           </div>
 

@@ -1,8 +1,9 @@
 use crate::game_logic::{
     GameLogic, UserID,
-    baduk_board::{color_i32, timeout_event::*},
+    baduk_board::{EndReason, color_i32, sgf_result, timeout_event::*},
     timer::GameInterrupter,
 };
+use crate::soyul::kibo::{GameKind, SgfGame};
 use doljabiproto::{
     badukboard::BadukBoardServer,
     common::{ClientToServer, ServerToClient, server_to_client::GameData},
@@ -21,12 +22,15 @@ pub struct OmokRoom {
     players: Players,
     interrupter: GameInterrupter,
     timeout_event: Arc<AtomicU16>,
+    kibo: SgfGame, // 게임 종료 시 DB에 저장할 SGF 기보 (수순 누적)
 }
 impl OmokRoom {
     pub fn new(game_config: BadukBoardGameConfig, game_event_manager: GameInterrupter) -> Self {
         let timeout_event = game_event_manager.register(Duration::from_secs(30), BRACK_GAME);
+        let game = Omok::new();
         Self {
-            game: Omok::new(),
+            kibo: SgfGame::new(GameKind::Omok),
+            game,
             game_config: game_config,
             players: Players::new(),
             interrupter: game_event_manager,
@@ -161,7 +165,18 @@ impl OmokRoom {
         }
     }
 
-    pub fn record_winner(&mut self, color: Color) {
+    /// 게임 종료 단일 진입점: 승자 확정 → 통계·기보 저장 → 방 종료를 한 번에 수행.
+    /// 결과가 확정되는 모든 경로는 이 함수를 거친다.
+    /// (승부 없이 방만 닫을 때는 interrupter.game_closer()를 직접 호출한다.)
+    fn end_game(&mut self, winner: Color, reason: EndReason) {
+        let result = sgf_result(winner, reason);
+        self.game.set_winner(winner);
+        self.record_winner(winner);
+        self.save_kibo(&result);
+        self.interrupter.game_closer();
+    }
+
+    fn record_winner(&mut self, color: Color) {
         use crate::soyul::soyul_login::{record_game_draw, record_game_lose, record_game_win};
 
         let black_player_id = self
@@ -179,34 +194,106 @@ impl OmokRoom {
 
         match color {
             Color::Black => {
-                let _ = record_game_win(black_player_id);
-                let _ = record_game_lose(white_player_id);
+                if let Err(e) = record_game_win(black_player_id) {
+                    eprintln!("DB 저장 에러: {}", e);
+                };
+                if let Err(e) = record_game_lose(white_player_id) {
+                    eprintln!("DB 저장 에러: {}", e);
+                };
             }
             Color::White => {
-                let _ = record_game_lose(black_player_id);
-                let _ = record_game_win(white_player_id);
+                if let Err(e) = record_game_lose(black_player_id) {
+                    eprintln!("DB 저장 에러: {}", e);
+                };
+                if let Err(e) = record_game_win(white_player_id) {
+                    eprintln!("DB 저장 에러: {}", e);
+                };
             }
             Color::Free => {
-                let _ = record_game_draw(black_player_id);
-                let _ = record_game_draw(white_player_id);
+                if let Err(e) = record_game_draw(black_player_id) {
+                    eprintln!("DB 저장 에러: {}", e);
+                };
+                if let Err(e) = record_game_draw(white_player_id) {
+                    eprintln!("DB 저장 에러: {}", e);
+                };
             }
             _ => {}
         }
     }
 
+    /// 누적된 기보(SgfGame)에 결과·플레이어 이름을 채워 games 테이블에 저장
+    fn save_kibo(&mut self, result: &str) {
+        use crate::soyul::soyul_db::save_finished_game;
+        use crate::soyul::soyul_login::get_user_profile_by_id;
+        use rusqlite::Connection;
+
+        // 정상적으로 두 명이 플레이한 게임만 저장
+        let (black_id, white_id) = match (
+            self.players.black_player.as_ref().map(|p| p.user_id()),
+            self.players.white_player.as_ref().map(|p| p.user_id()),
+        ) {
+            (Some(b), Some(w)) => (b, w),
+            _ => return,
+        };
+
+        let conn = match Connection::open("mydb.db") {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("기보 저장 실패(DB 오픈): {}", e);
+                return;
+            }
+        };
+
+        let name_of = |id| {
+            get_user_profile_by_id(&conn, id)
+                .ok()
+                .flatten()
+                .and_then(|p| p.username)
+                .unwrap_or_default()
+        };
+        let black_name = name_of(black_id);
+        let white_name = name_of(white_id);
+
+        self.kibo.set_players(&black_name, &white_name);
+        self.kibo.set_result(result);
+
+        let sgf = self.kibo.to_sgf_string();
+        let board_size = self.kibo.board_size;
+
+        if let Err(e) = save_finished_game(
+            &conn,
+            i64::from(black_id),
+            i64::from(white_id),
+            "omok",
+            board_size,
+            result,
+            &sgf,
+        ) {
+            eprintln!("기보 저장 실패(INSERT): {}", e);
+        } else {
+            #[cfg(debug_assertions)]
+            println!("✅ 기보 저장 성공: result={}", result);
+        }
+    }
+
     fn set_timer_time(&mut self) -> tokio::time::Duration {
         use tokio::time::Duration;
-        let turn_player = self.players.turn_player(self.game.board.is_turn());
+        // turn_player 빌림을 즉시 끝내기 위해 필요한 시간 값만 복사해 둔다.
+        // (그래야 아래 else 분기에서 self.end_game(&mut self)을 호출할 수 있음)
+        let turn_time = self
+            .players
+            .turn_player(self.game.board.is_turn())
+            .map(|p| (p.main_time(), p.remain_time(), p.overtime()));
 
-        match turn_player {
-            Some(p) => {
-                if p.main_time() > 0 {
-                    Duration::from_millis(p.main_time())
-                } else if p.remain_time() > 0 {
-                    Duration::from_millis(p.overtime())
+        match turn_time {
+            Some((main_time, remain_overtime, overtime)) => {
+                if main_time > 0 {
+                    Duration::from_millis(main_time)
+                } else if remain_overtime > 0 {
+                    Duration::from_millis(overtime)
                 } else {
-                    self.game.set_winner(self.game.board.is_turn().reverse());
-                    self.interrupter.game_closer();
+                    // 시간 완전 소진 → 현재 턴 패배로 종료 (통계·기보 저장 포함)
+                    self.end_game(self.game.board.is_turn().reverse(), EndReason::Timeout);
                     Duration::from_secs(86400)
                 }
             }
@@ -328,9 +415,8 @@ impl GameLogic for OmokRoom {
                                 })),
                             }
                         } else {
-                            self.game.set_winner(self.game.board.is_turn().reverse());
-                            self.record_winner(self.game.board.is_turn().reverse());
-                            self.interrupter.game_closer();
+                            let winner = self.game.board.is_turn().reverse();
+                            self.end_game(winner, EndReason::Timeout);
 
                             ServerToClient {
                                 response_type: true,
@@ -402,6 +488,12 @@ impl GameLogic for OmokRoom {
                     // 착수 시도
                     let success = match self.game.chaksu(chaksu_request.coordinate as u16, true) {
                         Ok(_) => {
+                            // 기보에 수순 누적 (정수 좌표 → x, y)
+                            let bs = self.game.board.is_boardsize();
+                            let coord = chaksu_request.coordinate as u16;
+                            self.kibo
+                                .add_move(turn, (coord % bs) as u8, (coord / bs) as u8);
+
                             self.players
                                 .switch_turn(self.game.board.is_turn().reverse());
 
@@ -430,8 +522,7 @@ impl GameLogic for OmokRoom {
 
                     let the_winner = match self.game.winner() {
                         Some(color) => {
-                            self.record_winner(color);
-                            self.interrupter.game_closer();
+                            self.end_game(color, EndReason::Immediate);
                             Some(color_i32(color))
                         }
                         None => None,
@@ -456,9 +547,7 @@ impl GameLogic for OmokRoom {
                     use doljabiproto::badukboard::ResignResponse;
 
                     let winner = self.players.check_id_to_color(user_id).reverse();
-                    self.game.set_winner(winner);
-                    self.record_winner(winner);
-                    self.interrupter.game_closer();
+                    self.end_game(winner, EndReason::Resign);
 
                     response = ServerToClient {
                         response_type: true,
@@ -492,10 +581,8 @@ impl GameLogic for OmokRoom {
 
                     // 둘 다 무승부 요청을 하면 비김
                     if self.players.check_draw() {
-                        self.game.set_winner(Color::Free);
-                        self.record_winner(Color::Free);
+                        self.end_game(Color::Free, EndReason::Draw);
                         winner = Some(color_i32(Color::Free));
-                        self.interrupter.game_closer();
                     }
 
                     let draw_offer_response = DrawOfferResponse {
