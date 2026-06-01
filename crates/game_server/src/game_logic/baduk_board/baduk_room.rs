@@ -125,6 +125,12 @@ impl BadukRoom {
         }
     }
 
+    pub fn add_move(&mut self, color: Color, coordinate: u16) {
+        let size = self.game.board.is_boardsize();
+        self.kibo
+            .add_move(color, (coordinate % size) as u8, (coordinate / size) as u8);
+    }
+
     pub fn user_info(&self, color: Color) -> Option<doljabiproto::badukboard::UserInfo> {
         use crate::soyul::soyul_login::get_user_profile_by_id;
         use rusqlite::Connection;
@@ -462,11 +468,12 @@ impl GameLogic for BadukRoom {
                 Some(PayloadForClient::Coordinate(chaksu_request)) => {
                     use doljabiproto::badukboard::ChaksuResponse;
                     let turn = self.game.is_board().is_turn();
+                    let coordinate = chaksu_request.coordinate as u16;
 
                     #[cfg(debug_assertions)]
                     println!(
                         "🎯 착수 요청: user_id={}, coordinate={}, 현재 턴={:?}",
-                        user_id, chaksu_request.coordinate, turn
+                        user_id, coordinate, turn
                     );
 
                     // 착수를 시도하는 사람의 턴인지 확인
@@ -481,8 +488,9 @@ impl GameLogic for BadukRoom {
                     }
 
                     // 착수 시도
-                    let success = match self.game.chaksu(chaksu_request.coordinate as u16) {
+                    let success = match self.game.chaksu(coordinate) {
                         Ok(_) => {
+                            self.add_move(player_color, coordinate);
                             self.pass_turn = false;
                             self.players
                                 .switch_turn(self.game.board.is_turn().reverse());

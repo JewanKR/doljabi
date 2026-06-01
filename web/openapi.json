@@ -12,7 +12,9 @@
   "paths": {
     "/api/admin/openapi": {
       "get": {
-        "tags": ["openapi"],
+        "tags": [
+          "openapi"
+        ],
         "operationId": "swagger_ui_page",
         "responses": {
           "200": {
@@ -23,7 +25,9 @@
     },
     "/api/admin/openapi/openapi.json": {
       "get": {
-        "tags": ["openapi"],
+        "tags": [
+          "openapi"
+        ],
         "summary": "OpenAPI JSON 스펙을 반환하는 엔드포인트",
         "operationId": "get_openapi_spec",
         "responses": {
@@ -38,7 +42,9 @@
     },
     "/api/games/{game_id}/sgf": {
       "get": {
-        "tags": ["game"],
+        "tags": [
+          "game"
+        ],
         "operationId": "get_game_sgf",
         "parameters": [
           {
@@ -74,7 +80,9 @@
     },
     "/api/login": {
       "post": {
-        "tags": ["auth"],
+        "tags": [
+          "auth"
+        ],
         "operationId": "login",
         "requestBody": {
           "content": {
@@ -155,7 +163,9 @@
     },
     "/api/session_check": {
       "post": {
-        "tags": ["auth"],
+        "tags": [
+          "auth"
+        ],
         "operationId": "session_check",
         "requestBody": {
           "content": {
@@ -179,7 +189,9 @@
     },
     "/api/signup": {
       "post": {
-        "tags": ["auth"],
+        "tags": [
+          "auth"
+        ],
         "operationId": "signup",
         "requestBody": {
           "content": {
@@ -227,7 +239,9 @@
     },
     "/api/user/delete": {
       "post": {
-        "tags": ["user"],
+        "tags": [
+          "user"
+        ],
         "operationId": "delete_user",
         "requestBody": {
           "content": {
@@ -275,7 +289,9 @@
     },
     "/api/user/game_result_info/session/{session_key}": {
       "get": {
-        "tags": ["user"],
+        "tags": [
+          "user"
+        ],
         "operationId": "get_game_result",
         "parameters": [
           {
@@ -313,7 +329,9 @@
     },
     "/api/user/games/session/{session_key}": {
       "get": {
-        "tags": ["game"],
+        "tags": [
+          "game"
+        ],
         "operationId": "get_my_games",
         "parameters": [
           {
@@ -348,7 +366,9 @@
     },
     "/api/user/profile": {
       "post": {
-        "tags": ["user"],
+        "tags": [
+          "user"
+        ],
         "operationId": "get_user_profile_handler",
         "requestBody": {
           "content": {
@@ -396,7 +416,9 @@
     },
     "/api/user/update-password": {
       "post": {
-        "tags": ["user"],
+        "tags": [
+          "user"
+        ],
         "operationId": "update_password",
         "requestBody": {
           "content": {
@@ -444,7 +466,9 @@
     },
     "/api/user/update-username": {
       "post": {
-        "tags": ["user"],
+        "tags": [
+          "user"
+        ],
         "operationId": "update_username",
         "requestBody": {
           "content": {
@@ -533,7 +557,10 @@
     "schemas": {
       "ApiResponse": {
         "type": "object",
-        "required": ["success", "message"],
+        "required": [
+          "success",
+          "message"
+        ],
         "properties": {
           "message": {
             "type": "string"
@@ -578,27 +605,37 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["game_config", "game_type"],
+            "required": [
+              "game_config",
+              "game_type"
+            ],
             "properties": {
               "game_config": {
                 "$ref": "#/components/schemas/BadukBoardGameConfig"
               },
               "game_type": {
                 "type": "string",
-                "enum": ["baduk"]
+                "enum": [
+                  "baduk"
+                ]
               }
             }
           },
           {
             "type": "object",
-            "required": ["game_config", "game_type"],
+            "required": [
+              "game_config",
+              "game_type"
+            ],
             "properties": {
               "game_config": {
                 "$ref": "#/components/schemas/BadukBoardGameConfig"
               },
               "game_type": {
                 "type": "string",
-                "enum": ["omok"]
+                "enum": [
+                  "omok"
+                ]
               }
             }
           }
@@ -606,7 +643,9 @@
       },
       "CreateRoomResponseForm": {
         "type": "object",
-        "required": ["enter_code"],
+        "required": [
+          "enter_code"
+        ],
         "properties": {
           "enter_code": {
             "type": "integer",
@@ -617,7 +656,11 @@
       },
       "GameListResponse": {
         "type": "object",
-        "required": ["success", "message", "games"],
+        "required": [
+          "success",
+          "message",
+          "games"
+        ],
         "properties": {
           "games": {
             "type": "array",
@@ -635,7 +678,11 @@
       },
       "GameResultInformationFrom": {
         "type": "object",
-        "required": ["win", "lose", "draw"],
+        "required": [
+          "win",
+          "lose",
+          "draw"
+        ],
         "properties": {
           "draw": {
             "type": "integer",
@@ -653,7 +700,9 @@
       },
       "GameSgfResponse": {
         "type": "object",
-        "required": ["sgf"],
+        "required": [
+          "sgf"
+        ],
         "properties": {
           "sgf": {
             "type": "string",
@@ -697,14 +746,20 @@
             "description": "요청자 입장에서 상대 플레이어의 user_id"
           },
           "result": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "SGF RE[] 형식 (\"B+R\", \"W+T\", \"B+5\", \"Draw\"). 미정이면 null"
           }
         }
       },
       "LoginForm": {
         "type": "object",
-        "required": ["login_id", "password"],
+        "required": [
+          "login_id",
+          "password"
+        ],
         "properties": {
           "login_id": {
             "type": "string",
@@ -718,13 +773,19 @@
       },
       "LoginResponse": {
         "type": "object",
-        "required": ["success", "message"],
+        "required": [
+          "success",
+          "message"
+        ],
         "properties": {
           "message": {
             "type": "string"
           },
           "session_key": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "success": {
             "type": "boolean"
@@ -733,7 +794,9 @@
       },
       "SessionCheckForm": {
         "type": "object",
-        "required": ["session_key"],
+        "required": [
+          "session_key"
+        ],
         "properties": {
           "session_key": {
             "type": "string"
@@ -742,7 +805,11 @@
       },
       "SignupForm": {
         "type": "object",
-        "required": ["login_id", "password", "username"],
+        "required": [
+          "login_id",
+          "password",
+          "username"
+        ],
         "properties": {
           "login_id": {
             "type": "string",
@@ -760,7 +827,11 @@
       },
       "UpdatePasswordForm": {
         "type": "object",
-        "required": ["session_key", "current_password", "new_password"],
+        "required": [
+          "session_key",
+          "current_password",
+          "new_password"
+        ],
         "properties": {
           "current_password": {
             "type": "string"
@@ -775,7 +846,10 @@
       },
       "UpdateUsernameForm": {
         "type": "object",
-        "required": ["session_key", "new_username"],
+        "required": [
+          "session_key",
+          "new_username"
+        ],
         "properties": {
           "new_username": {
             "type": "string"
@@ -787,20 +861,28 @@
       },
       "UserProfile": {
         "type": "object",
-        "required": ["rating"],
+        "required": [
+          "rating"
+        ],
         "properties": {
           "rating": {
             "type": "integer",
             "format": "int32"
           },
           "username": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
       "UserProfileResponse": {
         "type": "object",
-        "required": ["success", "message"],
+        "required": [
+          "success",
+          "message"
+        ],
         "properties": {
           "message": {
             "type": "string"
