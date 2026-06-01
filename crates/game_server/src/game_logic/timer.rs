@@ -18,12 +18,15 @@ pub struct TimeoutEvent {
 impl TimeoutEvent {
     async fn send(self) {
         if self.event.load(std::sync::atomic::Ordering::Relaxed) != 0 {
-            let _ = self
+            if let Err(e) = self
                 .tx
                 .send(InputMessage::System(SystemEvent::TimerInterrupt(
                     self.event,
                 )))
-                .await;
+                .await
+            {
+                eprintln!("Timer 전송 에러!! {}", e);
+            };
         }
     }
 }
@@ -124,7 +127,9 @@ impl GameInterrupter {
         if let Err(TrySendError::Full(returned)) = self.receiver.try_send(message) {
             let sender = self.receiver.clone();
             tokio::spawn(async move {
-                let _ = sender.send(returned).await;
+                if let Err(e) = sender.send(returned).await {
+                    eprintln!("Ÿ�̸� ������ ���� ����!!! {}", e);
+                };
             });
         }
     }

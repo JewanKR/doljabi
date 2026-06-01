@@ -61,7 +61,10 @@ fn sync_users_schema(conn: &mut Connection) -> Result<()> {
     for (col_name, col_def) in &target_schema {
         if !current_columns.contains(col_name) {
             println!("Adding missing column: {}", col_name);
-            let sql = format!("ALTER TABLE {} ADD COLUMN {} {}", table_name, col_name, col_def);
+            let sql = format!(
+                "ALTER TABLE {} ADD COLUMN {} {}",
+                table_name, col_name, col_def
+            );
             if let Err(e) = tx.execute(&sql, []) {
                 eprintln!("⚠️ 컬럼 추가 실패: {} - {}", col_name, e);
                 // 에러가 발생해도 계속 진행 (이미 존재하는 경우 등)
@@ -77,7 +80,7 @@ fn sync_users_schema(conn: &mut Connection) -> Result<()> {
         .iter()
         .cloned()
         .collect();
-    
+
     for col_name in &current_columns {
         if !target_schema.contains_key(col_name) && !protected_columns.contains(col_name.as_str()) {
             println!("Removing deprecated column: {}", col_name);

@@ -1,9 +1,11 @@
-use crate::game_logic::{
-    GameLogic, UserID,
-    baduk_board::{EndReason, color_i32, sgf_result, timeout_event::*},
-    timer::GameInterrupter,
+use crate::{
+    game_logic::{
+        GameLogic, UserID,
+        baduk_board::{EndReason, color_i32, timeout_event::*},
+        timer::GameInterrupter,
+    },
+    soyul::kibo::SgfGame,
 };
-use crate::soyul::kibo::{GameKind, SgfGame};
 use doljabiproto::{
     badukboard::BadukBoardServer,
     common::{ClientToServer, ServerToClient, server_to_client::GameData},
@@ -23,20 +25,19 @@ pub struct BadukRoom {
     pass_turn: bool,
     interrupter: GameInterrupter,
     timeout_event: Arc<AtomicU16>,
-    kibo: SgfGame, // 게임 종료 시 DB에 저장할 SGF 기보 (수순 누적)
+    kibo: SgfGame,
 }
 impl BadukRoom {
     pub fn new(game_config: BadukBoardGameConfig, game_event_manager: GameInterrupter) -> Self {
         let timeout_event = game_event_manager.register(Duration::from_secs(30), BRACK_GAME);
-        let game = Baduk::new();
         Self {
-            kibo: SgfGame::new(GameKind::Baduk),
-            game,
+            game: Baduk::new(),
             game_config: game_config,
             players: Players::new(),
             pass_turn: false,
             interrupter: game_event_manager,
             timeout_event: timeout_event,
+            kibo: SgfGame::baduk(),
         }
     }
 
@@ -58,6 +59,69 @@ impl BadukRoom {
         doljabiproto::badukboard::BadukBoardState {
             black: self.game.board.bitboard_black().to_vec(),
             white: self.game.board.bitboard_white().to_vec(),
+        }
+    }
+
+    fn end_game(&mut self, winner: Color, reason: EndReason) {
+        let result = super::sgf_result(winner, reason);
+        self.game.set_winner(winner);
+        self.record_winner(winner);
+        self.save_kibo(&result);
+        self.interrupter.game_closer();
+    }
+
+    /// 누적된 기보(SgfGame)에 결과·플레이어 이름을 채워 games 테이블에 저장
+    fn save_kibo(&mut self, result: &str) {
+        use crate::soyul::soyul_db::save_finished_game;
+        use crate::soyul::soyul_login::get_user_profile_by_id;
+        use rusqlite::Connection;
+
+        // 정상적으로 두 명이 플레이한 게임만 저장
+        let (black_id, white_id) = match (
+            self.players.black_player.as_ref().map(|p| p.user_id()),
+            self.players.white_player.as_ref().map(|p| p.user_id()),
+        ) {
+            (Some(b), Some(w)) => (b, w),
+            _ => return,
+        };
+
+        let conn = match Connection::open("mydb.db") {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("기보 저장 실패(DB 오픈): {}", e);
+                return;
+            }
+        };
+
+        let name_of = |id| {
+            get_user_profile_by_id(&conn, id)
+                .ok()
+                .flatten()
+                .and_then(|p| p.username)
+                .unwrap_or_default()
+        };
+        let black_name = name_of(black_id);
+        let white_name = name_of(white_id);
+
+        self.kibo.set_players(&black_name, &white_name);
+        self.kibo.set_result(result);
+
+        let sgf = self.kibo.to_sgf_string();
+        let board_size = self.kibo.board_size;
+
+        if let Err(e) = save_finished_game(
+            &conn,
+            i64::from(black_id),
+            i64::from(white_id),
+            "baduk",
+            board_size,
+            result,
+            &sgf,
+        ) {
+            eprintln!("기보 저장 실패(INSERT): {}", e);
+        } else {
+            #[cfg(debug_assertions)]
+            println!("✅ 기보 저장 성공: result={}", result);
         }
     }
 
@@ -167,18 +231,7 @@ impl BadukRoom {
         }
     }
 
-    /// 게임 종료 단일 진입점: 승자 확정 → 통계·기보 저장 → 방 종료를 한 번에 수행.
-    /// 결과가 확정되는 모든 경로는 이 함수를 거친다.
-    /// (승부 없이 방만 닫을 때는 interrupter.game_closer()를 직접 호출한다.)
-    fn end_game(&mut self, winner: Color, reason: EndReason) {
-        let result = sgf_result(winner, reason);
-        self.game.set_winner(winner);
-        self.record_winner(winner);
-        self.save_kibo(&result);
-        self.interrupter.game_closer();
-    }
-
-    pub fn record_winner(&mut self, color: Color) {
+    fn record_winner(&mut self, color: Color) {
         use crate::soyul::soyul_login::{record_game_draw, record_game_lose, record_game_win};
 
         let black_player_id = self
@@ -223,79 +276,19 @@ impl BadukRoom {
         }
     }
 
-    /// 누적된 기보(SgfGame)에 결과·플레이어 이름을 채워 games 테이블에 저장
-    fn save_kibo(&mut self, result: &str) {
-        use crate::soyul::soyul_db::save_finished_game;
-        use crate::soyul::soyul_login::get_user_profile_by_id;
-        use rusqlite::Connection;
-
-        // 정상적으로 두 명이 플레이한 게임만 저장
-        let (black_id, white_id) = match (
-            self.players.black_player.as_ref().map(|p| p.user_id()),
-            self.players.white_player.as_ref().map(|p| p.user_id()),
-        ) {
-            (Some(b), Some(w)) => (b, w),
-            _ => return,
-        };
-
-        let conn = match Connection::open("mydb.db") {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("기보 저장 실패(DB 오픈): {}", e);
-                return;
-            }
-        };
-
-        let name_of = |id| {
-            get_user_profile_by_id(&conn, id)
-                .ok()
-                .flatten()
-                .and_then(|p| p.username)
-                .unwrap_or_default()
-        };
-        let black_name = name_of(black_id);
-        let white_name = name_of(white_id);
-
-        self.kibo.set_players(&black_name, &white_name);
-        self.kibo.set_result(result);
-
-        let sgf = self.kibo.to_sgf_string();
-        let board_size = self.kibo.board_size;
-
-        if let Err(e) = save_finished_game(
-            &conn,
-            i64::from(black_id),
-            i64::from(white_id),
-            "baduk",
-            board_size,
-            result,
-            &sgf,
-        ) {
-            eprintln!("기보 저장 실패(INSERT): {}", e);
-        } else {
-            #[cfg(debug_assertions)]
-            println!("✅ 기보 저장 성공: result={}", result);
-        }
-    }
-
     fn set_timer_time(&mut self) -> tokio::time::Duration {
         use tokio::time::Duration;
-        // turn_player 빌림을 즉시 끝내기 위해 필요한 시간 값만 복사해 둔다.
-        // (그래야 아래 else 분기에서 self.end_game(&mut self)을 호출할 수 있음)
-        let turn_time = self
-            .players
-            .turn_player(self.game.board.is_turn())
-            .map(|p| (p.main_time(), p.remain_time(), p.overtime()));
+        let turn_player = self.players.turn_player(self.game.board.is_turn());
 
-        match turn_time {
-            Some((main_time, remain_overtime, overtime)) => {
-                if main_time > 0 {
-                    Duration::from_millis(main_time)
-                } else if remain_overtime > 0 {
-                    Duration::from_millis(overtime)
+        match turn_player {
+            Some(p) => {
+                if p.main_time() > 0 {
+                    Duration::from_millis(p.main_time() as u64)
+                } else if p.remain_time() > 0 {
+                    Duration::from_millis(p.overtime() as u64)
                 } else {
-                    // 시간 완전 소진 → 현재 턴 패배로 종료 (통계·기보 저장 포함)
-                    self.end_game(self.game.board.is_turn().reverse(), EndReason::Timeout);
+                    let winner = self.game.board.is_turn().reverse();
+                    self.end_game(winner, EndReason::Timeout);
                     Duration::from_secs(86400)
                 }
             }
@@ -491,13 +484,6 @@ impl GameLogic for BadukRoom {
                     let success = match self.game.chaksu(chaksu_request.coordinate as u16) {
                         Ok(_) => {
                             self.pass_turn = false;
-
-                            // 기보에 수순 누적 (정수 좌표 → x, y)
-                            let bs = self.game.board.is_boardsize();
-                            let coord = chaksu_request.coordinate as u16;
-                            self.kibo
-                                .add_move(turn, (coord % bs) as u8, (coord / bs) as u8);
-
                             self.players
                                 .switch_turn(self.game.board.is_turn().reverse());
 
@@ -626,14 +612,7 @@ impl GameLogic for BadukRoom {
 
                     if self.pass_turn {
                         let determined_winner = self.game.determine_winner();
-                        let reason = match determined_winner {
-                            Color::Free => EndReason::Draw,
-                            _ => {
-                                let (black, white) = self.game.calculate_score();
-                                EndReason::Score((black as i32 - white as i32).abs())
-                            }
-                        };
-                        self.end_game(determined_winner, reason);
+                        self.end_game(determined_winner, EndReason::Immediate);
 
                         response = ServerToClient {
                             response_type: true,

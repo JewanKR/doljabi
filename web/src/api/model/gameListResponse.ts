@@ -5,10 +5,10 @@
  * doljabi project REST API를 정의한 문서입니다.
  * OpenAPI spec version: 0.2.3
  */
-import type { UserProfile } from './userProfile';
+import type { GameSummary } from './gameSummary';
 
-export interface UserProfileResponse {
+export interface GameListResponse {
+  games: GameSummary[];
   message: string;
   success: boolean;
-  user?: null | UserProfile;
 }

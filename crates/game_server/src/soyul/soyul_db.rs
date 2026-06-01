@@ -1,6 +1,6 @@
 // src/game/game_db.rs
 
-use rusqlite::{params, Connection, Result};
+use rusqlite::{Connection, Result, params};
 
 /// games 테이블 생성 함수
 ///
@@ -32,6 +32,7 @@ pub fn init_games_table(conn: &Connection) -> Result<()> {
         "CREATE INDEX IF NOT EXISTS idx_games_white ON games(white_id);",
         [],
     )?;
+
     Ok(())
 }
 
@@ -55,12 +56,6 @@ pub fn create_game_db(conn: &Connection, black_id: i64, white_id: i64) -> Result
     Ok(game_id)
 }
 
-/// 종료된 게임을 games 테이블에 저장하고, 생성된 game_id를 리턴
-///
-/// - `black_id`, `white_id`는 `users.id` (정수 PK)
-/// - `game_type`은 "baduk" | "omok"
-/// - `result`는 SGF RE[] 형식 ("B+R", "W+T", "B+5", "Draw" 등)
-/// - `sgf`는 `SgfGame::to_sgf_string()` 결과 (수순 포함 완성본)
 pub fn save_finished_game(
     conn: &Connection,
     black_id: i64,
@@ -78,7 +73,14 @@ pub fn save_finished_game(
         INSERT INTO games (black_id, white_id, game_type, board_size, result, sgf)
         VALUES (?1, ?2, ?3, ?4, ?5, ?6);
         "#,
-        params![black_id, white_id, game_type, board_size as i64, result, sgf],
+        params![
+            black_id,
+            white_id,
+            game_type,
+            board_size as i64,
+            result,
+            sgf
+        ],
     )?;
 
     Ok(conn.last_insert_rowid())

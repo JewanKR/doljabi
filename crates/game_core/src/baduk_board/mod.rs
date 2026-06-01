@@ -192,10 +192,10 @@ impl BadukBoard {
 pub struct Player {
     user_id: UserID,
 
-    main_time: u64,
-    fischer_time: u64,
+    main_time: u32,
+    fischer_time: u32,
     remaining_overtime: u8,
-    overtime: u64,
+    overtime: u32,
 
     turn_start_time: tokio::time::Instant,
 
@@ -214,11 +214,11 @@ impl Player {
         }
     }
 
-    pub fn main_time(&self) -> u64 {
+    pub fn main_time(&self) -> u32 {
         self.main_time
     }
 
-    pub fn overtime(&self) -> u64 {
+    pub fn overtime(&self) -> u32 {
         self.overtime
     }
 
@@ -229,7 +229,7 @@ impl Player {
     // 남은 시간 계산
     pub fn sub_main_time(&mut self) {
         self.main_time = self.main_time.saturating_sub(
-            (tokio::time::Instant::now() - self.turn_start_time).as_millis() as u64,
+            (tokio::time::Instant::now() - self.turn_start_time).as_millis() as u32,
         );
     }
 
@@ -478,13 +478,13 @@ impl Players {
 
 #[derive(Deserialize, Serialize, ToSchema, Clone, Copy)]
 pub struct BadukBoardGameConfig {
-    main_time: u64,
-    fischer_time: u64,
+    main_time: u32,
+    fischer_time: u32,
     remaining_overtime: u8,
-    overtime: u64,
+    overtime: u32,
 }
 impl BadukBoardGameConfig {
-    pub fn new(main_time: u64, fischer_time: u64, remaining_overtime: u8, overtime: u64) -> Self {
+    pub fn new(main_time: u32, fischer_time: u32, remaining_overtime: u8, overtime: u32) -> Self {
         Self {
             main_time: main_time,
             fischer_time: fischer_time,
@@ -493,7 +493,7 @@ impl BadukBoardGameConfig {
         }
     }
 
-    pub fn make(config: (u64, u64, u8, u64)) -> Self {
+    pub fn make(config: (u32, u32, u8, u32)) -> Self {
         Self {
             main_time: config.0,
             fischer_time: config.1,
@@ -502,7 +502,7 @@ impl BadukBoardGameConfig {
         }
     }
 
-    pub fn output(&self) -> (u64, u64, u8, u64) {
+    pub fn output(&self) -> (u32, u32, u8, u32) {
         (
             self.main_time,
             self.fischer_time,

@@ -1,6 +1,6 @@
 [package]
 name = "game_server"
-version = "0.2.1"
+version = "0.2.3"
 edition = "2024"
 
 [lib]
@@ -38,5 +38,5 @@ rusqlite = { version = "0.37.0", features = ["bundled"] }
 argon2 = { version = "0.5", features = ["std"] }
 
 # 로컬
-game_core = { version = "0.2.0", path = "../game_core" }
-doljabiproto = { version = "0.2.0", path = "../doljabiproto" }
+game_core = { version = "0.2.1", path = "../game_core" }
+doljabiproto = { version = "0.2.1", path = "../doljabiproto" }

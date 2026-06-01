@@ -174,7 +174,11 @@ pub async fn get_my_games(
     };
 
     #[cfg(debug_assertions)]
-    println!("✅ 게임 리스트 조회 성공: user_id={}, {}건", user_id, games.len());
+    println!(
+        "✅ 게임 리스트 조회 성공: user_id={}, {}건",
+        user_id,
+        games.len()
+    );
 
     (
         StatusCode::OK,

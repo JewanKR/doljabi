@@ -172,7 +172,7 @@ pub async fn run_game_node<G: GameLogic>(
     while let Some(input_message) = mpsc_rx.recv().await {
         #[cfg(debug_assertions)]
         println!("{:#?}", input_message);
-        let _ = broadcast_tx.send(Arc::new(match input_message {
+        if let Err(e) = broadcast_tx.send(Arc::new(match input_message {
             InputMessage::Request((user_id, message)) => game.send(user_id, message),
             InputMessage::System(SystemEvent::EnterUser(user_id)) => game.enter_user(user_id),
             InputMessage::System(SystemEvent::LeaveUser(user_id)) => game.leave_user(user_id),
@@ -183,7 +183,9 @@ pub async fn run_game_node<G: GameLogic>(
                 }
             }
             InputMessage::System(SystemEvent::Close) => break,
-        }));
+        })) {
+            eprintln!("게임 메시지 전송 에러!!! {}", e);
+        };
     }
 
     let mut manager = room_manager.lock().await;

@@ -108,9 +108,12 @@ async fn handle_websocket(
                     if let Ok(request) = ClientToServer::decode(&data[..]) {
                         #[cfg(debug_assertions)]
                         println!("{:#?}", request);
-                        let _ = mpsc_tx
+                        if let Err(e) = mpsc_tx
                             .send(InputMessage::Request((user_id, request)))
-                            .await;
+                            .await
+                        {
+                            eprintln!("클라이언트 데이터 송신 오류!!! {}", e);
+                        };
                     }
                 }
 
@@ -137,7 +140,9 @@ async fn handle_websocket(
             println!("{:#?}", response);
             let mut buf = Vec::new();
             if response.encode(&mut buf).is_ok() {
-                let _ = ws_tx.send(Message::Binary(buf.into())).await;
+                if let Err(e) = ws_tx.send(Message::Binary(buf.into())).await {
+                    eprintln!("WebSocket 전송 에러!!! {}", e);
+                };
             }
         }
     });
@@ -147,9 +152,12 @@ async fn handle_websocket(
         _ = recv_task => {},
     }
 
-    let _ = send_disconnect
+    if let Err(e) = send_disconnect
         .send(InputMessage::System(SystemEvent::LeaveUser(user_id)))
-        .await;
+        .await
+    {
+        eprintln!("연결 해제 신호 전송 오류!!! {}", e);
+    };
 }
 
 pub fn web_socket_upgrade_router() -> OpenApiRouter<(RoomManager, SessionStore)> {

@@ -7,7 +7,7 @@
       "name": "Doljabi Team",
       "email": "doljabi2025@gmail.com"
     },
-    "version": "1.0.0"
+    "version": "0.2.3"
   },
   "paths": {
     "/api/admin/openapi": {
@@ -36,6 +36,44 @@
           },
           "500": {
             "description": "서버 오류"
+          }
+        }
+      }
+    },
+    "/api/games/{game_id}/sgf": {
+      "get": {
+        "tags": [
+          "game"
+        ],
+        "operationId": "get_game_sgf",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "description": "게임 고유 번호 (games.id)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "기보 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameSgfResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "해당 게임 없음"
+          },
+          "500": {
+            "description": "서버 내부 오류"
           }
         }
       }
@@ -289,6 +327,43 @@
         }
       }
     },
+    "/api/user/games/session/{session_key}": {
+      "get": {
+        "tags": [
+          "game"
+        ],
+        "operationId": "get_my_games",
+        "parameters": [
+          {
+            "name": "session_key",
+            "in": "path",
+            "description": "세션 키",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "게임 리스트 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "세션 키가 올바르지 않음"
+          },
+          "500": {
+            "description": "서버 내부 오류"
+          }
+        }
+      }
+    },
     "/api/user/profile": {
       "post": {
         "tags": [
@@ -506,17 +581,17 @@
         "properties": {
           "fischer_time": {
             "type": "integer",
-            "format": "int64",
+            "format": "int32",
             "minimum": 0
           },
           "main_time": {
             "type": "integer",
-            "format": "int64",
+            "format": "int32",
             "minimum": 0
           },
           "overtime": {
             "type": "integer",
-            "format": "int64",
+            "format": "int32",
             "minimum": 0
           },
           "remaining_overtime": {
@@ -579,6 +654,28 @@
           }
         }
       },
+      "GameListResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message",
+          "games"
+        ],
+        "properties": {
+          "games": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameSummary"
+            }
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        }
+      },
       "GameResultInformationFrom": {
         "type": "object",
         "required": [
@@ -598,6 +695,62 @@
           "win": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "GameSgfResponse": {
+        "type": "object",
+        "required": [
+          "sgf"
+        ],
+        "properties": {
+          "sgf": {
+            "type": "string",
+            "description": "SGF 기보 본문 (수순·결과·플레이어·보드크기가 모두 포함된 완성본)"
+          }
+        }
+      },
+      "GameSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "game_type",
+          "board_size",
+          "opponent_id",
+          "my_color",
+          "created_at"
+        ],
+        "properties": {
+          "board_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "game_type": {
+            "type": "string",
+            "description": "\"baduk\" | \"omok\""
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "my_color": {
+            "type": "string",
+            "description": "요청자가 둔 색 (\"black\" | \"white\")"
+          },
+          "opponent_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "요청자 입장에서 상대 플레이어의 user_id"
+          },
+          "result": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "SGF RE[] 형식 (\"B+R\", \"W+T\", \"B+5\", \"Draw\"). 미정이면 null"
           }
         }
       },

@@ -17,7 +17,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 fn add_openapi_info(openapi_doc: &mut OpenApi) {
     openapi_doc.openapi = OpenApiVersion::Version31;
     openapi_doc.info.title = "doljabi".to_string();
-    openapi_doc.info.version = "1.0.0".to_string();
+    openapi_doc.info.version = VERSION.to_string();
     openapi_doc.info.description =
         Some("doljabi project REST API를 정의한 문서입니다.".to_string());
     openapi_doc.info.license = None;

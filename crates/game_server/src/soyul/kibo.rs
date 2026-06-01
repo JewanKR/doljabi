@@ -2,9 +2,6 @@
 
 use game_core::baduk_board::Color;
 
-/// 게임 종류 (SGF의 GM[] 태그를 결정)
-///
-/// SGF 표준(FF[4]) game number: 1 = Go(바둑), 4 = Gomoku+Renju(오목)
 #[derive(Debug, Clone, Copy)]
 pub enum GameKind {
     Baduk,
@@ -43,8 +40,8 @@ pub struct SgfGame {
 }
 
 impl SgfGame {
-    /// 새 게임 생성 (게임 종류 + 보드 크기 + 흑/백 이름만 넣고 시작)
-    pub fn new(game_kind: GameKind) -> Self {
+    /// 새 게임 생성 (보드 크기 + 흑/백 이름만 넣고 시작)
+    fn new(game_kind: GameKind) -> Self {
         Self {
             game_kind,
             board_size: game_kind.board_size(),
@@ -53,6 +50,14 @@ impl SgfGame {
             result: String::new(), // 처음에는 결과 없음
             moves: Vec::new(),
         }
+    }
+
+    pub fn baduk() -> Self {
+        SgfGame::new(GameKind::Baduk)
+    }
+
+    pub fn omok() -> Self {
+        SgfGame::new(GameKind::Omok)
     }
 
     /// 게임 결과 설정 (예: "B+R", "W+5", "Draw" 등)
@@ -77,7 +82,7 @@ impl SgfGame {
 
         // --- 헤더 부분 ---
         s.push_str("(;FF[4]\n"); // SGF 포맷 버전
-        s.push_str(&format!("GM[{}]\n", self.game_kind.gm_number())); // 1=바둑(Go), 4=오목(Gomoku+Renju)
+        s.push_str(&format!("GM[{}]\n", self.game_kind.gm_number())); // 게임 종류 (1 = 바둑, 오목도 그냥 1로 많이 씀)
         s.push_str(&format!("SZ[{}]\n", self.board_size));
         s.push_str(&format!("PB[{}]\n", self.black_player));
         s.push_str(&format!("PW[{}]\n", self.white_player));
