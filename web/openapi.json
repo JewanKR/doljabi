@@ -7,14 +7,12 @@
       "name": "Doljabi Team",
       "email": "doljabi2025@gmail.com"
     },
-    "version": "1.0.0"
+    "version": "0.2.3"
   },
   "paths": {
     "/api/admin/openapi": {
       "get": {
-        "tags": [
-          "openapi"
-        ],
+        "tags": ["openapi"],
         "operationId": "swagger_ui_page",
         "responses": {
           "200": {
@@ -25,9 +23,7 @@
     },
     "/api/admin/openapi/openapi.json": {
       "get": {
-        "tags": [
-          "openapi"
-        ],
+        "tags": ["openapi"],
         "summary": "OpenAPI JSON 스펙을 반환하는 엔드포인트",
         "operationId": "get_openapi_spec",
         "responses": {
@@ -40,11 +36,45 @@
         }
       }
     },
+    "/api/games/{game_id}/sgf": {
+      "get": {
+        "tags": ["game"],
+        "operationId": "get_game_sgf",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "description": "게임 고유 번호 (games.id)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "기보 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameSgfResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "해당 게임 없음"
+          },
+          "500": {
+            "description": "서버 내부 오류"
+          }
+        }
+      }
+    },
     "/api/login": {
       "post": {
-        "tags": [
-          "auth"
-        ],
+        "tags": ["auth"],
         "operationId": "login",
         "requestBody": {
           "content": {
@@ -125,9 +155,7 @@
     },
     "/api/session_check": {
       "post": {
-        "tags": [
-          "auth"
-        ],
+        "tags": ["auth"],
         "operationId": "session_check",
         "requestBody": {
           "content": {
@@ -151,9 +179,7 @@
     },
     "/api/signup": {
       "post": {
-        "tags": [
-          "auth"
-        ],
+        "tags": ["auth"],
         "operationId": "signup",
         "requestBody": {
           "content": {
@@ -201,9 +227,7 @@
     },
     "/api/user/delete": {
       "post": {
-        "tags": [
-          "user"
-        ],
+        "tags": ["user"],
         "operationId": "delete_user",
         "requestBody": {
           "content": {
@@ -251,9 +275,7 @@
     },
     "/api/user/game_result_info/session/{session_key}": {
       "get": {
-        "tags": [
-          "user"
-        ],
+        "tags": ["user"],
         "operationId": "get_game_result",
         "parameters": [
           {
@@ -289,11 +311,44 @@
         }
       }
     },
+    "/api/user/games/session/{session_key}": {
+      "get": {
+        "tags": ["game"],
+        "operationId": "get_my_games",
+        "parameters": [
+          {
+            "name": "session_key",
+            "in": "path",
+            "description": "세션 키",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "게임 리스트 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "세션 키가 올바르지 않음"
+          },
+          "500": {
+            "description": "서버 내부 오류"
+          }
+        }
+      }
+    },
     "/api/user/profile": {
       "post": {
-        "tags": [
-          "user"
-        ],
+        "tags": ["user"],
         "operationId": "get_user_profile_handler",
         "requestBody": {
           "content": {
@@ -341,9 +396,7 @@
     },
     "/api/user/update-password": {
       "post": {
-        "tags": [
-          "user"
-        ],
+        "tags": ["user"],
         "operationId": "update_password",
         "requestBody": {
           "content": {
@@ -391,9 +444,7 @@
     },
     "/api/user/update-username": {
       "post": {
-        "tags": [
-          "user"
-        ],
+        "tags": ["user"],
         "operationId": "update_username",
         "requestBody": {
           "content": {
@@ -482,10 +533,7 @@
     "schemas": {
       "ApiResponse": {
         "type": "object",
-        "required": [
-          "success",
-          "message"
-        ],
+        "required": ["success", "message"],
         "properties": {
           "message": {
             "type": "string"
@@ -506,17 +554,17 @@
         "properties": {
           "fischer_time": {
             "type": "integer",
-            "format": "int64",
+            "format": "int32",
             "minimum": 0
           },
           "main_time": {
             "type": "integer",
-            "format": "int64",
+            "format": "int32",
             "minimum": 0
           },
           "overtime": {
             "type": "integer",
-            "format": "int64",
+            "format": "int32",
             "minimum": 0
           },
           "remaining_overtime": {
@@ -530,37 +578,27 @@
         "oneOf": [
           {
             "type": "object",
-            "required": [
-              "game_config",
-              "game_type"
-            ],
+            "required": ["game_config", "game_type"],
             "properties": {
               "game_config": {
                 "$ref": "#/components/schemas/BadukBoardGameConfig"
               },
               "game_type": {
                 "type": "string",
-                "enum": [
-                  "baduk"
-                ]
+                "enum": ["baduk"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "game_config",
-              "game_type"
-            ],
+            "required": ["game_config", "game_type"],
             "properties": {
               "game_config": {
                 "$ref": "#/components/schemas/BadukBoardGameConfig"
               },
               "game_type": {
                 "type": "string",
-                "enum": [
-                  "omok"
-                ]
+                "enum": ["omok"]
               }
             }
           }
@@ -568,9 +606,7 @@
       },
       "CreateRoomResponseForm": {
         "type": "object",
-        "required": [
-          "enter_code"
-        ],
+        "required": ["enter_code"],
         "properties": {
           "enter_code": {
             "type": "integer",
@@ -579,13 +615,27 @@
           }
         }
       },
+      "GameListResponse": {
+        "type": "object",
+        "required": ["success", "message", "games"],
+        "properties": {
+          "games": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameSummary"
+            }
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        }
+      },
       "GameResultInformationFrom": {
         "type": "object",
-        "required": [
-          "win",
-          "lose",
-          "draw"
-        ],
+        "required": ["win", "lose", "draw"],
         "properties": {
           "draw": {
             "type": "integer",
@@ -601,12 +651,60 @@
           }
         }
       },
-      "LoginForm": {
+      "GameSgfResponse": {
+        "type": "object",
+        "required": ["sgf"],
+        "properties": {
+          "sgf": {
+            "type": "string",
+            "description": "SGF 기보 본문 (수순·결과·플레이어·보드크기가 모두 포함된 완성본)"
+          }
+        }
+      },
+      "GameSummary": {
         "type": "object",
         "required": [
-          "login_id",
-          "password"
+          "id",
+          "game_type",
+          "board_size",
+          "opponent_id",
+          "my_color",
+          "created_at"
         ],
+        "properties": {
+          "board_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "game_type": {
+            "type": "string",
+            "description": "\"baduk\" | \"omok\""
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "my_color": {
+            "type": "string",
+            "description": "요청자가 둔 색 (\"black\" | \"white\")"
+          },
+          "opponent_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "요청자 입장에서 상대 플레이어의 user_id"
+          },
+          "result": {
+            "type": ["string", "null"],
+            "description": "SGF RE[] 형식 (\"B+R\", \"W+T\", \"B+5\", \"Draw\"). 미정이면 null"
+          }
+        }
+      },
+      "LoginForm": {
+        "type": "object",
+        "required": ["login_id", "password"],
         "properties": {
           "login_id": {
             "type": "string",
@@ -620,19 +718,13 @@
       },
       "LoginResponse": {
         "type": "object",
-        "required": [
-          "success",
-          "message"
-        ],
+        "required": ["success", "message"],
         "properties": {
           "message": {
             "type": "string"
           },
           "session_key": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "success": {
             "type": "boolean"
@@ -641,9 +733,7 @@
       },
       "SessionCheckForm": {
         "type": "object",
-        "required": [
-          "session_key"
-        ],
+        "required": ["session_key"],
         "properties": {
           "session_key": {
             "type": "string"
@@ -652,11 +742,7 @@
       },
       "SignupForm": {
         "type": "object",
-        "required": [
-          "login_id",
-          "password",
-          "username"
-        ],
+        "required": ["login_id", "password", "username"],
         "properties": {
           "login_id": {
             "type": "string",
@@ -674,11 +760,7 @@
       },
       "UpdatePasswordForm": {
         "type": "object",
-        "required": [
-          "session_key",
-          "current_password",
-          "new_password"
-        ],
+        "required": ["session_key", "current_password", "new_password"],
         "properties": {
           "current_password": {
             "type": "string"
@@ -693,10 +775,7 @@
       },
       "UpdateUsernameForm": {
         "type": "object",
-        "required": [
-          "session_key",
-          "new_username"
-        ],
+        "required": ["session_key", "new_username"],
         "properties": {
           "new_username": {
             "type": "string"
@@ -708,28 +787,20 @@
       },
       "UserProfile": {
         "type": "object",
-        "required": [
-          "rating"
-        ],
+        "required": ["rating"],
         "properties": {
           "rating": {
             "type": "integer",
             "format": "int32"
           },
           "username": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         }
       },
       "UserProfileResponse": {
         "type": "object",
-        "required": [
-          "success",
-          "message"
-        ],
+        "required": ["success", "message"],
         "properties": {
           "message": {
             "type": "string"

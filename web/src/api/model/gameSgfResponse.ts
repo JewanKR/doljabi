@@ -5,10 +5,8 @@
  * doljabi project REST API를 정의한 문서입니다.
  * OpenAPI spec version: 0.2.3
  */
-import type { UserProfile } from './userProfile';
 
-export interface UserProfileResponse {
-  message: string;
-  success: boolean;
-  user?: null | UserProfile;
+export interface GameSgfResponse {
+  /** SGF 기보 본문 (수순·결과·플레이어·보드크기가 모두 포함된 완성본) */
+  sgf: string;
 }

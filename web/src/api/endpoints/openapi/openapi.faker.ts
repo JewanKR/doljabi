@@ -5,10 +5,4 @@
  * doljabi project REST API를 정의한 문서입니다.
  * OpenAPI spec version: 0.2.3
  */
-import type { UserProfile } from './userProfile';
 
-export interface UserProfileResponse {
-  message: string;
-  success: boolean;
-  user?: null | UserProfile;
-}

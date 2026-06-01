@@ -10,8 +10,11 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+deno.*
 *.local
-deno.lock
+
+public/model/*.bin.gz
+public/model/*.ckpt
 
 # Editor directories and files
 .vscode/*

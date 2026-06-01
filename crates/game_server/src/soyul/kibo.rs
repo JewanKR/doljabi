@@ -1,6 +1,26 @@
 // kibo.rs
 
-use crate::geme_old::badukboard::Color;
+use game_core::baduk_board::Color;
+
+#[derive(Debug, Clone, Copy)]
+pub enum GameKind {
+    Baduk,
+    Omok,
+}
+impl GameKind {
+    fn gm_number(self) -> u8 {
+        match self {
+            GameKind::Baduk => 1,
+            GameKind::Omok => 4,
+        }
+    }
+    fn board_size(self) -> u8 {
+        match self {
+            GameKind::Baduk => 19,
+            GameKind::Omok => 15,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Move {
@@ -11,48 +31,44 @@ pub struct Move {
 
 #[derive(Debug, Clone)]
 pub struct SgfGame {
+    pub game_kind: GameKind,  // GM[] 태그 결정 (바둑/오목)
     pub board_size: u8,       // SZ[15] 같은 거
     pub black_player: String, // PB[]
     pub white_player: String, // PW[]
-    pub result: String,// RE[B+R] 등
+    pub result: String,       // RE[B+R] 등
     pub moves: Vec<Move>,     // 수순 리스트
 }
 
-/* 
-pub struct SgfGameResult {
-    pub color: Color,
-    pub socre: f32,
-    pub resign: bool
-}
-impl SgfGameResult {
-    pub fn convert_string(self) -> String {
-        if self.resign {let value = "+R".to_string();}
-        else {let value = format!("{:.1}", self.socre);}
-
-        match self.color {
-            Color::Black => {
-                
-            }
-        }
-    }
-}
-*/
-
 impl SgfGame {
     /// 새 게임 생성 (보드 크기 + 흑/백 이름만 넣고 시작)
-    pub fn new(board_size: u8, black_player: &str, white_player: &str) -> Self {
+    fn new(game_kind: GameKind) -> Self {
         Self {
-            board_size,
-            black_player: black_player.to_string(),
-            white_player: white_player.to_string(),
+            game_kind,
+            board_size: game_kind.board_size(),
+            black_player: "".to_string(),
+            white_player: "".to_string(),
             result: String::new(), // 처음에는 결과 없음
             moves: Vec::new(),
         }
     }
 
+    pub fn baduk() -> Self {
+        SgfGame::new(GameKind::Baduk)
+    }
+
+    pub fn omok() -> Self {
+        SgfGame::new(GameKind::Omok)
+    }
+
     /// 게임 결과 설정 (예: "B+R", "W+5", "Draw" 등)
     pub fn set_result(&mut self, result: &str) {
         self.result = result.to_string();
+    }
+
+    /// 종료 시점에 플레이어 이름(PB/PW)을 채워 넣기
+    pub fn set_players(&mut self, black_player: &str, white_player: &str) {
+        self.black_player = black_player.to_string();
+        self.white_player = white_player.to_string();
     }
 
     /// 한 수 추가 (color, x, y)
@@ -66,7 +82,7 @@ impl SgfGame {
 
         // --- 헤더 부분 ---
         s.push_str("(;FF[4]\n"); // SGF 포맷 버전
-        s.push_str("GM[1]\n");   // 게임 종류 (1 = 바둑, 오목도 그냥 1로 많이 씀)
+        s.push_str(&format!("GM[{}]\n", self.game_kind.gm_number())); // 게임 종류 (1 = 바둑, 오목도 그냥 1로 많이 씀)
         s.push_str(&format!("SZ[{}]\n", self.board_size));
         s.push_str(&format!("PB[{}]\n", self.black_player));
         s.push_str(&format!("PW[{}]\n", self.white_player));
@@ -114,7 +130,7 @@ mod tests {
 
     #[test]
     fn sgf_print_test() {
-        let mut game = SgfGame::new(15, "TestBlack", "TestWhite");
+        let mut game = SgfGame::new(GameKind::Baduk);
 
         game.add_move(Color::Black, 7, 7);
         game.add_move(Color::White, 8, 8);
