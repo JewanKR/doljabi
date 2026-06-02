@@ -50,10 +50,9 @@ export const GoBoard = ({ stones = [], markers = [], className = '', pending = n
     <svg
       viewBox={`0 0 ${W} ${H}`}
       width="100%"
-      height="auto"
       preserveAspectRatio="xMidYMid meet"
       className={`block ${className}`}
-      style={{ maxWidth: '100%' }}
+      style={{ maxWidth: '100%', height: 'auto' }}
       xmlns="http://www.w3.org/2000/svg"
     >
       {/* 보드 배경 */}

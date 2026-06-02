@@ -57,6 +57,14 @@ const data = new Uint8Array(sab, META_BYTES, STDIN_SIZE);
 // Blocking per-byte read for KataGo's stdin. Called synchronously from inside
 // callMain — must return as soon as a byte is available, and may sleep on
 // Atomics.wait until the main thread writes more.
+// 한 번의 read() 호출에서 바이트를 이미 넘겼는지 추적한다.
+// Emscripten createDevice 의 read 는 input() 이 null 을 줄 때까지 최대 length 만큼 계속
+// 읽으려 한다. blocking input 이 한 줄을 다 넘긴 뒤 또 블로킹하면 read() 가 끝나지 않아
+// 데드락이 난다(쿼리는 전달됐는데 KataGo 가 응답을 못 함). 그래서 가용 바이트를 다 넘긴
+// 뒤엔 null 을 돌려 read() 가 '지금까지 읽은 만큼'을 반환하게 하고, 다음 호출부터 다시 블로킹.
+let stdinBurst = false;
+let stdinLineLen = 0;
+
 function readByteFromSAB() {
   while (true) {
     const w = Atomics.load(meta, META_WRITE_IDX);
@@ -64,9 +72,21 @@ function readByteFromSAB() {
     if (w !== r) {
       const b = data[r % STDIN_SIZE];
       Atomics.add(meta, META_READ_IDX, 1);
-      return String.fromCharCode(b);
+      stdinBurst = true;
+      stdinLineLen++;
+      if (b === 10) {
+        // 진단용: 쿼리 한 줄이 KataGo stdin 으로 온전히 전달됐는지 확인 (추후 제거 가능)
+        self.postMessage({ type: 'log', stream: 'debug', line: `stdin ← 쿼리 ${stdinLineLen}바이트 전달` });
+        stdinLineLen = 0;
+      }
+      // 반드시 '숫자' 바이트를 반환한다(문자열이면 타입배열에서 NaN→0 으로 깨짐).
+      return b;
     }
-    Atomics.wait(meta, META_WRITE_IDX, w);
+    if (stdinBurst) {
+      stdinBurst = false;
+      return null; // 이번 read 를 종료시켜 데드락 방지
+    }
+    Atomics.wait(meta, META_WRITE_IDX, w); // 새 입력 대기 (블로킹)
   }
 }
 
@@ -83,6 +103,12 @@ function findCachedModelPath(mod) {
 }
 
 function classifyStdout(line) {
+  // 진단용: KataGo stdout 원문(앞부분)을 그대로 보여줘 응답 도착 여부를 확인 (추후 제거 가능)
+  self.postMessage({
+    type: 'log',
+    stream: 'stdout-raw',
+    line: line.length > 200 ? line.slice(0, 200) + '…' : line,
+  });
   const parsed = tryParseResponse(line);
   if (!parsed.ok) {
     self.postMessage({ type: 'log', stream: 'stdout', line });
