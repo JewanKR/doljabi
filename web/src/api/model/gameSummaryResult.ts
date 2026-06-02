@@ -5,6 +5,8 @@
  * doljabi project REST API를 정의한 문서입니다.
  * OpenAPI spec version: 0.2.3
  */
-import type { UserProfile } from './userProfile';
 
-export type UserProfileResponseUser = null | UserProfile;
+/**
+ * SGF RE[] 형식 ("B+R", "W+T", "B+5", "Draw"). 미정이면 null
+ */
+export type GameSummaryResult = string | null;
