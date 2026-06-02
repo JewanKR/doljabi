@@ -20,6 +20,8 @@
  */
 
 import wasmUrl from './katago.wasm?url';
+const katagoModuleUrl = new URL('./katago.js', import.meta.url).href;
+
 import {
   STDIN_SIZE,
   META_BYTES,
@@ -139,11 +141,12 @@ async function run() {
   // The Emscripten glue exports a default factory. @vite-ignore keeps Vite
   // from trying to statically analyze its non-standard ESM shape.
   const { default: createKataGo } = await import(
-    /* @vite-ignore */ './katago.js'
+    /* @vite-ignore */ katagoModuleUrl
   );
 
   const moduleArg = {
     noInitialRun: true,
+    mainScriptUrlOrBlob: katagoModuleUrl,
     locateFile: (path) => (path.endsWith('.wasm') ? wasmUrl : path),
     stdin: readByteFromSAB,
     print: (line) => classifyStdout(line),
