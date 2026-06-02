@@ -15,17 +15,17 @@ const formatTime = (seconds) => {
   return `${m}:${s}`;
 };
 
-// 19x19 비트보드(bigint[]) → {col, row, color}[] 변환
-const decodeBitboard = ({ black = [], white = [] }) => {
+// 비트보드(bigint[]) → {col, row, color}[] 변환 (stride = 보드 크기: 바둑 19, 오목 15)
+const decodeBitboard = ({ black = [], white = [] }, size = 19) => {
   const stones = [];
   const decode = (chunks, color) => {
     chunks.forEach((chunk, chunkIdx) => {
       for (let bit = 0; bit < 64; bit++) {
         if ((chunk >> BigInt(bit)) & 1n) {
           const idx = chunkIdx * 64 + bit;
-          const col = idx % 19;
-          const row = Math.floor(idx / 19);
-          if (row < 19) stones.push({ col, row, color });
+          const col = idx % size;
+          const row = Math.floor(idx / size);
+          if (row < size) stones.push({ col, row, color });
         }
       }
     });
@@ -36,6 +36,7 @@ const decodeBitboard = ({ black = [], white = [] }) => {
 };
 
 export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, wsRef, initialUsersInfo, initialBlackSec, initialWhiteSec, onSaveHistory }) => {
+  const boardSize = gameType === 'omok' ? 15 : 19;
   const [stones, setStones] = useState([]);
   const [history, setHistory] = useState([]);
   const [usersInfo, setUsersInfo] = useState(initialUsersInfo ?? null);
@@ -124,10 +125,10 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
           setMyTurn(isBlack ? turnVal === 0 : turnVal === 1);
 
           const gs = board.gameState;
-          if (gs.blackTime?.mainTime) setBlackSec(Math.floor(Number(gs.blackTime.mainTime) / 1_000_000));
-          if (gs.whiteTime?.mainTime) setWhiteSec(Math.floor(Number(gs.whiteTime.mainTime) / 1_000_000));
+          if (gs.blackTime !== undefined) setBlackSec(Math.floor(Number(gs.blackTime.mainTime) / 1000));
+          if (gs.whiteTime !== undefined) setWhiteSec(Math.floor(Number(gs.whiteTime.mainTime) / 1000));
           if (gs.board) {
-            const decoded = decodeBitboard(gs.board);
+            const decoded = decodeBitboard(gs.board, isOmok ? 15 : 19);
             const prevSet = new Set(stonesRef.current.map(s => `${s.col},${s.row}`));
             const newStone = decoded.find(s => !prevSet.has(`${s.col},${s.row}`));
             if (newStone) {
@@ -194,7 +195,8 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
   const handlePlaceStone = () => {
     console.log('[착수시도] myTurn:', myTurn, '| pending:', pendingCoord ? `${pendingCoord.col},${pendingCoord.row}` : null, '| ws:', wsRef?.current?.readyState, '| gameOver:', gameOver);
     if (!pendingCoord) return;
-    const coordInt = pendingCoord.col + pendingCoord.row * 19;
+    const size = actualGameTypeRef.current === 'omok' ? 15 : 19;
+    const coordInt = pendingCoord.col + pendingCoord.row * size;
     console.log('[착수전송] coord:', coordInt, '| ws:', wsRef?.current?.readyState);
     sendMessage(makePayload({ coordinate: { coordinate: coordInt } }));
     setPendingCoord(null);
@@ -230,6 +232,7 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
         <section className="min-h-[calc(100svh-56px)] lg:min-h-0 flex-1 flex flex-col items-center justify-center p-4 md:p-8 bg-surface lg:overflow-auto">
           <div className="w-full max-w-[580px]">
             <GoBoard
+              size={boardSize}
               stones={stones}
               className=""
               pending={pendingCoord}
@@ -367,7 +370,7 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
                     <div key={idx} className="grid grid-cols-3 gap-2 p-3 hover:bg-surface-container-highest transition-colors rounded-lg">
                       <span className="text-xs font-mono text-outline">{String(idx + 1).padStart(2, '0')}</span>
                       <span className="text-sm font-medium">{stone.color === 'black' ? '흑' : '백'}</span>
-                      <span className="text-sm font-medium">{`${'ABCDEFGHJKLMNOPQRST'[stone.col]}${19 - stone.row}`}</span>
+                      <span className="text-sm font-medium">{`${'ABCDEFGHJKLMNOPQRST'[stone.col]}${boardSize - stone.row}`}</span>
                     </div>
                   ))}
                   <div ref={historyBottomRef} />

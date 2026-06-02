@@ -1,57 +1,190 @@
 import { useEffect, useRef, useState } from 'react';
 import { SideNav } from './SideNav';
-import { historyToSgf, downloadSgf } from '../utils/sgf';
+import { GoBoard } from './GoBoard';
+import { replay } from '../utils/goRules';
+import { parseSgf, downloadSgf } from '../utils/sgf';
+import {
+  createTree,
+  treeFromMoves,
+  movesFromRoot,
+  nodesFromRoot,
+  nextColor,
+  play,
+  undo,
+  redo,
+  toStart,
+  toEnd,
+  goTo,
+} from '../utils/gameTree';
+import { useKataGo } from '../katago/useKataGo';
+import { colRowToGtp, gtpToColRow } from '../katago/historyToMoves';
+import { getMyGames, getGameSgf } from '../api/endpoints/game/game';
+import { SessionManager } from '../api/axios-instance';
 
 const COLS_LABEL = 'ABCDEFGHJKLMNOPQRST';
 
-export const AiAnalysis = ({ onNavigate, gameType = 'go', currentUser, history = [] }) => {
-  const [step, setStep] = useState(history.length);
-  const [svgContent, setSvgContent] = useState('');
-  const [wasmReady, setWasmReady] = useState(false);
-  const renderSgfRef = useRef(null);
-  const size = gameType === 'omok' ? 15 : 19;
+const coordLabel = (mv, size) =>
+  mv.pass ? '패스' : `${COLS_LABEL[mv.col]}${size - mv.row}`;
 
-  // WASM 초기화
+const gtpLabel = (gtp, size) => {
+  const c = gtpToColRow(gtp, size);
+  return c ? `${COLS_LABEL[c.col]}${size - c.row}` : '패스';
+};
+
+// 현재 노드를 지나는 라인 전체: 루트 → 현재 → (메인라인 자식 끝까지)
+const lineThrough = (cur) => {
+  const up = nodesFromRoot(cur);
+  const down = [];
+  let n = cur;
+  while (n.children[0]) { n = n.children[0]; down.push(n); }
+  return [...up, ...down];
+};
+
+const LOG_TONE = { error: 'text-error', io: 'text-on-surface-variant', info: 'text-on-surface' };
+
+/**
+ * AI 분석(복기) 화면 — 바둑 전용.
+ *  - SGF는 HTTP로 받아 "배경 history"로 쓰고 내부적으로는 tree(state)에 저장한다.
+ *  - SGF가 없어도(빈 판) 사용 가능: 보드를 클릭해 직접 두며 분기를 만들 수 있다.
+ *  - KataGo(웹워커)를 붙여 현재 노드 위치를 분석하고, 결과를 노드에 저장(KaTrain 패턴)하며
+ *    후보수를 보드 마커로, 엔진 로그를 우측 하단 패널에 표시한다.
+ */
+export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
+  const [tree, setTree] = useState(() => createTree());
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState('');
+  const [sgfText, setSgfText] = useState(null);
+  const [meta, setMeta] = useState({ size: 19, players: { black: '', white: '' }, result: '' });
+
+  const commit = (t) => setTree({ root: t.root, current: t.current });
+
   useEffect(() => {
     let cancelled = false;
-    import('../demo-wasm/pkg/sgf_render.js').then(async (mod) => {
-      await mod.default();
-      mod._start();
-      if (!cancelled) {
-        renderSgfRef.current = mod.renderSgf;
-        setWasmReady(true);
+
+    const startEmpty = (msg) => {
+      if (cancelled) return;
+      setTree(createTree());
+      setMeta({ size: 19, players: { black: '', white: '' }, result: '' });
+      setSgfText(null);
+      setNotice(msg);
+      setLoading(false);
+    };
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        let targetId = gameId;
+        if (targetId == null) {
+          const sessionKey = SessionManager.getSessionKey();
+          if (!sessionKey) { startEmpty('로그인하면 저장된 기보를 불러올 수 있어요. 빈 판에서 시작합니다.'); return; }
+          const list = await getMyGames(sessionKey);
+          const latest = (list?.games ?? []).find((g) => g.game_type === 'baduk'); // 오목 제외
+          if (!latest) { startEmpty('저장된 바둑 기보가 없어 빈 판에서 시작합니다.'); return; }
+          targetId = latest.id;
+        }
+
+        const res = await getGameSgf(targetId);
+        const sgf = res?.sgf;
+        if (!sgf) { startEmpty('기보가 비어 있어 빈 판에서 시작합니다.'); return; }
+
+        const p = parseSgf(sgf);
+        if (cancelled) return;
+        const t = treeFromMoves(p.moves);
+        toEnd(t);
+        setTree({ root: t.root, current: t.current });
+        setMeta({ size: p.size, players: p.players, result: p.result });
+        setSgfText(sgf);
+        setNotice('');
+        setLoading(false);
+      } catch (e) {
+        console.error('SGF 불러오기 실패:', e);
+        startEmpty('기보를 불러오지 못해 빈 판에서 시작합니다.');
       }
-    }).catch(console.error);
+    };
+
+    load();
     return () => { cancelled = true; };
-  }, []);
+  }, [gameId]);
 
-  // step 또는 WASM 준비 시 SVG 렌더링
+  const current = tree.current;
+  const size = meta.size;
+
+  // ── KataGo 연결 ──
+  const { ready, statusMessage, progress, error: kgError, analyze, resultByStep, pendingSteps, logs } =
+    useKataGo({ boardXSize: size, boardYSize: size });
+
+  const pathMoves = movesFromRoot(current);
+
+  // 현재 노드가 바뀌면 그 위치를 분석 요청 (analyze는 중복 키를 무시)
   useEffect(() => {
-    if (!wasmReady || !renderSgfRef.current || history.length === 0) return;
-    try {
-      const partial = history.slice(0, step);
-      const sgf = historyToSgf(partial, size);
-      let svg = renderSgfRef.current(sgf, {});
-      console.log('[SGF SVG 원본 태그]', svg.slice(0, 200));
-      // 고정 width/height 제거 후 100%로 교체해 컨테이너에 맞게 확장
-      svg = svg.replace(/<svg([^>]*)width="[^"]*"/, '<svg$1width="100%"');
-      svg = svg.replace(/<svg([^>]*)height="[^"]*"/, '<svg$1height="100%"');
-      // viewBox 없으면 추가 (스케일 기준점)
-      if (!svg.includes('viewBox')) {
-        svg = svg.replace('<svg', '<svg viewBox="0 0 800 800"');
-      }
-      setSvgContent(svg);
-    } catch (e) {
-      console.error('SGF 렌더링 오류:', e);
-    }
-  }, [step, wasmReady, history, size]);
+    if (!ready || loading) return;
+    const mv = movesFromRoot(current).map((m) => [
+      m.color === 'black' ? 'B' : 'W',
+      m.pass ? 'pass' : colRowToGtp(m.col, m.row, size),
+    ]);
+    analyze(current.id, mv);
+  }, [ready, current, size, loading, analyze]);
 
-  const sgf = history.length > 0 ? historyToSgf(history, size) : null;
+  // 노드별 분석 캐시: 훅의 resultByStep Map이 node.id로 키잉되어 KaTrain의 node.analysis와
+  // 동등한 역할을 한다(재방문 시 재사용, analyze는 중복 키를 무시).
+  const analysis = resultByStep.get(current.id) ?? null;
+  const analyzing = pendingSteps.has(current.id);
+
+  // 로그 자동 스크롤
+  const logBoxRef = useRef(null);
+  useEffect(() => {
+    const el = logBoxRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [logs]);
+
+  const stones = replay(pathMoves, undefined, size, 'go');
+  const moveNo = pathMoves.length;
+  const lineMoveNodes = lineThrough(current).filter((n) => n.move);
+
+  const candidates = (analysis?.moveInfos ?? []).slice(0, 6);
+
+  // 보드 마커: 분석 결과 있으면 후보수, 없으면 기존 변화도. + 마지막 수 표시.
+  const markers = [];
+  if (candidates.length > 0) {
+    candidates.forEach((mi) => {
+      const c = gtpToColRow(mi.move, size);
+      if (c) markers.push({ col: c.col, row: c.row, type: 'dashed' });
+    });
+  } else {
+    for (const ch of current.children) {
+      if (ch.move && !ch.move.pass) markers.push({ col: ch.move.col, row: ch.move.row, type: 'dashed' });
+    }
+  }
+  if (current.move && !current.move.pass) {
+    markers.push({ col: current.move.col, row: current.move.row, type: 'dot' });
+  }
+
+  const atRoot = !current.parent;
+  const atLeaf = !current.children[0];
+  const variationCount = current.children.length;
+  const turnLabel = nextColor(current) === 'black' ? '흑' : '백';
+
+  const handlePlay = (coord) => {
+    play(tree, { color: nextColor(current), col: coord.col, row: coord.row });
+    commit(tree);
+  };
+  const nav = (fn) => () => { fn(tree); commit(tree); };
+  const jumpTo = (node) => { goTo(tree, node); commit(tree); };
 
   const handleDownload = () => {
-    if (!sgf) return;
-    downloadSgf(sgf, `game_${new Date().toISOString().slice(0, 10)}.sgf`);
+    if (!sgfText) return;
+    downloadSgf(sgfText, `game_${new Date().toISOString().slice(0, 10)}.sgf`);
   };
+
+  // KataGo 상태 배지
+  let kgStatus, kgTone;
+  if (kgError) { kgStatus = '오류'; kgTone = 'bg-error-container text-on-error-container'; }
+  else if (!ready) {
+    const pct = progress?.total ? Math.round((progress.received / progress.total) * 100) : null;
+    kgStatus = pct != null ? `모델 ${pct}%` : (statusMessage ? '초기화 중' : '로딩');
+    kgTone = 'bg-surface-container-high text-on-surface-variant';
+  } else if (analyzing) { kgStatus = '분석 중'; kgTone = 'bg-primary/15 text-primary'; }
+  else { kgStatus = '준비됨'; kgTone = 'bg-primary/15 text-primary'; }
 
   return (
     <div className="bg-background text-on-surface overflow-hidden">
@@ -59,82 +192,151 @@ export const AiAnalysis = ({ onNavigate, gameType = 'go', currentUser, history =
 
       <main className="md:ml-64 min-h-screen flex flex-col lg:flex-row pt-14 md:pt-0">
         {/* 보드 */}
-        <div className="flex-grow flex flex-col items-center bg-surface-container-lowest rounded-3xl p-6 m-6 gap-6">
-          <div className="w-full max-w-[580px]" style={{ aspectRatio: '1 / 1' }}>
-            {history.length === 0 ? (
-              <div className="w-full h-full flex items-center justify-center text-sm text-on-surface-variant">
-                게임 기록이 없습니다. 게임을 마친 후 AI 분석을 이용해주세요.
+        <div className="flex-grow flex flex-col items-center bg-surface-container-lowest rounded-3xl p-6 m-6 gap-4">
+          <div className="w-full max-w-[580px]">
+            {loading ? (
+              <div className="w-full aspect-square flex items-center justify-center text-sm text-on-surface-variant">
+                기보 불러오는 중...
               </div>
-            ) : svgContent ? (
-              <div
-                className="w-full h-full overflow-hidden"
-                dangerouslySetInnerHTML={{ __html: svgContent }}
-              />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-sm text-on-surface-variant">
-                렌더링 중...
-              </div>
+              <GoBoard size={size} stones={stones} markers={markers} onIntersectionClick={handlePlay} />
             )}
           </div>
+
+          {!loading && (
+            <p className="text-xs text-on-surface-variant">
+              빈 자리를 클릭하면 <span className="font-bold text-on-surface">{turnLabel}</span>이(가) 두어지고, 새 변화도가 만들어집니다.
+            </p>
+          )}
 
           {/* 복기 컨트롤 */}
           <div className="flex gap-4 flex-wrap justify-center items-center">
             <div className="flex bg-surface-container rounded-xl p-1 shadow-sm">
-              <button onClick={() => setStep(0)} disabled={step === 0}
+              <button onClick={nav(toStart)} disabled={atRoot}
                 className="p-2 hover:bg-surface-container-high rounded-lg transition-colors disabled:opacity-30">
                 <span className="material-symbols-outlined">first_page</span>
               </button>
-              <button onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0}
+              <button onClick={nav(undo)} disabled={atRoot}
                 className="p-2 hover:bg-surface-container-high rounded-lg transition-colors disabled:opacity-30">
                 <span className="material-symbols-outlined">chevron_left</span>
               </button>
               <span className="px-4 flex items-center text-sm font-mono font-bold">
-                {step} / {history.length}
+                {moveNo} / {lineMoveNodes.length}
               </span>
-              <button onClick={() => setStep(s => Math.min(history.length, s + 1))} disabled={step === history.length}
+              <button onClick={nav(redo)} disabled={atLeaf}
                 className="p-2 hover:bg-surface-container-high rounded-lg transition-colors disabled:opacity-30">
                 <span className="material-symbols-outlined">chevron_right</span>
               </button>
-              <button onClick={() => setStep(history.length)} disabled={step === history.length}
+              <button onClick={nav(toEnd)} disabled={atLeaf}
                 className="p-2 hover:bg-surface-container-high rounded-lg transition-colors disabled:opacity-30">
                 <span className="material-symbols-outlined">last_page</span>
               </button>
             </div>
 
-            <button onClick={handleDownload} disabled={!sgf}
+            <button onClick={handleDownload} disabled={!sgfText}
               className="px-4 py-2.5 bg-primary text-on-primary rounded-xl font-bold text-sm flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-40">
               <span className="material-symbols-outlined text-base">download</span>
               SGF 다운로드
             </button>
           </div>
+
+          {notice && (
+            <p className="text-xs text-on-surface-variant bg-surface-container px-3 py-2 rounded-lg text-center">{notice}</p>
+          )}
         </div>
 
-        {/* 기보 패널 */}
+        {/* 우측 패널 */}
         <div className="w-full lg:w-[380px] flex flex-col gap-6 lg:mt-6 px-6 pb-6">
-          <div className="flex-grow bg-surface-container-low rounded-3xl p-6 flex flex-col">
-            <div className="flex items-center justify-between mb-4">
+          {/* 기보 */}
+          <div className="bg-surface-container-low rounded-3xl p-6 flex flex-col">
+            <div className="flex items-center justify-between mb-2">
               <h2 className="font-bold text-on-surface">기보</h2>
               <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-1 rounded-full">
-                총 {history.length}수
+                총 {lineMoveNodes.length}수
               </span>
             </div>
-            <div className="flex-1 overflow-y-auto space-y-px" style={{ maxHeight: '400px' }}>
-              {history.length === 0 ? (
-                <p className="text-xs text-outline text-center py-4">기보가 없습니다.</p>
+            {(meta.players.black || meta.players.white || meta.result) && (
+              <div className="flex items-center justify-between mb-4 text-xs text-on-surface-variant">
+                <span className="truncate">흑 {meta.players.black || '?'} vs 백 {meta.players.white || '?'}</span>
+                {meta.result && <span className="font-bold text-on-surface flex-shrink-0 ml-2">{meta.result}</span>}
+              </div>
+            )}
+            {variationCount > 1 && (
+              <div className="mb-3 text-xs text-on-surface-variant">
+                이 위치의 다음 수: <span className="font-bold text-primary">{variationCount}개 분기</span>
+              </div>
+            )}
+            <div className="flex-1 overflow-y-auto space-y-px" style={{ maxHeight: '260px' }}>
+              {lineMoveNodes.length === 0 ? (
+                <p className="text-xs text-outline text-center py-4">아직 둔 수가 없습니다. 보드를 클릭해 시작하세요.</p>
               ) : (
-                history.map((stone, idx) => (
-                  <button key={idx} onClick={() => setStep(idx + 1)}
-                    className={`w-full grid grid-cols-3 gap-2 p-2.5 rounded-lg text-left transition-colors ${
-                      step === idx + 1
-                        ? 'bg-primary/15 text-primary'
-                        : 'hover:bg-surface-container-high text-on-surface'
-                    }`}>
-                    <span className="text-xs font-mono text-outline">{String(idx + 1).padStart(2, '0')}</span>
-                    <span className="text-sm font-medium">{stone.color === 'black' ? '흑' : '백'}</span>
-                    <span className="text-sm font-medium">{COLS_LABEL[stone.col]}{size - stone.row}</span>
-                  </button>
-                ))
+                lineMoveNodes.map((node, idx) => {
+                  const isCurrent = node === current;
+                  const hasBranch = node.parent && node.parent.children.length > 1;
+                  return (
+                    <button key={node.id} onClick={() => jumpTo(node)}
+                      className={`w-full grid grid-cols-[2rem_2rem_1fr_auto] gap-2 items-center p-2.5 rounded-lg text-left transition-colors ${
+                        isCurrent ? 'bg-primary/15 text-primary' : 'hover:bg-surface-container-high text-on-surface'
+                      }`}>
+                      <span className="text-xs font-mono text-outline">{String(idx + 1).padStart(2, '0')}</span>
+                      <span className="text-sm font-medium">{node.move.color === 'black' ? '흑' : '백'}</span>
+                      <span className="text-sm font-medium">{coordLabel(node.move, size)}</span>
+                      {hasBranch && <span className="material-symbols-outlined text-sm text-primary" title="분기 있음">alt_route</span>}
+                    </button>
+                  );
+                })
               )}
+            </div>
+          </div>
+
+          {/* KataGo 분석 + 로그 (우측 하단) */}
+          <div className="bg-surface-container-low rounded-3xl p-6 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-on-surface">KataGo 분석</h2>
+              <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${kgTone}`}>{kgStatus}</span>
+            </div>
+
+            {!ready && progress?.total ? (
+              <div className="h-1.5 bg-surface-container rounded-full overflow-hidden">
+                <div className="h-full bg-primary transition-all" style={{ width: `${Math.round((progress.received / progress.total) * 100)}%` }} />
+              </div>
+            ) : null}
+
+            {kgError && <p className="text-xs text-error">{kgError}</p>}
+
+            {/* 후보수 */}
+            {candidates.length > 0 && (
+              <div className="space-y-px">
+                {candidates.map((mi, i) => {
+                  const c = gtpToColRow(mi.move, size);
+                  const wr = typeof mi.winrate === 'number' ? (mi.winrate * 100).toFixed(1) : '?';
+                  const sl = typeof mi.scoreLead === 'number' ? mi.scoreLead.toFixed(1) : '?';
+                  return (
+                    <button key={i} onClick={() => c && handlePlay({ col: c.col, row: c.row })}
+                      className="w-full grid grid-cols-[1.25rem_2.75rem_1fr_auto] gap-2 items-center text-xs p-1.5 rounded-lg text-left hover:bg-surface-container-high transition-colors disabled:opacity-40"
+                      disabled={!c}>
+                      <span className="text-outline font-mono">{i + 1}</span>
+                      <span className="font-bold">{gtpLabel(mi.move, size)}</span>
+                      <span className="text-on-surface-variant">흑 {wr}% · {sl}집</span>
+                      <span className="text-outline">{mi.visits}v</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 엔진 로그 */}
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">엔진 로그</div>
+              <div ref={logBoxRef} className="h-40 overflow-y-auto font-mono text-[10px] leading-relaxed bg-surface-container-lowest rounded-lg p-2 space-y-0.5">
+                {logs.length === 0 ? (
+                  <p className="text-outline">로그 없음</p>
+                ) : (
+                  logs.map((l, i) => (
+                    <div key={i} className={`whitespace-pre-wrap break-all ${LOG_TONE[l.kind] || 'text-on-surface'}`}>{l.text}</div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>

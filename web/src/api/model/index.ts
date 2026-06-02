@@ -3,7 +3,7 @@
  * Do not edit manually.
  * doljabi
  * doljabi project REST API를 정의한 문서입니다.
- * OpenAPI spec version: 1.0.0
+ * OpenAPI spec version: 0.2.3
  */
 
 export * from './apiResponse';
@@ -14,18 +14,19 @@ export * from './createRoomRequestFormOneOfGameType';
 export * from './createRoomRequestFormOneOfThree';
 export * from './createRoomRequestFormOneOfThreeGameType';
 export * from './createRoomResponseForm';
+export * from './gameListResponse';
 export * from './gameResultInformationFrom';
+export * from './gameSgfResponse';
+export * from './gameSummary';
+export * from './gameSummaryResult';
 export * from './loginForm';
 export * from './loginResponse';
 export * from './loginResponseSessionKey';
 export * from './sessionCheckForm';
-export * from './sessionCheckResponse';
-export * from './sessionCheckResponseUserId';
 export * from './signupForm';
 export * from './updatePasswordForm';
 export * from './updateUsernameForm';
 export * from './userProfile';
-export * from './userProfileRequest';
 export * from './userProfileResponse';
 export * from './userProfileResponseUser';
 export * from './userProfileUsername';

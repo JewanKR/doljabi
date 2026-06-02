@@ -3,7 +3,7 @@
  * Do not edit manually.
  * doljabi
  * doljabi project REST API를 정의한 문서입니다.
- * OpenAPI spec version: 1.0.0
+ * OpenAPI spec version: 0.2.3
  */
 import {
   useQuery
@@ -21,6 +21,10 @@ import type {
 } from '@tanstack/react-query';
 
 import { customInstance } from '../../axios-instance';
+
+type AwaitedInput<T> = PromiseLike<T> | T;
+
+      type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];

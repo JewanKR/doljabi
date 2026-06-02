@@ -48,8 +48,8 @@ export const GameWaiting = ({ onNavigate, gameType = 'go', currentUser, enterCod
         if (!isHost && board.gameState) {
           const gs = board.gameState;
           onGameTime && onGameTime({
-            black: gs.blackTime?.mainTime ? Math.floor(Number(gs.blackTime.mainTime) / 1_000_000) : null,
-            white: gs.whiteTime?.mainTime ? Math.floor(Number(gs.whiteTime.mainTime) / 1_000_000) : null,
+            black: gs.blackTime !== undefined ? Math.floor(Number(gs.blackTime.mainTime) / 1000) : null,
+            white: gs.whiteTime !== undefined ? Math.floor(Number(gs.whiteTime.mainTime) / 1000) : null,
           });
           onNavigate && onNavigate('game_play', detectedType, enterCode);
         }

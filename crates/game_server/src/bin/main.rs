@@ -3,7 +3,7 @@ use axum::Router;
 use game_server::{
     game_logic::{RoomManagement, create_room_router, timer::ServerTimer},
     network::socket::web_socket_upgrade_router,
-    soyul::{session::SessionStore, soyul_login::login_router},
+    soyul::{game_record::sgf_router, session::SessionStore, soyul_login::login_router},
     utility::admin_page::admin_page_router,
 };
 use std::{fs, sync::Arc};
@@ -17,7 +17,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 fn add_openapi_info(openapi_doc: &mut OpenApi) {
     openapi_doc.openapi = OpenApiVersion::Version31;
     openapi_doc.info.title = "doljabi".to_string();
-    openapi_doc.info.version = "1.0.0".to_string();
+    openapi_doc.info.version = VERSION.to_string();
     openapi_doc.info.description =
         Some("doljabi project REST API를 정의한 문서입니다.".to_string());
     openapi_doc.info.license = None;
@@ -42,6 +42,7 @@ async fn main() {
         .merge(
             web_socket_upgrade_router().with_state((room_manager.clone(), session_manager.clone())),
         )
+        .merge(sgf_router().with_state(session_manager.clone()))
         .merge(admin_page_router());
 
     // openapi 명세와 라우터 분리
