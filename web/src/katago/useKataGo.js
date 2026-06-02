@@ -21,7 +21,6 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createSabWriter } from './sabWriter.js';
 import {
   createAnalysisQuery,
   createIdGenerator,
@@ -41,7 +40,6 @@ export function useKataGo(options = {}) {
   } = options;
 
   const workerRef = useRef(null);
-  const writerRef = useRef(null);
   const nextIdRef = useRef(null);
   const pendingByIdRef = useRef(new Map()); // queryId -> turnNumber
   const sentAtRef = useRef(new Map()); // queryId -> performance.now() at send, for timing
@@ -83,9 +81,6 @@ export function useKataGo(options = {}) {
     worker.onmessage = (e) => {
       const msg = e.data;
       switch (msg.type) {
-        case 'sab':
-          writerRef.current = createSabWriter(msg.sab);
-          break;
         case 'status':
           console.log('[KataGo]', msg.message);
           setStatusMessage(msg.message);
@@ -191,7 +186,6 @@ export function useKataGo(options = {}) {
     return () => {
       worker.terminate();
       workerRef.current = null;
-      writerRef.current = null;
       pendingById.clear();
       sentAtMap.clear();
       pendingStepsSet.clear();
@@ -201,7 +195,7 @@ export function useKataGo(options = {}) {
 
   const analyze = useCallback(
     (turnNumber, moves) => {
-      if (!ready || !writerRef.current) return;
+      if (!ready || !workerRef.current) return;
       if (resultStepsRef.current.has(turnNumber)) return;
       if (pendingStepsRef.current.has(turnNumber)) return;
 
@@ -216,6 +210,7 @@ export function useKataGo(options = {}) {
         komi: opts.komi,
         maxVisits: opts.maxVisits,
         analyzeTurns: [moves.length],
+        includeOwnership: true, // 집(territory) 히트맵용 전판 ownership 요청
       });
 
       pendingByIdRef.current.set(id, turnNumber);
@@ -230,16 +225,16 @@ export function useKataGo(options = {}) {
       );
       console.debug(`[KataGo] query ${id} payload:`, line.trimEnd());
       pushLog('info', `→ 분석 요청: ${moves.length}수, maxVisits ${opts.maxVisits}`);
-      writerRef.current.writeLine(line);
+      workerRef.current.postMessage({ type: 'stdin', line });
     },
     [ready, pushLog],
   );
 
   const clearResults = useCallback(() => {
-    if (writerRef.current && ready) {
+    if (workerRef.current && ready) {
       const id = nextIdRef.current();
       console.debug(`[KataGo] → terminate_all ${id}`);
-      writerRef.current.writeLine(serializeQuery(terminateAllQuery(id)));
+      workerRef.current.postMessage({ type: 'stdin', line: serializeQuery(terminateAllQuery(id)) });
     }
     pendingByIdRef.current.clear();
     sentAtRef.current.clear();

@@ -12,11 +12,13 @@
  * @param {number|null} upto 재생할 수의 개수 (null이면 전체)
  * @param {number} size 보드 한 변의 점 개수 (바둑 19, 오목 15)
  * @param {'go'|'omok'} gameType
- * @returns {{ col: number, row: number, color: 'black'|'white' }[]}
+ * @returns {{ col: number, row: number, color: 'black'|'white', moveNo: number }[]}
+ *          moveNo: 그 점에 현재 놓인 돌을 둔 수의 순번(1-based). 따냄으로 사라진 돌은 결과에 없다.
  */
 export function replay(moves, upto, size, gameType = 'go') {
   const n = upto == null ? moves.length : Math.min(Math.max(0, upto), moves.length);
   const grid = new Array(size * size).fill(null); // null | 'black' | 'white'
+  const moveAt = new Array(size * size).fill(0);   // 점별 마지막 착수 순번(1-based, 0=빈 점)
   const idx = (c, r) => r * size + c;
   const inB = (c, r) => c >= 0 && c < size && r >= 0 && r < size;
   const opp = (c) => (c === 'black' ? 'white' : 'black');
@@ -45,15 +47,16 @@ export function replay(moves, upto, size, gameType = 'go') {
           else if (v === enemy) stack.push([ac, ar]);
         }
       }
-      if (!hasLiberty) for (const k of group) grid[k] = null;
+      if (!hasLiberty) for (const k of group) { grid[k] = null; moveAt[k] = 0; }
     }
   };
 
   for (let i = 0; i < n; i++) {
     const m = moves[i];
-    if (!m || m.col == null || m.row == null) continue; // pass 등
+    if (!m || m.col == null || m.row == null) continue; // pass 등 (순번 i는 그대로 소모)
     if (!inB(m.col, m.row)) continue;
     grid[idx(m.col, m.row)] = m.color;
+    moveAt[idx(m.col, m.row)] = i + 1;
     if (gameType !== 'omok') captureAround(m.col, m.row, m.color);
   }
 
@@ -61,7 +64,7 @@ export function replay(moves, upto, size, gameType = 'go') {
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
       const color = grid[idx(c, r)];
-      if (color) stones.push({ col: c, row: r, color });
+      if (color) stones.push({ col: c, row: r, color, moveNo: moveAt[idx(c, r)] });
     }
   }
   return stones;

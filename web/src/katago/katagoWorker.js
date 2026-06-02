@@ -23,12 +23,6 @@ import wasmUrl from './katago.wasm?url';
 const katagoModuleUrl = new URL('./katago.js', import.meta.url).href;
 
 import {
-  STDIN_SIZE,
-  META_BYTES,
-  META_WRITE_IDX,
-  META_READ_IDX,
-} from './sabWriter.js';
-import {
   tryParseResponse,
   isCompletedResult,
   isPartialResult,
@@ -51,46 +45,20 @@ const GZIP_MAGIC_0 = 0x1f;
 const GZIP_MAGIC_1 = 0x8b;
 const KATA_MAGIC = [0x6b, 0x61, 0x74, 0x61];
 
-// SAB ring buffer for stdin
-const sab = new SharedArrayBuffer(META_BYTES + STDIN_SIZE);
-const meta = new Int32Array(sab, 0, 3);
-const data = new Uint8Array(sab, META_BYTES, STDIN_SIZE);
+// stdin 은 더 이상 Emscripten TTY(프록시 대상)를 거치지 않는다. PROXY_TO_PTHREAD 에서
+// TTY 읽기를 블로킹하면 이 워커(프록시 서버)가 멈춰 엔진의 프록시된 cout 출력이 막힌다.
+// 대신 페이지가 보낸 쿼리 한 줄을 공유 wasm 메모리 링으로 직접 밀어넣고(kata_stdin_push),
+// 엔진 pthread 가 자기 스레드에서 블로킹-읽기 하므로 이 워커는 자유로워진다.
+let katagoModule = null;
+const stdinEncoder = new TextEncoder();
 
-// Blocking per-byte read for KataGo's stdin. Called synchronously from inside
-// callMain — must return as soon as a byte is available, and may sleep on
-// Atomics.wait until the main thread writes more.
-// 한 번의 read() 호출에서 바이트를 이미 넘겼는지 추적한다.
-// Emscripten createDevice 의 read 는 input() 이 null 을 줄 때까지 최대 length 만큼 계속
-// 읽으려 한다. blocking input 이 한 줄을 다 넘긴 뒤 또 블로킹하면 read() 가 끝나지 않아
-// 데드락이 난다(쿼리는 전달됐는데 KataGo 가 응답을 못 함). 그래서 가용 바이트를 다 넘긴
-// 뒤엔 null 을 돌려 read() 가 '지금까지 읽은 만큼'을 반환하게 하고, 다음 호출부터 다시 블로킹.
-let stdinBurst = false;
-let stdinLineLen = 0;
-
-function readByteFromSAB() {
-  while (true) {
-    const w = Atomics.load(meta, META_WRITE_IDX);
-    const r = Atomics.load(meta, META_READ_IDX);
-    if (w !== r) {
-      const b = data[r % STDIN_SIZE];
-      Atomics.add(meta, META_READ_IDX, 1);
-      stdinBurst = true;
-      stdinLineLen++;
-      if (b === 10) {
-        // 진단용: 쿼리 한 줄이 KataGo stdin 으로 온전히 전달됐는지 확인 (추후 제거 가능)
-        self.postMessage({ type: 'log', stream: 'debug', line: `stdin ← 쿼리 ${stdinLineLen}바이트 전달` });
-        stdinLineLen = 0;
-      }
-      // 반드시 '숫자' 바이트를 반환한다(문자열이면 타입배열에서 NaN→0 으로 깨짐).
-      return b;
-    }
-    if (stdinBurst) {
-      stdinBurst = false;
-      return null; // 이번 read 를 종료시켜 데드락 방지
-    }
-    Atomics.wait(meta, META_WRITE_IDX, w); // 새 입력 대기 (블로킹)
-  }
-}
+self.addEventListener('message', (e) => {
+  const msg = e.data;
+  if (!msg || msg.type !== 'stdin' || !katagoModule) return;
+  const line = msg.line.endsWith('\n') ? msg.line : msg.line + '\n';
+  const bytes = stdinEncoder.encode(line);
+  katagoModule.ccall('kata_stdin_push', null, ['array', 'number'], [bytes, bytes.length]);
+});
 
 function syncFS(mod, populate) {
   return new Promise((res, rej) =>
@@ -135,7 +103,6 @@ function classifyStdout(line) {
 }
 
 async function run() {
-  self.postMessage({ type: 'sab', sab });
   self.postMessage({ type: 'status', message: 'KataGo WASM 로딩 중...' });
 
   // The Emscripten glue exports a default factory. @vite-ignore keeps Vite
@@ -148,7 +115,6 @@ async function run() {
     noInitialRun: true,
     mainScriptUrlOrBlob: katagoModuleUrl,
     locateFile: (path) => (path.endsWith('.wasm') ? wasmUrl : path),
-    stdin: readByteFromSAB,
     print: (line) => classifyStdout(line),
     printErr: (line) =>
       self.postMessage({ type: 'log', stream: 'stderr', line }),
@@ -160,6 +126,7 @@ async function run() {
   };
 
   const Module = await createKataGo(moduleArg);
+  katagoModule = Module; // stdin 메시지 핸들러가 ccall 할 수 있도록 노출
 
   try {
     Module.FS.mkdir('/work');
@@ -249,15 +216,10 @@ async function run() {
 
   self.postMessage({ type: 'ready' });
 
-  // Blocks the worker thread permanently. stdin/stdout flow via SAB and the
-  // print/printErr callbacks above.
+  // PROXY_TO_PTHREAD: callMain 은 main() 을 전용 pthread 에 올리고 즉시 리턴한다(블로킹 X).
+  // 엔진은 그 pthread 에서 계속 돌고, 이 워커는 프록시 서버로 살아남아 엔진의 프록시된
+  // cout 출력을 처리한다. 따라서 리턴을 '종료'로 보지 않는다.
   Module.callMain(['analysis', '-config', CFG_PATH, '-model', modelPath]);
-
-  // If callMain ever returns, KataGo exited unexpectedly.
-  self.postMessage({
-    type: 'fatal',
-    message: 'KataGo 프로세스가 예기치 않게 종료됨',
-  });
 }
 
 run().catch((err) =>

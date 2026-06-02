@@ -49,3 +49,28 @@ export function historyToKatagoMoves(history, size = BOARD_SIZE_DEFAULT) {
 export function prefixMoves(history, turn, size = BOARD_SIZE_DEFAULT) {
   return historyToKatagoMoves(history.slice(0, turn), size);
 }
+
+/**
+ * KataGo 후보수의 PV(예상 진행)를 보드에 그릴 돌 배열로 변환한다.
+ *
+ * PV는 GTP 좌표 문자열의 나열(["D16","Q4",...])이며 첫 수부터 색을 교대한다.
+ * 보드 미리보기용으로 좌표를 풀고 진행 순번(moveNo, 1-based)을 붙인다.
+ *
+ * @param {string[]} pv KataGo moveInfo.pv
+ * @param {'black'|'white'} firstColor PV 첫 수의 색(둘 차례)
+ * @param {number} size 보드 한 변의 점 개수
+ * @param {number} [maxLen=12] 표시할 최대 길이
+ * @returns {{ col: number, row: number, color: 'black'|'white', moveNo: number }[]}
+ */
+export function pvToStones(pv, firstColor, size = BOARD_SIZE_DEFAULT, maxLen = 12) {
+  if (!Array.isArray(pv)) return [];
+  const stones = [];
+  let color = firstColor;
+  for (const gtp of pv) {
+    if (stones.length >= maxLen) break;
+    const c = gtpToColRow(gtp, size); // pass/resign 등은 null
+    if (c) stones.push({ col: c.col, row: c.row, color, moveNo: stones.length + 1 });
+    color = color === 'black' ? 'white' : 'black';
+  }
+  return stones;
+}

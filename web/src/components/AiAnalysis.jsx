@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SideNav } from './SideNav';
 import { GoBoard } from './GoBoard';
 import { replay } from '../utils/goRules';
@@ -17,7 +17,8 @@ import {
   goTo,
 } from '../utils/gameTree';
 import { useKataGo } from '../katago/useKataGo';
-import { colRowToGtp, gtpToColRow } from '../katago/historyToMoves';
+import { colRowToGtp, gtpToColRow, pvToStones } from '../katago/historyToMoves';
+import { evalColor } from '../katago/evalColor';
 import { getMyGames, getGameSgf } from '../api/endpoints/game/game';
 import { SessionManager } from '../api/axios-instance';
 
@@ -40,8 +41,6 @@ const lineThrough = (cur) => {
   return [...up, ...down];
 };
 
-const LOG_TONE = { error: 'text-error', io: 'text-on-surface-variant', info: 'text-on-surface' };
-
 /**
  * AI 분석(복기) 화면 — 바둑 전용.
  *  - SGF는 HTTP로 받아 "배경 history"로 쓰고 내부적으로는 tree(state)에 저장한다.
@@ -55,6 +54,8 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
   const [notice, setNotice] = useState('');
   const [sgfText, setSgfText] = useState(null);
   const [meta, setMeta] = useState({ size: 19, players: { black: '', white: '' }, result: '' });
+  const [hovered, setHovered] = useState(null);          // 호버 중인 후보수 index (PV 미리보기)
+  const [showNumbers, setShowNumbers] = useState(false); // 둔 돌 수순번호 토글
 
   const commit = (t) => setTree({ root: t.root, current: t.current });
 
@@ -110,7 +111,7 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
   const size = meta.size;
 
   // ── KataGo 연결 ──
-  const { ready, statusMessage, progress, error: kgError, analyze, resultByStep, pendingSteps, logs } =
+  const { ready, statusMessage, progress, error: kgError, analyze, resultByStep, pendingSteps } =
     useKataGo({ boardXSize: size, boardYSize: size });
 
   const pathMoves = movesFromRoot(current);
@@ -130,33 +131,45 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
   const analysis = resultByStep.get(current.id) ?? null;
   const analyzing = pendingSteps.has(current.id);
 
-  // 로그 자동 스크롤
-  const logBoxRef = useRef(null);
-  useEffect(() => {
-    const el = logBoxRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [logs]);
-
   const stones = replay(pathMoves, undefined, size, 'go');
   const moveNo = pathMoves.length;
   const lineMoveNodes = lineThrough(current).filter((n) => n.move);
 
   const candidates = (analysis?.moveInfos ?? []).slice(0, 6);
 
-  // 보드 마커: 분석 결과 있으면 후보수, 없으면 기존 변화도. + 마지막 수 표시.
+  // 보드용 후보수(평가색 + 순위). points lost = 최선수 집수 - 해당 후보 집수.
+  const bestScore = candidates[0]?.scoreLead;
+  const boardCandidates = [];
+  candidates.forEach((mi, k) => {
+    const c = gtpToColRow(mi.move, size);
+    if (!c) return;
+    const pointsLost =
+      typeof bestScore === 'number' && typeof mi.scoreLead === 'number'
+        ? Math.max(0, bestScore - mi.scoreLead)
+        : 0;
+    const { fill, text } = evalColor(pointsLost);
+    boardCandidates.push({ col: c.col, row: c.row, label: String(k + 1), fill, text, best: k === 0 });
+  });
+
+  // PV 미리보기: 호버한 후보의 예상 진행(첫 수 색 = 둘 차례).
+  const pvPreview =
+    hovered != null && candidates[hovered]?.pv
+      ? pvToStones(candidates[hovered].pv, nextColor(current), size)
+      : null;
+
+  // 마지막 수 마커 / 집 히트맵
+  const lastMove =
+    current.move && !current.move.pass
+      ? { col: current.move.col, row: current.move.row, color: current.move.color }
+      : null;
+  const ownership = analysis?.ownership ?? null;
+
+  // 변화도 마커: 분석 결과(후보수)가 없을 때만 자식 변화도를 점선으로 표시.
   const markers = [];
-  if (candidates.length > 0) {
-    candidates.forEach((mi) => {
-      const c = gtpToColRow(mi.move, size);
-      if (c) markers.push({ col: c.col, row: c.row, type: 'dashed' });
-    });
-  } else {
+  if (boardCandidates.length === 0) {
     for (const ch of current.children) {
       if (ch.move && !ch.move.pass) markers.push({ col: ch.move.col, row: ch.move.row, type: 'dashed' });
     }
-  }
-  if (current.move && !current.move.pass) {
-    markers.push({ col: current.move.col, row: current.move.row, type: 'dot' });
   }
 
   const atRoot = !current.parent;
@@ -165,11 +178,12 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
   const turnLabel = nextColor(current) === 'black' ? '흑' : '백';
 
   const handlePlay = (coord) => {
+    setHovered(null);
     play(tree, { color: nextColor(current), col: coord.col, row: coord.row });
     commit(tree);
   };
-  const nav = (fn) => () => { fn(tree); commit(tree); };
-  const jumpTo = (node) => { goTo(tree, node); commit(tree); };
+  const nav = (fn) => () => { setHovered(null); fn(tree); commit(tree); };
+  const jumpTo = (node) => { setHovered(null); goTo(tree, node); commit(tree); };
 
   const handleDownload = () => {
     if (!sgfText) return;
@@ -199,7 +213,18 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
                 기보 불러오는 중...
               </div>
             ) : (
-              <GoBoard size={size} stones={stones} markers={markers} onIntersectionClick={handlePlay} />
+              <GoBoard
+                size={size}
+                stones={stones}
+                markers={markers}
+                candidates={boardCandidates}
+                pvPreview={pvPreview}
+                lastMove={lastMove}
+                ownership={ownership}
+                showMoveNumbers={showNumbers && hovered === null}
+                onCandidateHover={setHovered}
+                onIntersectionClick={handlePlay}
+              />
             )}
           </div>
 
@@ -232,6 +257,14 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
                 <span className="material-symbols-outlined">last_page</span>
               </button>
             </div>
+
+            <button onClick={() => setShowNumbers((v) => !v)} aria-pressed={showNumbers}
+              className={`px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-colors ${
+                showNumbers ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+              }`}>
+              <span className="material-symbols-outlined text-base">tag</span>
+              수순번호
+            </button>
 
             <button onClick={handleDownload} disabled={!sgfText}
               className="px-4 py-2.5 bg-primary text-on-primary rounded-xl font-bold text-sm flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-40">
@@ -324,20 +357,6 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
                 })}
               </div>
             )}
-
-            {/* 엔진 로그 */}
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">엔진 로그</div>
-              <div ref={logBoxRef} className="h-40 overflow-y-auto font-mono text-[10px] leading-relaxed bg-surface-container-lowest rounded-lg p-2 space-y-0.5">
-                {logs.length === 0 ? (
-                  <p className="text-outline">로그 없음</p>
-                ) : (
-                  logs.map((l, i) => (
-                    <div key={i} className={`whitespace-pre-wrap break-all ${LOG_TONE[l.kind] || 'text-on-surface'}`}>{l.text}</div>
-                  ))
-                )}
-              </div>
-            </div>
           </div>
         </div>
       </main>
