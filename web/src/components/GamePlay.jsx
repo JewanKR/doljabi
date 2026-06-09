@@ -35,7 +35,7 @@ const decodeBitboard = ({ black = [], white = [] }, size = 19) => {
   return stones;
 };
 
-export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, wsRef, initialUsersInfo, initialBlackSec, initialWhiteSec, onSaveHistory }) => {
+export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, wsRef, initialUsersInfo, initialBlackSec, initialWhiteSec }) => {
   const boardSize = gameType === 'omok' ? 15 : 19;
   const [stones, setStones] = useState([]);
   const [history, setHistory] = useState([]);
@@ -50,13 +50,14 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
   const [whiteSec, setWhiteSec] = useState(initialWhiteSec ?? null);
   const [pendingCoord, setPendingCoord] = useState(null);
   const [wsClosed, setWsClosed] = useState(false);
-  const [drawOfferFrom, setDrawOfferFrom] = useState(null); // 무승부 신청한 상대 이름
+  const [drawOfferPending, setDrawOfferPending] = useState(false); // 상대 무승부 신청 카드 표시 여부
   const stonesRef = useRef([]);
   const historyRef = useRef([]);
   const historyBottomRef = useRef(null);
   const usersInfoRef = useRef(initialUsersInfo ?? null);
-  const gameRunningRef = useRef(false);
   const actualGameTypeRef = useRef(gameType); // 서버 메시지에서 확인된 실제 게임 타입
+  const drawHandledRef = useRef(false); // 이번 수(턴)에 무승부 신청 경고창을 이미 띄웠는지
+  const lastTurnRef = useRef(null);     // 직전 턴 색 — 턴이 바뀌면 무승부 경고창 다시 허용
 
   // 새 수 추가 시 기보 내부만 스크롤 (페이지 전체 스크롤 방지)
   useEffect(() => {
@@ -84,6 +85,16 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
     onNavigate(page, ...args);
   };
 
+  const sendMessage = (payload) => {
+    if (wsRef?.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(payload);
+    }
+  };
+
+  const makePayload = (msg) => ClientToServer.encode(
+    actualGameTypeRef.current === 'omok' ? { omok: msg } : { baduk: msg }
+  ).finish();
+
   // 서버 메시지 처리
   useEffect(() => {
     const ws = wsRef?.current;
@@ -102,15 +113,10 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
         const isOmok = msg.gameType === GameType.GAME_TYPE_OMOK;
         actualGameTypeRef.current = isOmok ? 'omok' : 'go';
         const board = isOmok ? msg.omok : msg.baduk;
-        if (msg.running === true) gameRunningRef.current = true;
-        console.log('[WS수신] responseType:', msg.responseType, '| running:', msg.running, '| hasBaduk:', !!msg.baduk, '| hasOmok:', !!msg.omok, '| turn:', board?.turn, '| hasGameState:', !!board?.gameState, '| stones:', stonesRef.current.length);
-        // board 없어도 running:false는 처리 (기권/무승부 후 board 없이 올 수 있음)
-        if (!board) {
-          if (msg.running === false && gameRunningRef.current) {
-            setGameOver(true);
-          }
-          return;
-        }
+        // running: 게임 방(true) / 대기실(false) / 업데이트 없음(undefined). 게임 종료 판단엔 쓰지 않음(아래 the_winner 사용).
+        console.log('[WS수신] responseType:', msg.responseType, '| running:', msg.running, '| winner:', board?.theWinner, '| hasBaduk:', !!msg.baduk, '| hasOmok:', !!msg.omok, '| turn:', board?.turn, '| hasGameState:', !!board?.gameState, '| stones:', stonesRef.current.length);
+        // board 없음(타이머 인터럽트/에러 등) → 무시
+        if (!board) return;
 
         if (board.usersInfo) {
           setUsersInfo(board.usersInfo);
@@ -119,6 +125,12 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
 
         if (board.gameState) {
           const turnVal = board.turn;
+          // 턴이 바뀌면(= 한 수 진행) 무승부 신청 카드를 닫고 다시 띄울 수 있도록 초기화
+          if (lastTurnRef.current !== null && turnVal !== lastTurnRef.current) {
+            drawHandledRef.current = false;
+            setDrawOfferPending(false);
+          }
+          lastTurnRef.current = turnVal;
           setTurnColor(turnVal);
           const info = usersInfoRef.current;
           const isBlack = info?.black?.userName === (currentUser?.username || currentUser?.id);
@@ -140,25 +152,22 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
           }
         }
 
-        // 무승부 신청 수신 (상대방이 신청한 경우만 표시)
-        if (board.drawOffer?.userName) {
-          const offerName = board.drawOffer.userName;
-          if (offerName !== myName) {
-            setDrawOfferFrom(offerName);
+        // 무승부 신청 수신: 상대가 신청했고 게임이 진행 중(승자 미정)일 때만, 한 수에 한 번 경고창 출력.
+        // (같은 수에 양쪽이 신청하면 서버가 the_winner=무승부(Free)로 종료 처리 → 아래 종료 처리)
+        if (board.drawOffer?.userName && board.theWinner === undefined) {
+          const offererIsBlack = board.drawOffer.userName.startsWith('Black');
+          const info = usersInfoRef.current;
+          const iAmBlack = info?.black?.userName === myName;
+          if (offererIsBlack !== iAmBlack && !drawHandledRef.current) {
+            drawHandledRef.current = true;
+            setDrawOfferPending(true);
           }
         }
 
-        // running:true를 받은 뒤 running:false가 와야 진짜 게임 종료
-        if (msg.running === false && gameRunningRef.current) {
+        // 게임 종료 판단: the_winner 가 채워지면 종료 (흑=0, 백=1, 무승부=Free=2 모두 그대로 수신)
+        if (board.theWinner !== undefined) {
           setGameOver(true);
-          onSaveHistory && onSaveHistory([...historyRef.current]);
-          if (board.drawOffer !== undefined) {
-            // 무승부 합의 → winner null 유지
-          } else if (board.theWinner !== undefined) {
-            setWinner(board.theWinner); // 백(1) 승리: proto가 인코딩함
-          } else {
-            setWinner(0); // 흑(0) 승리: proto 기본값이라 undefined로 수신됨
-          }
+          setWinner(board.theWinner);
         }
       } catch (e) {
         console.error('WS message decode error:', e);
@@ -182,16 +191,6 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
   const blackTime = formatTime(blackSec);
   const whiteTime = formatTime(whiteSec);
 
-  const sendMessage = (payload) => {
-    if (wsRef?.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(payload);
-    }
-  };
-
-  const makePayload = (msg) => ClientToServer.encode(
-    actualGameTypeRef.current === 'omok' ? { omok: msg } : { baduk: msg }
-  ).finish();
-
   const handlePlaceStone = () => {
     console.log('[착수시도] myTurn:', myTurn, '| pending:', pendingCoord ? `${pendingCoord.col},${pendingCoord.row}` : null, '| ws:', wsRef?.current?.readyState, '| gameOver:', gameOver);
     if (!pendingCoord) return;
@@ -212,12 +211,12 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
   };
 
   const handleAcceptDraw = () => {
-    setDrawOfferFrom(null);
+    setDrawOfferPending(false);
     sendMessage(makePayload({ drawOffer: {} }));
   };
 
   const handleRejectDraw = () => {
-    setDrawOfferFrom(null);
+    setDrawOfferPending(false);
   };
 
   const blackName = usersInfo?.black?.userName || 'Kuro_Knight';
@@ -266,10 +265,10 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
             </button>
           </div>
 
-          {drawOfferFrom && (
+          {drawOfferPending && !gameOver && (
             <div className="mt-4 flex flex-col items-center gap-2 px-4 py-3 bg-surface-container-low border border-outline-variant rounded-xl">
               <p className="text-sm font-semibold text-on-surface">
-                <span className="text-primary">{drawOfferFrom}</span>님이 무승부를 신청했습니다
+                상대가 무승부를 신청했습니다
               </p>
               <div className="flex gap-2">
                 <button onClick={handleAcceptDraw} className="px-4 py-1.5 bg-primary text-on-primary rounded-lg text-sm font-bold">수락</button>
@@ -278,7 +277,7 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
             </div>
           )}
 
-{wsClosed && !gameOver && (
+          {wsClosed && !gameOver && (
             <p className="mt-4 text-sm font-semibold text-error bg-error-container px-4 py-2 rounded-xl">
               서버 연결이 끊겼습니다 (1006). 서버 측 오류일 수 있습니다.
             </p>

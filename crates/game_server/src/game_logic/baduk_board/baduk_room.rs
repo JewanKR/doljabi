@@ -421,7 +421,7 @@ impl GameLogic for BadukRoom {
 
                             ServerToClient {
                                 response_type: true,
-                                running: Some(false),
+                                running: Some(true),
                                 game_type: GAME_TYPE_BADUK,
                                 game_data: Some(GameData::Baduk(BadukBoardServer {
                                     turn: is_turn,
