@@ -78,8 +78,8 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
         if (targetId == null) {
           const sessionKey = SessionManager.getSessionKey();
           if (!sessionKey) { startEmpty('로그인하면 저장된 기보를 불러올 수 있어요. 빈 판에서 시작합니다.'); return; }
-          const list = await getMyGames(sessionKey);
-          const latest = (list?.games ?? []).find((g) => g.game_type === 'baduk'); // 오목 제외
+          const list = await getMyGames(sessionKey, { game_type: 'baduk' }); // 서버에서 바둑만 필터링
+          const latest = list?.games?.[0]; // 이미 바둑 + 최신순이라 첫 항목
           if (!latest) { startEmpty('저장된 바둑 기보가 없어 빈 판에서 시작합니다.'); return; }
           targetId = latest.id;
         }

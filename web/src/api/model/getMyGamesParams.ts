@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.2.4
  */
 
-export interface SessionCheckForm {
-  session_key: string;
-}
+export type GetMyGamesParams = {
+/**
+ * 게임 종류 필터: "baduk" | "omok". 생략 시 전체 반환
+ */
+game_type?: string;
+};
