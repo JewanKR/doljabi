@@ -230,8 +230,8 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
 
       <main className="md:ml-64 flex flex-col lg:flex-row lg:h-screen pt-14 md:pt-0 lg:overflow-hidden overflow-y-auto">
         {/* Center Board Section */}
-        <section className="min-h-[calc(100svh-56px)] lg:min-h-0 flex-1 flex flex-col items-center justify-center p-4 md:p-8 bg-surface lg:overflow-auto">
-          <div className="w-full max-w-[580px]">
+        <section className="min-h-[calc(100svh-56px)] lg:min-h-0 flex-1 flex flex-col items-center justify-center p-4 md:p-8 lg:p-10 xl:p-12 bg-surface lg:overflow-auto">
+          <div className="w-full max-w-[580px] lg:max-w-[min(clamp(420px,calc(100vw-720px),760px),calc(100svh-240px))]">
             <GoBoard
               size={boardSize}
               stones={stones}

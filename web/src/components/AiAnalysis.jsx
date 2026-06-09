@@ -256,8 +256,8 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
 
       <main className="md:ml-64 min-h-screen flex flex-col lg:flex-row pt-14 md:pt-0">
         {/* 보드 */}
-        <div className="flex-grow flex flex-col items-center bg-surface-container-lowest rounded-3xl p-6 m-6 gap-4">
-          <div className="w-full max-w-[580px]">
+        <div className="flex-grow flex flex-col items-center bg-surface-container-lowest rounded-3xl p-6 m-6 lg:p-8 lg:m-8 xl:p-10 xl:m-10 gap-4">
+          <div className="w-full max-w-[580px] lg:max-w-[clamp(420px,calc(100vw-732px),760px)]">
             {loading ? (
               <div className="w-full aspect-square flex items-center justify-center text-sm text-on-surface-variant">
                 기보 불러오는 중...
@@ -329,7 +329,7 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
         </div>
 
         {/* 우측 패널 */}
-        <div className="w-full lg:w-[380px] flex flex-col gap-6 lg:mt-6 px-6 pb-6">
+        <div className="w-full lg:w-[380px] flex flex-col gap-6 lg:mt-6 lg:mr-2 xl:mt-10 xl:mr-4 px-6 pb-6">
           {/* 기보 */}
           <div className="bg-surface-container-low rounded-3xl p-6 flex flex-col">
             <div className="flex items-center justify-between mb-2">
