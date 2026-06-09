@@ -55,7 +55,7 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
   const historyRef = useRef([]);
   const historyBottomRef = useRef(null);
   const usersInfoRef = useRef(initialUsersInfo ?? null);
-  const actualGameTypeRef = useRef(gameType); // 서버 메시지에서 확인된 실제 게임 타입
+  const [actualGameType, setActualGameType] = useState(gameType); // 서버 메시지에서 확인된 실제 게임 타입
   const drawHandledRef = useRef(false); // 이번 수(턴)에 무승부 신청 경고창을 이미 띄웠는지
   const lastTurnRef = useRef(null);     // 직전 턴 색 — 턴이 바뀌면 무승부 경고창 다시 허용
 
@@ -92,7 +92,7 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
   };
 
   const makePayload = (msg) => ClientToServer.encode(
-    actualGameTypeRef.current === 'omok' ? { omok: msg } : { baduk: msg }
+    actualGameType === 'omok' ? { omok: msg } : { baduk: msg }
   ).finish();
 
   // 서버 메시지 처리
@@ -101,6 +101,7 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
     if (!ws) return;
 
     console.log('[GamePlay] WS 핸들러 등록, readyState:', ws.readyState);
+    /* eslint-disable react-hooks/immutability -- App이 소유한 공유 WebSocket(wsRef)에 핸들러 부착(의도된 동작) */
     ws.onclose = (e) => {
       console.warn('[WS닫힘] code:', e.code, '| reason:', e.reason);
       setWsClosed(true);
@@ -111,7 +112,7 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
       try {
         const msg = ServerToClient.decode(new Uint8Array(event.data));
         const isOmok = msg.gameType === GameType.GAME_TYPE_OMOK;
-        actualGameTypeRef.current = isOmok ? 'omok' : 'go';
+        setActualGameType(isOmok ? 'omok' : 'go');
         const board = isOmok ? msg.omok : msg.baduk;
         // running: 게임 방(true) / 대기실(false) / 업데이트 없음(undefined). 게임 종료 판단엔 쓰지 않음(아래 the_winner 사용).
         console.log('[WS수신] responseType:', msg.responseType, '| running:', msg.running, '| winner:', board?.theWinner, '| hasBaduk:', !!msg.baduk, '| hasOmok:', !!msg.omok, '| turn:', board?.turn, '| hasGameState:', !!board?.gameState, '| stones:', stonesRef.current.length);
@@ -133,7 +134,7 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
           lastTurnRef.current = turnVal;
           setTurnColor(turnVal);
           const info = usersInfoRef.current;
-          const isBlack = info?.black?.userName === (currentUser?.username || currentUser?.id);
+          const isBlack = info?.black?.userName === myName;
           setMyTurn(isBlack ? turnVal === 0 : turnVal === 1);
 
           const gs = board.gameState;
@@ -173,7 +174,8 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
         console.error('WS message decode error:', e);
       }
     };
-  }, [enterCode, wsRef]);
+    /* eslint-enable react-hooks/immutability */
+  }, [enterCode, wsRef, myName]);
 
   // 현재 턴 플레이어 시간 카운트다운
   useEffect(() => {
@@ -194,7 +196,7 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
   const handlePlaceStone = () => {
     console.log('[착수시도] myTurn:', myTurn, '| pending:', pendingCoord ? `${pendingCoord.col},${pendingCoord.row}` : null, '| ws:', wsRef?.current?.readyState, '| gameOver:', gameOver);
     if (!pendingCoord) return;
-    const size = actualGameTypeRef.current === 'omok' ? 15 : 19;
+    const size = actualGameType === 'omok' ? 15 : 19;
     const coordInt = pendingCoord.col + pendingCoord.row * size;
     console.log('[착수전송] coord:', coordInt, '| ws:', wsRef?.current?.readyState);
     sendMessage(makePayload({ coordinate: { coordinate: coordInt } }));
@@ -290,7 +292,7 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
                 </p>
               )}
               <div className="flex gap-2">
-                {actualGameTypeRef.current !== 'omok' && (
+                {actualGameType !== 'omok' && (
                   <button
                     onClick={() => onNavigate('ai_analysis', 'go')}
                     className="px-6 py-2.5 bg-surface-container-high text-on-surface border border-outline-variant rounded-xl font-bold text-sm hover:bg-surface-container-highest transition-colors"
