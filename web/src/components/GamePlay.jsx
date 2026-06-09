@@ -10,9 +10,43 @@ import { ClientToServer, ServerToClient, GameType } from '../ts-proto/common';
 
 const formatTime = (seconds) => {
   if (!seconds && seconds !== 0) return '--:--';
-  const m = Math.floor(Number(seconds) / 60).toString().padStart(2, '0');
-  const s = (Number(seconds) % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
+  const total = Math.floor(Number(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = m.toString().padStart(2, '0');
+  const ss = s.toString().padStart(2, '0');
+  // 1시간 이상이면 H:MM:SS, 그 미만이면 기존 MM:SS 유지
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+};
+
+// 서버 PlayerTimeInfo(ms) → 화면용 시계 상태(초). overtimeFull은 초읽기 주기 길이(로컬 리셋 기준).
+const toClock = (t) => {
+  if (!t) return { main: null, overtime: null, overtimeFull: null, periods: null };
+  const overtime = Math.floor(Number(t.overtime) / 1000);
+  return {
+    main: Math.floor(Number(t.mainTime) / 1000),
+    overtime,
+    overtimeFull: overtime,
+    periods: Number(t.remainingOvertime),
+  };
+};
+
+// 시계 숫자: 메인 시간이 남아있으면 메인, 소진되면 초읽기 시간만 (횟수는 캐션으로 분리)
+const formatClock = (clock) => {
+  if (!clock || clock.main === null) return '--:--';
+  return clock.main > 0 ? formatTime(clock.main) : formatTime(clock.overtime);
+};
+
+// UI 문자열은 추후 다국어(i18n) 교체가 쉽도록 한곳에 모음 (컴포넌트에 하드코딩 금지)
+const LABELS = {
+  byoYomiRemaining: (count) => `초읽기 남은 횟수 : ${count}`,
+};
+
+// 초읽기 캐션: 메인 소진(=초읽기) 상태일 때만 라벨 반환, 그 외엔 null
+const byoYomiCaption = (clock) => {
+  if (!clock || clock.main === null || clock.main > 0) return null;
+  return LABELS.byoYomiRemaining(clock.periods ?? 0);
 };
 
 // 비트보드(bigint[]) → {col, row, color}[] 변환 (stride = 보드 크기: 바둑 19, 오목 15)
@@ -46,8 +80,8 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
   const [turnColor, setTurnColor] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState(null);
-  const [blackSec, setBlackSec] = useState(initialBlackSec ?? null);
-  const [whiteSec, setWhiteSec] = useState(initialWhiteSec ?? null);
+  const [blackClock, setBlackClock] = useState(() => ({ main: initialBlackSec ?? null, overtime: null, overtimeFull: null, periods: null }));
+  const [whiteClock, setWhiteClock] = useState(() => ({ main: initialWhiteSec ?? null, overtime: null, overtimeFull: null, periods: null }));
   const [pendingCoord, setPendingCoord] = useState(null);
   const [wsClosed, setWsClosed] = useState(false);
   const [drawOfferPending, setDrawOfferPending] = useState(false); // 상대 무승부 신청 카드 표시 여부
@@ -138,8 +172,8 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
           setMyTurn(isBlack ? turnVal === 0 : turnVal === 1);
 
           const gs = board.gameState;
-          if (gs.blackTime !== undefined) setBlackSec(Math.floor(Number(gs.blackTime.mainTime) / 1000));
-          if (gs.whiteTime !== undefined) setWhiteSec(Math.floor(Number(gs.whiteTime.mainTime) / 1000));
+          if (gs.blackTime !== undefined) setBlackClock(toClock(gs.blackTime));
+          if (gs.whiteTime !== undefined) setWhiteClock(toClock(gs.whiteTime));
           if (gs.board) {
             const decoded = decodeBitboard(gs.board, isOmok ? 15 : 19);
             const prevSet = new Set(stonesRef.current.map(s => `${s.col},${s.row}`));
@@ -177,21 +211,28 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
     /* eslint-enable react-hooks/immutability */
   }, [enterCode, wsRef, myName]);
 
-  // 현재 턴 플레이어 시간 카운트다운
+  // 현재 턴 플레이어 시간 카운트다운: 메인 → 소진 시 초읽기, 주기 소진 시 다음 주기로 롤오버
   useEffect(() => {
     if (gameOver) return;
+    const tick = (prev) => {
+      if (!prev || prev.main === null) return prev;
+      if (prev.main > 0) return { ...prev, main: prev.main - 1 };
+      if (prev.overtime > 0) return { ...prev, overtime: prev.overtime - 1 };
+      // 현재 초읽기 주기 소진 → 다음 주기로 리셋 (마지막 주기면 0 유지, 서버가 시간패 처리)
+      if (prev.periods > 1) return { ...prev, periods: prev.periods - 1, overtime: prev.overtimeFull ?? 0 };
+      return prev;
+    };
     const interval = setInterval(() => {
-      if (turnColor === 0) {
-        setBlackSec(prev => prev !== null && prev > 0 ? prev - 1 : prev);
-      } else {
-        setWhiteSec(prev => prev !== null && prev > 0 ? prev - 1 : prev);
-      }
+      if (turnColor === 0) setBlackClock(tick);
+      else setWhiteClock(tick);
     }, 1000);
     return () => clearInterval(interval);
   }, [turnColor, gameOver]);
 
-  const blackTime = formatTime(blackSec);
-  const whiteTime = formatTime(whiteSec);
+  const blackTime = formatClock(blackClock);
+  const whiteTime = formatClock(whiteClock);
+  const blackByoYomi = byoYomiCaption(blackClock);
+  const whiteByoYomi = byoYomiCaption(whiteClock);
 
   const handlePlaceStone = () => {
     console.log('[착수시도] myTurn:', myTurn, '| pending:', pendingCoord ? `${pendingCoord.col},${pendingCoord.row}` : null, '| ws:', wsRef?.current?.readyState, '| gameOver:', gameOver);
@@ -334,7 +375,12 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
                   )}
                 </div>
               </div>
-              <span className="text-xl lg:text-3xl font-mono font-bold text-primary">{blackTime}</span>
+              <div className="flex flex-col">
+                <span className="text-xl lg:text-3xl font-mono font-bold text-primary leading-tight">{blackTime}</span>
+                {blackByoYomi && (
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mt-0.5">{blackByoYomi}</span>
+                )}
+              </div>
             </div>
 
             {/* White Player */}
@@ -350,7 +396,12 @@ export const GamePlay = ({ onNavigate, gameType = 'go', currentUser, enterCode, 
                   )}
                 </div>
               </div>
-              <span className="text-xl lg:text-3xl font-mono font-bold text-on-surface-variant">{whiteTime}</span>
+              <div className="flex flex-col">
+                <span className="text-xl lg:text-3xl font-mono font-bold text-on-surface-variant leading-tight">{whiteTime}</span>
+                {whiteByoYomi && (
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mt-0.5">{whiteByoYomi}</span>
+                )}
+              </div>
             </div>
           </div>
 

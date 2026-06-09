@@ -52,8 +52,8 @@ export const HomeHub = ({ onNavigate, currentUser }) => {
                 <button
                   key={option.type}
                   onClick={() => {
-                    if (option.type === '멀티 플레이') onNavigate('game_lobby', 'go');
-                    if (option.type === '싱글 플레이') onNavigate('game_lobby', 'go');
+                    if (option.type === '멀티 플레이') onNavigate('game_lobby', 'go', undefined, false, 'multi');
+                    if (option.type === '싱글 플레이') onNavigate('game_lobby', 'go', undefined, false, 'single');
                     if (option.type === 'AI 분석') onNavigate('ai_analysis', 'go');
                   }}
                   className="group flex flex-col p-8 bg-surface-container-low border border-outline-variant rounded-[2rem] hover:bg-primary hover:text-white hover:border-primary transition-all duration-300"
@@ -85,8 +85,8 @@ export const HomeHub = ({ onNavigate, currentUser }) => {
                 <button
                   key={option.type}
                   onClick={() => {
-                    if (option.type === '멀티 플레이') onNavigate('game_lobby', 'omok');
-                    if (option.type === '싱글 플레이') onNavigate('game_lobby', 'omok');
+                    if (option.type === '멀티 플레이') onNavigate('game_lobby', 'omok', undefined, false, 'multi');
+                    if (option.type === '싱글 플레이') onNavigate('game_lobby', 'omok', undefined, false, 'single');
                   }}
                   className="group flex flex-col p-8 bg-surface-container-low border border-outline-variant rounded-[2rem] hover:bg-secondary hover:text-white hover:border-secondary transition-all duration-300"
                 >

@@ -96,6 +96,7 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
 
         const p = parseSgf(sgf);
         if (cancelled) return;
+        if (p.gameType === 'omok') { startEmpty('오목 기보는 분석할 수 없어 빈 판에서 시작합니다.'); return; }
         const t = treeFromMoves(p.moves);
         toEnd(t);
         setTree({ root: t.root, current: t.current });
@@ -217,6 +218,12 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
       const sgf = res?.sgf;
       if (!sgf) { setNotice('기보가 비어 있습니다.'); return; }
       const p = parseSgf(sgf);
+      if (p.gameType === 'omok') {
+        setTree(createTree());
+        setMeta({ size: 19, players: { black: '', white: '' }, result: '' });
+        setNotice('오목 기보는 분석할 수 없어 빈 판에서 시작합니다.');
+        return;
+      }
       const t = treeFromMoves(p.moves);
       toEnd(t);
       setTree({ root: t.root, current: t.current });
@@ -445,7 +452,7 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
                         {g.result && <span className="text-xs font-mono text-primary">{g.result}</span>}
                       </div>
                       <div className="text-xs text-on-surface-variant truncate">
-                        {fmtDateTime(g.created_at)} · {g.board_size}로
+                        {fmtDateTime(g.created_at)} · {g.game_type === 'omok' ? '오목' : '바둑'}
                       </div>
                     </button>
                     <button onClick={() => downloadGame(g.id)} title="SGF 다운로드"
