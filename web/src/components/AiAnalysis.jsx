@@ -41,6 +41,9 @@ const lineThrough = (cur) => {
   return [...up, ...down];
 };
 
+// SQLite created_at("YYYY-MM-DD HH:MM:SS" 또는 ISO) → "YYYY-MM-DD HH:MM"
+const fmtDateTime = (s) => String(s ?? '').replace('T', ' ').slice(0, 16);
+
 /**
  * AI 분석(복기) 화면 — 바둑 전용.
  *  - SGF는 HTTP로 받아 "배경 history"로 쓰고 내부적으로는 tree(state)에 저장한다.
@@ -52,10 +55,14 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
   const [tree, setTree] = useState(() => createTree());
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState('');
-  const [sgfText, setSgfText] = useState(null);
   const [meta, setMeta] = useState({ size: 19, players: { black: '', white: '' }, result: '' });
   const [hovered, setHovered] = useState(null);          // 호버 중인 후보수 index (PV 미리보기)
   const [showNumbers, setShowNumbers] = useState(false); // 둔 돌 수순번호 토글
+  // SGF 불러오기(서버 저장 기보) 모달 상태
+  const [showLoader, setShowLoader] = useState(false);
+  const [gameList, setGameList] = useState([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [listError, setListError] = useState('');
 
   const commit = (t) => setTree({ root: t.root, current: t.current });
 
@@ -66,7 +73,6 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
       if (cancelled) return;
       setTree(createTree());
       setMeta({ size: 19, players: { black: '', white: '' }, result: '' });
-      setSgfText(null);
       setNotice(msg);
       setLoading(false);
     };
@@ -94,7 +100,6 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
         toEnd(t);
         setTree({ root: t.root, current: t.current });
         setMeta({ size: p.size, players: p.players, result: p.result });
-        setSgfText(sgf);
         setNotice('');
         setLoading(false);
       } catch (e) {
@@ -185,9 +190,54 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
   const nav = (fn) => () => { setHovered(null); fn(tree); commit(tree); };
   const jumpTo = (node) => { setHovered(null); goTo(tree, node); commit(tree); };
 
-  const handleDownload = () => {
-    if (!sgfText) return;
-    downloadSgf(sgfText, `game_${new Date().toISOString().slice(0, 10)}.sgf`);
+  // SGF 불러오기: 서버에 저장된 내 바둑 기보 목록을 GET 으로 가져온다.
+  const openLoader = async () => {
+    setShowLoader(true);
+    setListLoading(true);
+    setListError('');
+    try {
+      const sessionKey = SessionManager.getSessionKey();
+      if (!sessionKey) { setListError('로그인이 필요합니다.'); setGameList([]); return; }
+      const list = await getMyGames(sessionKey, { game_type: 'baduk' });
+      setGameList(list?.games ?? []);
+    } catch (e) {
+      console.error('게임 목록 조회 실패:', e);
+      setListError('목록을 불러오지 못했습니다.');
+    } finally {
+      setListLoading(false);
+    }
+  };
+
+  // 목록에서 고른 기보를 GET 으로 받아 분석 보드에 올린다.
+  const selectGame = async (id) => {
+    setShowLoader(false);
+    setLoading(true);
+    try {
+      const res = await getGameSgf(id);
+      const sgf = res?.sgf;
+      if (!sgf) { setNotice('기보가 비어 있습니다.'); return; }
+      const p = parseSgf(sgf);
+      const t = treeFromMoves(p.moves);
+      toEnd(t);
+      setTree({ root: t.root, current: t.current });
+      setMeta({ size: p.size, players: p.players, result: p.result });
+      setNotice('');
+    } catch (e) {
+      console.error('SGF 불러오기 실패:', e);
+      setNotice('기보를 불러오지 못했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 목록에서 고른 기보를 SGF 파일로 내려받는다.
+  const downloadGame = async (id) => {
+    try {
+      const res = await getGameSgf(id);
+      if (res?.sgf) downloadSgf(res.sgf, `game_${id}.sgf`);
+    } catch (e) {
+      console.error('SGF 다운로드 실패:', e);
+    }
   };
 
   // KataGo 상태 배지
@@ -266,10 +316,10 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
               수순번호
             </button>
 
-            <button onClick={handleDownload} disabled={!sgfText}
-              className="px-4 py-2.5 bg-primary text-on-primary rounded-xl font-bold text-sm flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-40">
-              <span className="material-symbols-outlined text-base">download</span>
-              SGF 다운로드
+            <button onClick={openLoader}
+              className="px-4 py-2.5 bg-primary text-on-primary rounded-xl font-bold text-sm flex items-center gap-2 hover:opacity-90 transition-opacity">
+              <span className="material-symbols-outlined text-base">folder_open</span>
+              SGF 불러오기
             </button>
           </div>
 
@@ -360,6 +410,55 @@ export const AiAnalysis = ({ onNavigate, currentUser, gameId = null }) => {
           </div>
         </div>
       </main>
+
+      {showLoader && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowLoader(false)}
+        >
+          <div
+            className="w-full max-w-md max-h-[80vh] flex flex-col bg-surface-container-high rounded-2xl shadow-xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-on-surface">저장된 기보 불러오기</h3>
+              <button onClick={() => setShowLoader(false)}
+                className="p-1 rounded-lg hover:bg-surface-container text-on-surface-variant">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {listLoading ? (
+              <p className="py-10 text-center text-sm text-on-surface-variant">불러오는 중...</p>
+            ) : listError ? (
+              <p className="py-10 text-center text-sm text-error">{listError}</p>
+            ) : gameList.length === 0 ? (
+              <p className="py-10 text-center text-sm text-on-surface-variant">저장된 바둑 기보가 없습니다.</p>
+            ) : (
+              <ul className="flex-1 overflow-y-auto space-y-2 pr-1">
+                {gameList.map((g) => (
+                  <li key={g.id}
+                    className="flex items-center gap-2 p-3 bg-surface-container-low rounded-xl hover:bg-surface-container transition-colors">
+                    <button onClick={() => selectGame(g.id)} className="flex-1 min-w-0 text-left">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-on-surface">{g.my_color === 'black' ? '흑' : '백'}</span>
+                        {g.result && <span className="text-xs font-mono text-primary">{g.result}</span>}
+                      </div>
+                      <div className="text-xs text-on-surface-variant truncate">
+                        {fmtDateTime(g.created_at)} · {g.board_size}로
+                      </div>
+                    </button>
+                    <button onClick={() => downloadGame(g.id)} title="SGF 다운로드"
+                      className="flex-shrink-0 p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant">
+                      <span className="material-symbols-outlined text-base">download</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
