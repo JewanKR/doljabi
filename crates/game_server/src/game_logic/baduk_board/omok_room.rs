@@ -111,7 +111,7 @@ impl OmokRoom {
             &conn,
             i64::from(black_id),
             i64::from(white_id),
-            "baduk",
+            "omok",
             board_size,
             result,
             &sgf,
