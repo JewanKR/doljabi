@@ -1,10 +1,14 @@
-use axum::{Json, response::{Html, IntoResponse}, http::StatusCode};
-use utoipa_axum::{router::OpenApiRouter, routes};
+use axum::{
+    Json,
+    http::StatusCode,
+    response::{Html, IntoResponse},
+};
 use std::fs;
+use utoipa_axum::{router::OpenApiRouter, routes};
 
 /// OpenAPI JSON 스펙을 반환하는 엔드포인트
 #[utoipa::path(
-    get,    
+    get,
     path = "/api/admin/openapi/openapi.json",
     tag = "openapi",
     responses(
@@ -13,20 +17,20 @@ use std::fs;
     )
 )]
 async fn get_openapi_spec() -> impl IntoResponse {
-    match fs::read_to_string("./src/openapi.json") {
-        Ok(json_content) => {
-            match serde_json::from_str::<serde_json::Value>(&json_content) {
-                Ok(json_value) => (StatusCode::OK, Json(json_value)).into_response(),
-                Err(e) => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to parse OpenAPI JSON: {}", e)
-                ).into_response(),
-            }
-        }
+    match fs::read_to_string("./web/openapi.json") {
+        Ok(json_content) => match serde_json::from_str::<serde_json::Value>(&json_content) {
+            Ok(json_value) => (StatusCode::OK, Json(json_value)).into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to parse OpenAPI JSON: {}", e),
+            )
+                .into_response(),
+        },
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to read OpenAPI file: {}", e)
-        ).into_response(),
+            format!("Failed to read OpenAPI file: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -78,7 +82,6 @@ async fn swagger_ui_page() -> Html<String> {
     "#;
     Html(html.to_string())
 }
-
 
 /// Admin 페이지 라우터
 pub fn admin_page_router() -> OpenApiRouter {
