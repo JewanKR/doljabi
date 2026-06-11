@@ -47,8 +47,6 @@ WebSocket 멀티플레이, 방 관리, 인증, 영속화를 담당하는 메인 
 
 * **바이너리 (`src/bin/`)**
   * `main.rs` - 서버 진입점. Axum Router 조립, OpenAPI 문서 생성, 세션·방·타이머 매니저 초기화, WebSocket·REST 엔드포인트 등록.
-  * `migration_rusqlite.rs` - DB 스키마 초기화/마이그레이션. `users`, `games` 테이블과 인덱스 생성.
-  * `debug_page_template.rs` - Swagger UI 디버깅용 경량 테스트 서버(:27099).
 
 * **`game_logic/` — 대국 상태 머신**
   * `mod.rs` - 게임 오케스트레이션. `RoomChannels`(mpsc 입력 / broadcast 출력), 입장 코드 관리, `GameLogic` 트레이트, `SystemEvent`(타이머·입장·퇴장·종료), `InputMessage`.
@@ -70,7 +68,6 @@ WebSocket 멀티플레이, 방 관리, 인증, 영속화를 담당하는 메인 
   * `soyul_db.rs` - `games` 테이블 스키마 및 쿼리(흑/백 ID, 게임 종류, 판 크기, 결과, SGF, 생성 시각).
   * `game_record.rs` - 기보 조회 REST API(`/api/games/{id}/sgf`, 사용자 대국 목록).
   * `kibo.rs` - SGF 빌더. `SgfGame`가 수순·메타데이터를 모아 표준 SGF 문자열로 출력.
-  * `gamehistory_db.rs` - 구버전 DB 유틸리티(레거시).
 
 * **`utility/` — 관리자 도구**
   * `admin_page.rs` - OpenAPI 문서 엔드포인트(`/api/admin/openapi/openapi.json`, Swagger UI 페이지).
@@ -137,6 +134,5 @@ OpenAPI 명세에서 생성된 React Query 훅 계층.
 ## Build & Run
 
 * **서버**: `cargo run --bin main` (워크스페이스 루트)
-* **DB 초기화**: `cargo run --bin migration_rusqlite`
 * **프론트엔드 빌드**: `web/`에서 `vite build`
 * **API/Proto 코드 생성**: `npm run gen:orval`, `npm run gen:ts-proto`
