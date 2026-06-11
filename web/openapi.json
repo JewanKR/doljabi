@@ -7,7 +7,7 @@
       "name": "Doljabi Team",
       "email": "doljabi2025@gmail.com"
     },
-    "version": "0.2.3"
+    "version": "0.2.4"
   },
   "paths": {
     "/api/admin/openapi": {
@@ -339,6 +339,15 @@
             "in": "path",
             "description": "세션 키",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "game_type",
+            "in": "query",
+            "description": "게임 종류 필터: \"baduk\" | \"omok\". 생략 시 전체 반환",
+            "required": false,
             "schema": {
               "type": "string"
             }

@@ -8,7 +8,6 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "gen:api": "openapi-typescript ../doljabi_engine/src/openapi.json -o src/api/schema.ts",
     "gen:ts-proto": "protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=src/ts-proto --ts_proto_opt=forceLong=bigint -I ../crates/doljabiproto/doljabiproto ../crates/doljabiproto/doljabiproto/*.proto",
     "gen:orval": "npx orval --config orval.config.ts"
   },

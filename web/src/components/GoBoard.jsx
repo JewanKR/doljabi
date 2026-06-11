@@ -6,7 +6,7 @@ const R = 12;  // 돌 반지름
 
 // 집(territory) 히트맵 색 — katrain OWNERSHIP_COLORS 근사
 const OWN_BLACK = 'rgb(0,0,26)';
-const OWN_WHITE = 'rgb(235,235,255)';
+const OWN_WHITE = 'rgb(255,255,255)';
 
 /** 돌 색 위에 올릴 글자색(수순번호 등) */
 const onStoneText = (color) => (color === 'black' ? '#ffffff' : '#1a1a1a');
@@ -127,7 +127,9 @@ export const GoBoard = ({
         Array.from({ length: size }, (_, col) => {
           const v = ownership[row * size + col];
           if (v == null || Math.abs(v) < 0.1) return null;
-          const opacity = Math.min(0.55, Math.pow(Math.abs(v), 0.75) * 0.55);
+          // 흰색은 주황 보드와 대비가 약해 더 진하게(최대 0.85), 검정은 기존(최대 0.55)
+          const maxOp = v > 0 ? 0.55 : 0.95;
+          const opacity = Math.min(maxOp, Math.pow(Math.abs(v), 0.75) * maxOp);
           return (
             <rect
               key={`own-${col}-${row}`}

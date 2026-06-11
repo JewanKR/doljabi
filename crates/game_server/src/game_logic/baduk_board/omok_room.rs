@@ -111,7 +111,7 @@ impl OmokRoom {
             &conn,
             i64::from(black_id),
             i64::from(white_id),
-            "baduk",
+            "omok",
             board_size,
             result,
             &sgf,
@@ -419,7 +419,7 @@ impl GameLogic for OmokRoom {
 
                             ServerToClient {
                                 response_type: true,
-                                running: Some(false),
+                                running: Some(true),
                                 game_type: GAME_TYPE_OMOK,
                                 game_data: Some(GameData::Omok(BadukBoardServer {
                                     turn: is_turn,

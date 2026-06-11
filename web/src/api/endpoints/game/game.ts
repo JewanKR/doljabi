@@ -3,7 +3,7 @@
  * Do not edit manually.
  * doljabi
  * doljabi project REST API를 정의한 문서입니다.
- * OpenAPI spec version: 0.2.3
+ * OpenAPI spec version: 0.2.4
  */
 import {
   useQuery
@@ -22,7 +22,8 @@ import type {
 
 import type {
   GameListResponse,
-  GameSgfResponse
+  GameSgfResponse,
+  GetMyGamesParams
 } from '../../model';
 
 import { customInstance } from '../../axios-instance';
@@ -124,12 +125,14 @@ export function useGetGameSgf<TData = Awaited<ReturnType<typeof getGameSgf>>, TE
 
 export const getMyGames = (
     sessionKey: string,
+    params?: GetMyGamesParams,
  options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
 ) => {
       
       
       return customInstance<GameListResponse>(
-      {url: `/api/user/games/session/${sessionKey}`, method: 'GET', signal
+      {url: `/api/user/games/session/${sessionKey}`, method: 'GET',
+        params, signal
     },
       options);
     }
@@ -137,23 +140,25 @@ export const getMyGames = (
 
 
 
-export const getGetMyGamesQueryKey = (sessionKey?: string,) => {
+export const getGetMyGamesQueryKey = (sessionKey?: string,
+    params?: GetMyGamesParams,) => {
     return [
-    `/api/user/games/session/${sessionKey}`
+    `/api/user/games/session/${sessionKey}`, ...(params ? [params]: [])
     ] as const;
     }
 
     
-export const getGetMyGamesQueryOptions = <TData = Awaited<ReturnType<typeof getMyGames>>, TError = void>(sessionKey: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyGames>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+export const getGetMyGamesQueryOptions = <TData = Awaited<ReturnType<typeof getMyGames>>, TError = void>(sessionKey: string,
+    params?: GetMyGamesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyGames>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetMyGamesQueryKey(sessionKey);
+  const queryKey =  queryOptions?.queryKey ?? getGetMyGamesQueryKey(sessionKey,params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyGames>>> = ({ signal }) => getMyGames(sessionKey, requestOptions, signal);
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyGames>>> = ({ signal }) => getMyGames(sessionKey,params, requestOptions, signal);
 
       
 
@@ -167,7 +172,8 @@ export type GetMyGamesQueryError = void
 
 
 export function useGetMyGames<TData = Awaited<ReturnType<typeof getMyGames>>, TError = void>(
- sessionKey: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyGames>>, TError, TData>> & Pick<
+ sessionKey: string,
+    params: undefined |  GetMyGamesParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyGames>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getMyGames>>,
           TError,
@@ -177,7 +183,8 @@ export function useGetMyGames<TData = Awaited<ReturnType<typeof getMyGames>>, TE
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetMyGames<TData = Awaited<ReturnType<typeof getMyGames>>, TError = void>(
- sessionKey: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyGames>>, TError, TData>> & Pick<
+ sessionKey: string,
+    params?: GetMyGamesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyGames>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getMyGames>>,
           TError,
@@ -187,16 +194,18 @@ export function useGetMyGames<TData = Awaited<ReturnType<typeof getMyGames>>, TE
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetMyGames<TData = Awaited<ReturnType<typeof getMyGames>>, TError = void>(
- sessionKey: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyGames>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ sessionKey: string,
+    params?: GetMyGamesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyGames>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 
 export function useGetMyGames<TData = Awaited<ReturnType<typeof getMyGames>>, TError = void>(
- sessionKey: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyGames>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ sessionKey: string,
+    params?: GetMyGamesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMyGames>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getGetMyGamesQueryOptions(sessionKey,options)
+  const queryOptions = getGetMyGamesQueryOptions(sessionKey,params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

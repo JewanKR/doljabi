@@ -6,13 +6,13 @@
 
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
 };
-use rusqlite::Connection;
-use serde::Serialize;
-use utoipa::ToSchema;
+use rusqlite::{Connection, params};
+use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::soyul::session::{SessionStore, get_user_id_by_session};
@@ -80,6 +80,14 @@ pub async fn get_game_sgf(Path(game_id): Path<i64>) -> impl IntoResponse {
 // 리스트는 sgf 본문을 내려주지 않으므로(가볍게), 화면 표시에 필요한 메타만 담는다.
 //
 
+/// 게임 리스트 조회 시 선택적 필터(URL 쿼리 스트링).
+#[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct GameListQuery {
+    /// 게임 종류 필터: "baduk" | "omok". 생략 시 전체 반환
+    pub game_type: Option<String>,
+}
+
 #[derive(Serialize, ToSchema)]
 pub struct GameSummary {
     pub id: i64,
@@ -107,7 +115,8 @@ pub struct GameListResponse {
     path = "/api/user/games/session/{session_key}",
     tag = "game",
     params(
-        ("session_key" = String, Path, description = "세션 키")
+        ("session_key" = String, Path, description = "세션 키"),
+        GameListQuery,
     ),
     responses(
         (status = 200, description = "게임 리스트 조회 성공", body = GameListResponse),
@@ -118,6 +127,7 @@ pub struct GameListResponse {
 pub async fn get_my_games(
     State(session_store): State<SessionStore>,
     Path(session_key): Path<String>,
+    Query(q): Query<GameListQuery>,
 ) -> impl IntoResponse {
     // 세션키 → user_id
     let user_id = match get_user_id_by_session(&session_store, &session_key).await {
@@ -136,7 +146,8 @@ pub async fn get_my_games(
     let mut stmt = match conn.prepare(
         "SELECT id, black_id, white_id, game_type, board_size, result, created_at
          FROM games
-         WHERE black_id = ?1 OR white_id = ?1
+         WHERE (black_id = ?1 OR white_id = ?1)
+           AND (?2 IS NULL OR game_type = ?2)
          ORDER BY datetime(created_at) DESC, id DESC",
     ) {
         Ok(s) => s,
@@ -146,7 +157,7 @@ pub async fn get_my_games(
         }
     };
 
-    let rows = stmt.query_map([user_id], |row| {
+    let rows = stmt.query_map(params![user_id, q.game_type], |row| {
         let black_id: i64 = row.get(1)?;
         let white_id: i64 = row.get(2)?;
         let (my_color, opponent_id) = if black_id == user_id {

@@ -24,6 +24,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 function App() {
   const [currentPage, setCurrentPage] = useState("home");
   const [currentGameType, setCurrentGameType] = useState("go");
+  const [currentMode, setCurrentMode] = useState("multi");
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -35,7 +36,6 @@ function App() {
     black: null,
     white: null,
   });
-  const [gameHistory, setGameHistory] = useState([]);
   const wsRef = useRef(null);
   const heartbeatRef = useRef(null);
 
@@ -84,9 +84,11 @@ function App() {
     if (sessionKey) {
       checkSession({ data: { session_key: sessionKey } });
     }
+    // 세션 복원은 앱 마운트 시 1회만 실행 (checkSession 의존성 의도적 제외)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const openWs = (code, gameType) => {
+  const openWs = (code) => {
     const sessionKey = SessionManager.getSessionKey();
     if (!code || !sessionKey) return;
     if (wsRef.current && wsRef.current.readyState < 2) wsRef.current.close();
@@ -116,7 +118,7 @@ function App() {
     }
   };
 
-  const handleNavigate = (page, gameType, code, host = false) => {
+  const handleNavigate = (page, gameType, code, host = false, mode) => {
     if (page === "login") {
       setShowLoginModal(true);
       return;
@@ -132,12 +134,13 @@ function App() {
       return;
     }
     if (page === "game_waiting") {
-      openWs(code, gameType);
+      openWs(code);
     } else if (page !== "game_play") {
       closeWs();
     }
     setCurrentPage(page);
     if (gameType) setCurrentGameType(gameType);
+    if (mode) setCurrentMode(mode);
     if (code !== undefined) setEnterCode(code);
     setIsHost(host);
   };
@@ -150,11 +153,10 @@ function App() {
           <AiAnalysis
             {...commonProps}
             gameType={currentGameType}
-            history={gameHistory}
           />
         );
       case "game_lobby":
-        return <GameLobby {...commonProps} gameType={currentGameType} />;
+        return <GameLobby {...commonProps} gameType={currentGameType} mode={currentMode} />;
       case "game_waiting":
         return (
           <GameWaiting
@@ -177,7 +179,6 @@ function App() {
             initialUsersInfo={roomUsersInfo}
             initialBlackSec={roomInitTime.black}
             initialWhiteSec={roomInitTime.white}
-            onSaveHistory={setGameHistory}
           />
         );
       case "home":
@@ -201,6 +202,8 @@ function App() {
   return (
     <div className="App min-h-screen bg-background" key="app">
       <ErrorBoundary key={currentPage}>
+        {/* WebSocket ref(wsRef)를 게임 페이지 자식에 전달하는 의도된 패턴 */}
+        {/* eslint-disable-next-line react-hooks/refs */}
         {renderPage(handleNavigate)}
       </ErrorBoundary>
 

@@ -20,6 +20,7 @@ export const GameWaiting = ({ onNavigate, gameType = 'go', currentUser, enterCod
     if (!ws) return;
 
     if (ws.readyState === WebSocket.OPEN) setConnectionError(false);
+    /* eslint-disable react-hooks/immutability -- App이 소유한 공유 WebSocket(wsRef)에 핸들러 부착(의도된 동작) */
     ws.onopen = () => setConnectionError(false);
     ws.onerror = () => setConnectionError(true);
     ws.onmessage = (event) => {
@@ -57,7 +58,11 @@ export const GameWaiting = ({ onNavigate, gameType = 'go', currentUser, enterCod
         console.error('WS decode error:', e);
       }
     };
+    /* eslint-enable react-hooks/immutability */
 
+    // 핸들러는 연결(wsRef)·방코드(enterCode)당 1회만 등록. 누락 의존성(isHost·onNavigate·onUsersInfo·onGameTime)은
+    // 안정적인 state setter이거나 동작이 불변이라 재등록이 불필요(특히 onNavigate는 매 렌더 새 함수라 추가 시 churn 발생).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enterCode, wsRef]);
 
   const handleGameStart = () => {
